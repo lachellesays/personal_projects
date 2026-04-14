@@ -8,7 +8,15 @@ st.set_page_config(page_title="Agility Check-in", page_icon="🐾")
 # 1. Establish the Connection
 # This uses the URL you provided
 sheet_url = "https://docs.google.com/spreadsheets/d/1cakveWwfjL7-RNGWvw9RogAc4odCtSNvjrjX6fVSKRk/edit?gid=0#gid=0"
+# The string "gsheets" must match the word in your secrets.toml
 conn = st.connection("gsheets", type=GSheetsConnection)
+# This checks if the specific 'connections.gsheets' section exists in your secrets
+if "connections" in st.secrets and "gsheets" in st.secrets.connections:
+    st.success("✅ Streamlit found your secrets.toml file!")
+    # Show the email just to be 100% sure it's the right one
+    st.write(f"Logged in as: {st.secrets.connections.gsheets.client_email}")
+else:
+    st.error("❌ Streamlit CANNOT see your secrets.toml or the [connections.gsheets] section.")
 
 # 2. Fetch Data (ttl=0 ensures we don't use old cached data)
 df = conn.read(spreadsheet=sheet_url, ttl=0)
