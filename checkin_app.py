@@ -206,7 +206,7 @@ with tab5:
                 
                 c_info, c_ring, c_undo = st.columns([2, 1, 1])
                 with c_info: 
-                    st.write(f"**{row['Height']}\"** | #{pk_val} **{row['Name']}** ({row['status']})")
+                    st.write(f"**{row['Height']}\"** | **{row['Name']}** ({row['status']})")
                 
                 with c_ring:
                     if row['status'] not in ['In Ring', 'Run Completed']:
