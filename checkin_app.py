@@ -140,7 +140,7 @@ with tab2:
         
         m1.metric("Total Entries", total)
         m2.metric("Checked In", f"{checked_in} ({(checked_in/total)*100:.1f}%)")
-        m3.metric("Currently In Ring", in_ring)
+        m3.metric("Already Run", in_ring)
         m4.metric("Scratches", scratched, delta_color="inverse")
         
         st.divider()
