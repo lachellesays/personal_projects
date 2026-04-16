@@ -234,6 +234,13 @@ with tab3:
                     use_container_width=True
                 )
 
+# --- TAB 4: TRIAL INFO ---
+with tab4:
+    st.header("Trial Information")
+    if not info_df.empty:
+        for _, row in info_df.iterrows():
+            st.write(f"**{row['Parameter']}:** {row['Value']}")
+
 # --- TAB 5: GATE STEWARD ---
 with tab5:
     st.header("🚧 Gate Steward")
