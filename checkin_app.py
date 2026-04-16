@@ -242,52 +242,56 @@ with tab4:
             st.write(f"**{row['Parameter']}:** {row['Value']}")
 
 
-# --- TAB 5: GATE STEWARD (Mobile Compact Row) ---
+# --- TAB 5: GATE STEWARD (Extreme Compact Mode) ---
 with tab5:
     st.header("🚧 Gate Steward")
-    pin = st.text_input("PIN:", type="password", key="gate_pin")
-    
-    if pin == "7890":
+    if st.text_input("PIN:", type="password", key="gate_pin") == "7890":
         if not df.empty:
             gate_class = st.selectbox("Class:", sorted(df['Combined Class Name'].unique()), key="gate_sel")
             gate_df = df[df['Combined Class Name'] == gate_class].sort_values(['Height', 'Run_Order'])
             
+            # Column headers for the steward
+            st.markdown("""
+                <div style="display: flex; font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-bottom: 10px; font-size: 0.8rem; color: #666;">
+                    <div style="flex: 1;">DOG / ORDER</div>
+                    <div style="flex: 1; text-align: center;">STATUS</div>
+                    <div style="flex: 1; text-align: right;">ACTION</div>
+                </div>
+            """, unsafe_allow_html=True)
+
             for _, row in gate_df.iterrows():
                 if row['status'] == 'Scratch': continue
                 pk_val = row['Run_Order']
                 status = row['status']
                 
-                # Color code the left border based on status
-                border_color = "#155724" if status == "Checked In" else "#854d0e" if status == "In Ring" else "#adb5bd"
+                # Dynamic styling based on status
+                bg_color = "#fff3cd" if status == "In Ring" else "transparent"
                 
-                # CUSTOM HTML ROW: Forces a single line on mobile
-                st.markdown(f"""
-                <div style="display: flex; align-items: center; justify-content: space-between; 
-                            padding: 10px; border-left: 6px solid {border_color}; 
-                            background-color: white; border-radius: 4px; margin-bottom: 8px;
-                            box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                    <div style="flex-grow: 1; margin-right: 10px;">
-                        <span style="font-weight: 800; font-size: 1rem;">#{pk_val} {row['Name']}</span><br>
-                        <span style="font-size: 0.8rem; color: #666;">{row['Height']}" | {row['Breed']}</span>
-                    </div>
-                    <div style="font-size: 0.85rem; font-weight: bold; color: {border_color}; margin-right: 10px;">
-                        {status}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                # Row Container
+                col1, col2, col3 = st.columns([2, 1, 1])
+                
+                with col1:
+                    # Compact Dog Info
+                    st.markdown(f"**#{pk_val} {row['Name']}** <br><span style='font-size: 0.7rem;'>{row['Height']}\" | {row['Breed'][:10]}</span>", unsafe_allow_html=True)
+                
+                with col2:
+                    # Simple Status Emoji
+                    status_emoji = "🟡" if status == "In Ring" else "✅" if status == "Checked In" else "🏁" if status == "Run Completed" else "⚪"
+                    st.markdown(f"<div style='text-align: center; padding-top: 5px;'>{status_emoji}<br><span style='font-size: 0.6rem;'>{status}</span></div>", unsafe_allow_html=True)
 
-                # BUTTON ACTIONS (Placed directly under the row in a tight column setup)
-                c_ring, c_undo = st.columns(2)
-                with c_ring:
+                with col3:
+                    # Action Buttons - Minimalist
                     if status not in ['In Ring', 'Run Completed']:
-                        if st.button("IN RING", key=f"ring_{pk_val}", use_container_width=True):
+                        # The "Go" Button
+                        if st.button("▶️", key=f"ring_{pk_val}", help="Move to Ring"):
                             conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", gate_class).eq("status", "In Ring").execute()
                             conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute()
                             fetch_fresh_data()
                             st.rerun()
-                with c_undo:
-                    if status in ['In Ring', 'Run Completed']:
-                        if st.button("Undo", key=f"undo_{pk_val}", use_container_width=True):
+                    else:
+                        # The "Undo" Button
+                        if st.button("↩️", key=f"undo_{pk_val}", help="Undo"):
                             conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk_val).execute()
                             fetch_fresh_data()
                             st.rerun()
+                st.divider()
