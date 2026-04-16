@@ -158,14 +158,13 @@ with tab3:
                     height_df['Dog'] = height_df['Name']
 
                 # Format Display DF
-                display_cols = ['Run_Order', 'Handler_Name', 'Dog', 'Breed', 'Class_Type', 'status']
+                display_cols = ['Handler_Name', 'Dog', 'Breed', 'Class_Type', 'status']
                 # Ensure Class_Type exists
                 available_cols = [c for c in display_cols if c in height_df.columns]
                 
                 final_display = height_df[available_cols].copy()
                 # Rename for UI
                 column_mapping = {
-                    'Run_Order': '#', 
                     'Handler_Name': 'Handler', 
                     'Class_Type': 'Type', 
                     'status': 'Status'
