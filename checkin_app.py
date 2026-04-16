@@ -18,21 +18,23 @@ st.markdown("""
     .status-conflict { color: #721c24; background-color: #f8d7da; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
     .status-scratch { color: #383d41; background-color: #e2e3e5; padding: 3px 8px; border-radius: 4px; text-decoration: line-through; }
     .status-default { color: #0c5460; background-color: #d1ecf1; padding: 3px 8px; border-radius: 4px; }
+    
+    /* Height Header Styling */
+    .height-header { background-color: #f1f5f9; padding: 10px; border-radius: 8px; border-left: 5px solid #1E3A8A; margin-top: 20px; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-header">🏆 Trial Secretary App</p>', unsafe_allow_html=True)
-st.caption("UKI Agility | Real-Time Sync Active ⚡")
+st.caption("UKI Agility | Personalized Live Portal")
+st.divider()
 
 # 2. ESTABLISH CONNECTIONS
 conn_gsheets = st.connection("gsheets", type=GSheetsConnection)
 
-# Explicitly pull secrets for Supabase
 try:
     s_url = st.secrets["connections"]["supabase"]["url"]
     s_key = st.secrets["connections"]["supabase"]["key"]
 except KeyError:
-    # Fallback for different Secret formats
     s_url = st.secrets["supabase_url"]
     s_key = st.secrets["supabase_key"]
 
@@ -40,17 +42,18 @@ conn_supabase = st.connection("supabase", type=SupabaseConnection, url=s_url, ke
 
 # 3. HELPER FUNCTIONS
 def fetch_fresh_data():
-    """Bypasses session state to pull latest from Supabase."""
     res = conn_supabase.table("trialdata").select("*").execute()
     new_df = pd.DataFrame(res.data)
     if not new_df.empty:
         new_df['UKI_Number'] = new_df['UKI_Number'].astype(str).str.strip()
         new_df['Run_Order'] = pd.to_numeric(new_df['Run_Order'], errors='coerce').fillna(0).astype(int)
+        # Rename column for UI preference
+        if 'Intl_Jump_Ht' in new_df.columns:
+            new_df = new_df.rename(columns={'Intl_Jump_Ht': 'Height'})
     st.session_state.main_df = new_df
     return new_df
 
 def update_status_instant(run_order, new_status):
-    """Pushes single update and refreshes local cache."""
     try:
         conn_supabase.table("trialdata").update({"status": new_status}).eq("Run_Order", run_order).execute()
         fetch_fresh_data()
@@ -64,7 +67,6 @@ if 'main_df' not in st.session_state:
 
 df = st.session_state.main_df
 
-# Fetch static Google Sheets
 try:
     info_df = conn_gsheets.read(worksheet="trialinfo", ttl=3600)
     maps_df = conn_gsheets.read(worksheet="coursemaps", ttl=3600)
@@ -82,8 +84,6 @@ with tab1:
 
     if handler_input:
         user_data = df[df['UKI_Number'] == handler_input]
-        
-        # Last-ditch refresh if not found
         if user_data.empty:
             df = fetch_fresh_data()
             user_data = df[df['UKI_Number'] == handler_input]
@@ -96,7 +96,6 @@ with tab1:
                 dog_rows = user_data[user_data['Name'] == dog]
                 with st.container(border=True):
                     st.markdown(f"### 🐶 {dog}")
-                    
                     if st.button(f"Check in all runs for {dog}", key=f"btn_{dog}"):
                         for _, r in dog_rows.iterrows():
                             update_status_instant(r['Run_Order'], "Checked In")
@@ -106,7 +105,6 @@ with tab1:
                         pk = row['Run_Order']
                         current_status = row['status'] if row['status'] in status_options else "Not Checked In"
                         
-                        # Style logic
                         icon, label_class = "⚪", "status-default"
                         if current_status == "Checked In": icon, label_class = "✅", "status-checked"
                         elif current_status == "Conflict": icon, label_class = "⚠️", "status-conflict"
@@ -116,80 +114,83 @@ with tab1:
                         with c_class:
                             st.markdown(f'{icon} <span class="{label_class}">{row["Combined Class Name"]}</span>', unsafe_allow_html=True)
                         with c_status:
-                            st.selectbox(
-                                "Status", 
-                                options=status_options, 
-                                index=status_options.index(current_status),
-                                key=f"select_{pk}",
-                                on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]),
-                                label_visibility="collapsed"
-                            )
+                            st.selectbox("Status", options=status_options, 
+                                         index=status_options.index(current_status),
+                                         key=f"select_{pk}",
+                                         on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]),
+                                         label_visibility="collapsed")
         else:
             st.warning(f"Handler #{handler_input} not found.")
-            if st.button("Force Refresh Database"):
-                fetch_fresh_data()
-                st.rerun()
 
-# --- TAB 2: DASHBOARD ---
-with tab2:
-    st.header("Trial Statistics")
-    if st.button("🔄 Refresh Data", key="refresh_dash"):
-        fetch_fresh_data()
-        st.rerun()
-
-    if not df.empty:
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Entries", len(df))
-        c2.metric("Checked In", len(df[df['status'] == 'Checked In']))
-        c3.metric("Scratches", len(df[df['status'] == 'Scratch']), delta_color="inverse")
-        
-        st.divider()
-        for agility_class in sorted(df['Combined Class Name'].unique()):
-            class_data = df[df['Combined Class Name'] == agility_class]
-            with st.expander(f"📌 {agility_class}"):
-                st.write(class_data['status'].value_counts())
-
-# --- TAB 3: RUNNING ORDER ---
+# --- TAB 3: RUNNING ORDER (Personalized & Grouped) ---
 with tab3:
     st.header("Class Running Order")
     if not df.empty:
         selected_class = st.selectbox("Select Class:", sorted(df['Combined Class Name'].unique()), key="run_select")
         
         if selected_class:
+            # Course Map Logic
             if not maps_df.empty:
                 target = str(selected_class).strip().lower()
                 match = maps_df[maps_df['Class'].str.strip().str.lower() == target] if 'Class' in maps_df.columns else pd.DataFrame()
-                
                 if not match.empty:
-                    st.markdown(f"#### 🗺️ Course Map for {selected_class}")
                     st.image(str(match.iloc[0]['Map_Link']), use_container_width=True)
+
+            # Filter and Sort
+            run_df = df[df['Combined Class Name'] == selected_class].sort_values(['Height', 'Run_Order'])
+            
+            # Identify current handler's dogs for highlighting
+            current_handler_num = st.session_state.get("search_box", "").strip()
+            
+            # Grouping by Height
+            for height in sorted(run_df['Height'].unique()):
+                st.markdown(f'<div class="height-header">📏 Height: {height}"</div>', unsafe_allow_html=True)
+                
+                height_df = run_df[run_df['Height'] == height].copy()
+                
+                # Add personalization indicator
+                if current_handler_num:
+                    height_df['Dog'] = height_df.apply(
+                        lambda x: f"🌟 {x['Name']}" if str(x['UKI_Number']) == current_handler_num else x['Name'], 
+                        axis=1
+                    )
                 else:
-                    with st.expander("🛠️ Map Debugger"):
-                        st.write(f"Looking for: `{selected_class}`")
-                        st.write("Found in GSheet:", maps_df['Class'].tolist() if 'Class' in maps_df.columns else "Column 'Class' missing!")
+                    height_df['Dog'] = height_df['Name']
 
-            run_df = df[df['Combined Class Name'] == selected_class].sort_values('Run_Order')
-            display_df = run_df[['Run_Order', 'Handler_Name', 'Name', 'Breed', 'status']].copy()
-            display_df.columns = ['#', 'Handler', 'Dog', 'Breed', 'Status']
+                # Format Display DF
+                display_cols = ['Run_Order', 'Handler_Name', 'Dog', 'Breed', 'Class_Type', 'status']
+                # Ensure Class_Type exists
+                available_cols = [c for c in display_cols if c in height_df.columns]
+                
+                final_display = height_df[available_cols].copy()
+                # Rename for UI
+                column_mapping = {
+                    'Run_Order': '#', 
+                    'Handler_Name': 'Handler', 
+                    'Class_Type': 'Type', 
+                    'status': 'Status'
+                }
+                final_display = final_display.rename(columns=column_mapping)
 
-            def style_rows(row):
-                styles = [''] * len(row)
-                if row['Status'] == 'In Ring':
-                    styles = ['background-color: #fef08a; color: #854d0e; font-weight: bold'] * len(row)
-                elif row['Status'] in ['Run Completed', 'Scratch']:
-                    styles = ['text-decoration: line-through; color: #adb5bd'] * len(row)
-                elif row['Status'] == 'Checked In':
-                    styles = ['background-color: #d4edda; color: #155724'] * len(row)
-                return styles
+                def style_running_order(row):
+                    styles = [''] * len(row)
+                    # 1. Highlight current handler's dogs in Blue
+                    if "🌟" in str(row['Dog']):
+                        styles = ['background-color: #dbeafe; color: #1e40af; font-weight: bold'] * len(row)
+                    
+                    # 2. Status Overrides
+                    if row['Status'] == 'In Ring':
+                        styles = ['background-color: #fef08a; color: #854d0e; border: 2px solid #854d0e'] * len(row)
+                    elif row['Status'] in ['Run Completed', 'Scratch']:
+                        styles = ['text-decoration: line-through; color: #adb5bd; background-color: transparent'] * len(row)
+                    
+                    return styles
 
-            st.dataframe(display_df.style.apply(style_rows, axis=1), hide_index=True, use_container_width=True)
-
-# --- TAB 4: TRIAL INFO ---
-with tab4:
-    st.header("Trial Information")
-    if not info_df.empty:
-        for _, row in info_df.iterrows():
-            st.write(f"**{row['Parameter']}:** {row['Value']}")
+                st.dataframe(
+                    final_display.style.apply(style_running_order, axis=1), 
+                    hide_index=True, 
+                    use_container_width=True
+                )
 
 # --- TAB 5: GATE STEWARD ---
 with tab5:
@@ -197,14 +198,16 @@ with tab5:
     if st.text_input("PIN:", type="password", key="gate_pin") == "7890":
         if not df.empty:
             gate_class = st.selectbox("Class:", sorted(df['Combined Class Name'].unique()), key="gate_sel")
-            gate_df = df[df['Combined Class Name'] == gate_class].sort_values('Run_Order')
+            # Grouping by height here too makes the steward's life easier
+            gate_df = df[df['Combined Class Name'] == gate_class].sort_values(['Height', 'Run_Order'])
             
             for _, row in gate_df.iterrows():
                 if row['status'] == 'Scratch': continue
                 pk_val = row['Run_Order']
                 
                 c_info, c_ring, c_undo = st.columns([2, 1, 1])
-                with c_info: st.write(f"#{pk_val} **{row['Name']}** ({row['status']})")
+                with c_info: 
+                    st.write(f"**{row['Height']}\"** | #{pk_val} **{row['Name']}** ({row['status']})")
                 
                 with c_ring:
                     if row['status'] not in ['In Ring', 'Run Completed']:
