@@ -241,7 +241,7 @@ with tab4:
         for _, row in info_df.iterrows():
             st.write(f"**{row['Parameter']}:** {row['Value']}")
 
-# --- TAB 5: GATE STEWARD (Single Row Mobile Optimized) ---
+# --- TAB 5: GATE STEWARD (Single Row / Visual Priority) ---
 with tab5:
     st.header("🚧 Gate Steward")
     pin = st.text_input("PIN:", type="password", key="gate_pin")
@@ -249,6 +249,8 @@ with tab5:
     if pin == "7890":
         if not df.empty:
             gate_class = st.selectbox("Class:", sorted(df['Combined Class Name'].unique()), key="gate_sel")
+            
+            # Sort by Height then Run_Order (Displaying neither)
             gate_df = df[df['Combined Class Name'] == gate_class].sort_values(['Height', 'Run_Order'])
             
             for _, row in gate_df.iterrows():
@@ -256,41 +258,50 @@ with tab5:
                 pk_val = row['Run_Order']
                 status = row['status']
                 
-                # Visual encoding
-                border_color = "#28a745" if status == "Checked In" else "#ffc107" if status == "In Ring" else "#6c757d"
-                bg_color = "#fffbeb" if status == "In Ring" else "white"
+                # Visual encoding logic
+                is_done = (status == "Run Completed")
+                is_in_ring = (status == "In Ring")
                 
-                # Create a single row with 2 columns: Info (80%) and Action (20%)
-                c_main, c_btn = st.columns([4, 1])
+                # Status-based colors
+                border_color = "#28a745" if status == "Checked In" else "#ffc107" if is_in_ring else "#adb5bd"
+                
+                # Greying out logic for completed runs
+                bg_style = "background-color: #f8f9fa; opacity: 0.6; filter: grayscale(100%);" if is_done else f"background-color: {'#fffbeb' if is_in_ring else 'white'};"
+                text_style = "text-decoration: line-through; color: #6c757d;" if is_done else "color: black;"
+
+                # Layout: 85% Info, 15% Button
+                c_main, c_btn = st.columns([5, 1])
                 
                 with c_main:
-                    # Combined Info Box
                     st.markdown(f"""
                     <div style="display: flex; align-items: center; justify-content: space-between; 
-                                padding: 8px; border-left: 5px solid {border_color}; 
-                                background-color: {bg_color}; border-radius: 4px; height: 50px;
-                                box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                        <div style="overflow: hidden;">
-                            <span style="font-weight: 800; font-size: 0.9rem; {'text-decoration: line-through;' if status == 'Run Completed' else ''}">
-                                #{pk_val} {row['Name']}
+                                padding: 10px; border-left: 6px solid {border_color}; 
+                                {bg_style} border-radius: 4px; min-height: 55px;
+                                box-shadow: 0 1px 2px rgba(0,0,0,0.05); margin-bottom: 2px;">
+                        <div style="overflow: hidden; line-height: 1.2;">
+                            <span style="font-weight: 800; font-size: 1rem; {text_style}">
+                                {row['Name']}
                             </span><br>
-                            <span style="font-size: 0.75rem; color: #666;">{row['Height']}" | {row['Breed'][:10]}</span>
+                            <span style="font-size: 0.8rem; {text_style if is_done else 'color: #666;'}">
+                                {row['Height']}" | {row['Breed']}
+                            </span>
                         </div>
-                        <div style="font-size: 0.7rem; font-weight: bold; color: {border_color}; text-align: right; min-width: 60px;">
-                            {status.replace('Run Completed', 'Done')}
+                        <div style="font-size: 0.75rem; font-weight: bold; color: {border_color}; text-align: right; min-width: 50px;">
+                            {'DONE' if is_done else ('RING' if is_in_ring else 'READY')}
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
                 with c_btn:
-                    # Action Button - Simplified to an Emoji to save space
-                    if status not in ['In Ring', 'Run Completed']:
+                    # Minimalist Toggle Button
+                    if not is_done and not is_in_ring:
                         if st.button("▶️", key=f"ring_{pk_val}", use_container_width=True):
                             conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", gate_class).eq("status", "In Ring").execute()
                             conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute()
                             fetch_fresh_data()
                             st.rerun()
                     else:
+                        # Undo button for both Done and In Ring
                         if st.button("↩️", key=f"undo_{pk_val}", use_container_width=True):
                             conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk_val).execute()
                             fetch_fresh_data()
