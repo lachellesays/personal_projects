@@ -241,57 +241,57 @@ with tab4:
         for _, row in info_df.iterrows():
             st.write(f"**{row['Parameter']}:** {row['Value']}")
 
-# --- TAB 5: GATE STEWARD (Native Mobile UI - No Frames) ---
+# --- TAB 5: GATE STEWARD (Single Row Mobile Optimized) ---
 with tab5:
     st.header("🚧 Gate Steward")
-    if st.text_input("PIN:", type="password", key="gate_pin") == "7890":
+    pin = st.text_input("PIN:", type="password", key="gate_pin")
+    
+    if pin == "7890":
         if not df.empty:
             gate_class = st.selectbox("Class:", sorted(df['Combined Class Name'].unique()), key="gate_sel")
+            gate_df = df[df['Combined Class Name'] == gate_class].sort_values(['Height', 'Run_Order'])
             
-            # 1. Pull and Sort Data
-            gate_df = df[df['Combined Class Name'] == gate_class].sort_values(['Height', 'Run_Order']).copy()
-            
-            # 2. Iterate through dogs and build "Native" cards
             for _, row in gate_df.iterrows():
-                if row['status'] == 'Scratch':
-                    continue
-                
-                pk = row['Run_Order']
+                if row['status'] == 'Scratch': continue
+                pk_val = row['Run_Order']
                 status = row['status']
                 
-                # Dynamic Styling per Dog Card
-                # We use container borders to define the "card"
-                with st.container(border=True):
-                    col_info, col_action = st.columns([3, 1])
-                    
-                    with col_info:
-                        # Strikethrough for completed, Yellow highlight for In Ring
-                        if status == "Run Completed":
-                            st.markdown(f"~~**{row['Name']}** ({row['Height']}\") - {row['Breed'][:12]}~~")
-                        elif status == "In Ring":
-                            st.markdown(f"✨ **{row['Name']}** ({row['Height']}\") - **IN RING**")
-                        else:
-                            st.markdown(f"**{row['Name']}** ({row['Height']}\") - {row['Breed'][:12]}")
-                    
-                    with col_action:
-                        # Logic: Show "GO" if ready, "UNDO" if in ring or done
-                        if status == "Checked In" or status == "Not Checked In":
-                            if st.button("▶️", key=f"go_{pk}", use_container_width=True):
-                                # Logic: Move current 'In Ring' to 'Completed', then move this one 'In Ring'
-                                conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", gate_class).eq("status", "In Ring").execute()
-                                conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk).execute()
-                                fetch_fresh_data()
-                                st.rerun()
-                        
-                        elif status == "In Ring":
-                            if st.button("↩️", key=f"undo_{pk}", use_container_width=True):
-                                conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk).execute()
-                                fetch_fresh_data()
-                                st.rerun()
-                        
-                        elif status == "Run Completed":
-                            # Allow undoing a completed run if accidentally skipped
-                            if st.button("🔙", key=f"rev_{pk}", use_container_width=True):
-                                conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk).execute()
-                                fetch_fresh_data()
-                                st.rerun()
+                # Visual encoding
+                border_color = "#28a745" if status == "Checked In" else "#ffc107" if status == "In Ring" else "#6c757d"
+                bg_color = "#fffbeb" if status == "In Ring" else "white"
+                
+                # Create a single row with 2 columns: Info (80%) and Action (20%)
+                c_main, c_btn = st.columns([4, 1])
+                
+                with c_main:
+                    # Combined Info Box
+                    st.markdown(f"""
+                    <div style="display: flex; align-items: center; justify-content: space-between; 
+                                padding: 8px; border-left: 5px solid {border_color}; 
+                                background-color: {bg_color}; border-radius: 4px; height: 50px;
+                                box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <div style="overflow: hidden;">
+                            <span style="font-weight: 800; font-size: 0.9rem; {'text-decoration: line-through;' if status == 'Run Completed' else ''}">
+                                #{pk_val} {row['Name']}
+                            </span><br>
+                            <span style="font-size: 0.75rem; color: #666;">{row['Height']}" | {row['Breed'][:10]}</span>
+                        </div>
+                        <div style="font-size: 0.7rem; font-weight: bold; color: {border_color}; text-align: right; min-width: 60px;">
+                            {status.replace('Run Completed', 'Done')}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                with c_btn:
+                    # Action Button - Simplified to an Emoji to save space
+                    if status not in ['In Ring', 'Run Completed']:
+                        if st.button("▶️", key=f"ring_{pk_val}", use_container_width=True):
+                            conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", gate_class).eq("status", "In Ring").execute()
+                            conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute()
+                            fetch_fresh_data()
+                            st.rerun()
+                    else:
+                        if st.button("↩️", key=f"undo_{pk_val}", use_container_width=True):
+                            conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk_val).execute()
+                            fetch_fresh_data()
+                            st.rerun()
