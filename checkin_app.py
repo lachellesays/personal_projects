@@ -26,7 +26,6 @@ st.markdown("""
 
 st.markdown('<p class="main-header">🏆 Trial Secretary App</p>', unsafe_allow_html=True)
 st.caption("UKI Agility | Personalized Live Portal")
-st.caption(f"You are logged in as: {user_data.iloc[0]['Handler_Name']}")
 st.divider()
 
 # 2. ESTABLISH CONNECTIONS
