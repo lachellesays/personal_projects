@@ -13,7 +13,7 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
     
-    /* Status Colors for Check-in Page */
+    /* Visual Status Styles */
     .status-checked { color: #155724; background-color: #d4edda; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
     .status-conflict { color: #721c24; background-color: #f8d7da; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
     .status-scratch { color: #383d41; background-color: #e2e3e5; padding: 3px 8px; border-radius: 4px; text-decoration: line-through; }
@@ -22,13 +22,10 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.markdown('<p class="main-header">🏆 Trial Secretary App</p>', unsafe_allow_html=True)
-st.caption("UKI Agility | Live Portal")
-st.divider()
+st.caption("UKI Agility | Real-Time Sync Active ⚡")
 
-# 2. ESTABLISH CONNECTIONS
+# --- 2. CONNECTIONS ---
 conn_gsheets = st.connection("gsheets", type=GSheetsConnection)
-
-# Explicit Supabase connection using UKI-specific keys from secrets
 conn_supabase = st.connection(
     "supabase",
     type=SupabaseConnection,
@@ -36,91 +33,84 @@ conn_supabase = st.connection(
     key=st.secrets["connections"]["supabase"]["key"]
 )
 
-# 3. SMART DATA FETCHING
-if 'main_df' not in st.session_state:
+# --- 3. CALLBACK FUNCTIONS (The "Instant Save" Logic) ---
+def update_status_instant(run_order, new_status):
+    """Pushes a single row update to Supabase immediately."""
     try:
-        res = conn_supabase.table("trialdata").select("*").execute()
-        if hasattr(res, 'data') and res.data:
-            st.session_state.main_df = pd.DataFrame(res.data)
-        else:
-            st.error("Database connected, but no data returned. Check RLS settings.")
-            st.session_state.main_df = pd.DataFrame()
+        conn_supabase.table("trialdata").update({"status": new_status}).eq("Run_Order", run_order).execute()
+        # Clear cache so other tabs see the update
+        if 'main_df' in st.session_state:
+            del st.session_state.main_df
+        st.toast(f"Updated to {new_status}!", icon="💾")
     except Exception as e:
-        st.error(f"Supabase Connection Error: {e}")
-        st.session_state.main_df = pd.DataFrame()
+        st.error(f"Sync Failed: {e}")
+
+# --- 4. DATA FETCHING ---
+if 'main_df' not in st.session_state:
+    res = conn_supabase.table("trialdata").select("*").execute()
+    st.session_state.main_df = pd.DataFrame(res.data)
 
 df = st.session_state.main_df
 
-# Fetch static Google Sheets (Maps & Info)
 try:
-    info_df = conn_gsheets.read(worksheet="trialinfo", ttl=60)
-    maps_df = conn_gsheets.read(worksheet="coursemaps", ttl=60)
+    info_df = conn_gsheets.read(worksheet="trialinfo", ttl=3600)
+    maps_df = conn_gsheets.read(worksheet="coursemaps", ttl=3600)
 except:
     info_df, maps_df = pd.DataFrame(), pd.DataFrame()
 
-# --- DATA CLEANUP ---
-if not df.empty:
-    if 'UKI_Number' in df.columns:
-        df['UKI_Number'] = df['UKI_Number'].astype(str).str.strip()
-    # Using Run_Order as our Primary Key/Unique ID for this session
-    df['Run_Order'] = pd.to_numeric(df['Run_Order'], errors='coerce').fillna(0).astype(int)
+# --- 5. TABS ---
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📲 My Check-in", "📊 Dashboard", "🏃 Running Order", "ℹ️ Trial Info", "🚧 Gate Steward"])
 
-# 4. TABS SETUP
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📲 My Check-in", "📊 Dashboard", "🏃 Running Order", "ℹ️ Trial Info", "🚧 Gate Steward"
-])
-
-# --- TAB 1: INDIVIDUAL CHECK-IN ---
 with tab1:
     handler_input = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345")
 
-    if handler_input:
-        if df.empty:
-            st.warning("Database is empty.")
-        else:
-            user_data = df[df['UKI_Number'] == str(handler_input).strip()]
+    if handler_input and not df.empty:
+        user_data = df[df['UKI_Number'] == str(handler_input).strip()]
+        
+        if not user_data.empty:
+            st.subheader(f"Welcome, {user_data.iloc[0]['Handler_Name']}")
+            status_options = ["Not Checked In", "Checked In", "Scratch", "Conflict"]
             
-            if not user_data.empty:
-                st.subheader(f"Welcome, {user_data.iloc[0]['Handler_Name']}")
-                status_options = ["Not Checked In", "Checked In", "Scratch", "Conflict"]
-                updates = {}
-                
-                for dog in user_data['Name'].unique():
-                    dog_rows = user_data[user_data['Name'] == dog]
-                    with st.container(border=True):
-                        st.markdown(f"### 🐶 {dog}")
-                        
-                        if st.button(f"Check in all runs for {dog}", key=f"btn_{dog}"):
-                            for _, r in dog_rows.iterrows():
-                                st.session_state[f"sel_{r['Run_Order']}"] = "Checked In"
-                            st.rerun()
+            for dog in user_data['Name'].unique():
+                dog_rows = user_data[user_data['Name'] == dog]
+                with st.container(border=True):
+                    st.markdown(f"### 🐶 {dog}")
+                    
+                    # Mass Check-in for Dog
+                    if st.button(f"Check in all runs for {dog}", key=f"btn_{dog}"):
+                        for _, r in dog_rows.iterrows():
+                            update_status_instant(r['Run_Order'], "Checked In")
+                        st.rerun()
 
-                        for idx, row in dog_rows.iterrows():
-                            pk_val = row['Run_Order']
-                            if f"sel_{pk_val}" not in st.session_state:
-                                st.session_state[f"sel_{pk_val}"] = row['status'] if row['status'] in status_options else "Not Checked In"
-                            
-                            current_status = st.session_state[f"sel_{pk_val}"]
-                            icon, label_class = "⚪", "status-default"
-                            if current_status == "Checked In": icon, label_class = "✅", "status-checked"
-                            elif current_status == "Conflict": icon, label_class = "⚠️", "status-conflict"
-                            elif current_status == "Scratch": icon, label_class = "❌", "status-scratch"
-                            
-                            c_class, c_status = st.columns([1.5, 1])
-                            with c_class:
-                                st.markdown(f'{icon} <span class="{label_class}">{row["Combined Class Name"]}</span>', unsafe_allow_html=True)
-                            with c_status:
-                                updates[pk_val] = st.selectbox("Status", options=status_options, 
-                                                             key=f"sel_{pk_val}", label_visibility="collapsed")
-                
-                if st.button("💾 SAVE ALL CHANGES", type="primary", use_container_width=True):
-                    with st.spinner("Syncing..."):
-                        for pk, s_val in updates.items():
-                            conn_supabase.table("trialdata").update({"status": s_val}).eq("Run_Order", pk).execute()
-                        if 'main_df' in st.session_state: del st.session_state.main_df
-                        st.success("Saved!"); time.sleep(1); st.rerun()
-            else:
-                st.info(f"UKI Number {handler_input} not found.")
+                    for idx, row in dog_rows.iterrows():
+                        pk = row['Run_Order']
+                        
+                        # Visual styling
+                        current_status = row['status']
+                        icon, label_class = "⚪", "status-default"
+                        if current_status == "Checked In": icon, label_class = "✅", "status-checked"
+                        elif current_status == "Conflict": icon, label_class = "⚠️", "status-conflict"
+                        elif current_status == "Scratch": icon, label_class = "❌", "status-scratch"
+                        
+                        c_class, c_status = st.columns([1.5, 1])
+                        with c_class:
+                            st.markdown(f'{icon} <span class="{label_class}">{row["Combined Class Name"]}</span>', unsafe_allow_html=True)
+                        with c_status:
+                            # The "Magic" happens here with on_change
+                            st.selectbox(
+                                "Status", 
+                                options=status_options, 
+                                index=status_options.index(current_status) if current_status in status_options else 0,
+                                key=f"select_{pk}",
+                                on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]),
+                                label_visibility="collapsed"
+                            )
+        else:
+            st.info("Handler not found.")
+
+# Note: Tabs 2-5 remain the same as the previous version, 
+# but they will feel faster because the data is always fresh!
+
 
 # --- TAB 2: DASHBOARD ---
 with tab2:
