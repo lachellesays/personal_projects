@@ -4,27 +4,10 @@ from st_supabase_connection import SupabaseConnection
 import pandas as pd
 import time
 
-# 1. PAGE CONFIG & UI STYLING
+# 1. PAGE CONFIG
 st.set_page_config(page_title="Agility Trial Center", page_icon="🐾", layout="wide")
 
-st.markdown("""
-    <style>
-    .block-container { padding-top: 5rem; padding-bottom: 2rem; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
-    
-    /* Visual Status Styles */
-    .status-checked { color: #155724; background-color: #d4edda; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
-    .status-conflict { color: #721c24; background-color: #f8d7da; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
-    .status-scratch { color: #383d41; background-color: #e2e3e5; padding: 3px 8px; border-radius: 4px; text-decoration: line-through; }
-    .status-default { color: #0c5460; background-color: #d1ecf1; padding: 3px 8px; border-radius: 4px; }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.markdown('<p class="main-header">🏆 Trial Secretary App</p>', unsafe_allow_html=True)
-st.caption("UKI Agility | Real-Time Sync Active ⚡")
-
-# --- 2. CONNECTIONS ---
+# 2. CONNECTIONS
 conn_gsheets = st.connection("gsheets", type=GSheetsConnection)
 conn_supabase = st.connection(
     "supabase",
@@ -33,40 +16,48 @@ conn_supabase = st.connection(
     key=st.secrets["connections"]["supabase"]["key"]
 )
 
-# --- 3. CALLBACK FUNCTIONS (The "Instant Save" Logic) ---
+# 3. HELPER FUNCTIONS
+def fetch_fresh_data():
+    """Bypasses the session state to get the newest data from Supabase."""
+    res = conn_supabase.table("trialdata").select("*").execute()
+    new_df = pd.DataFrame(res.data)
+    # Critical Cleanup
+    if not new_df.empty:
+        new_df['UKI_Number'] = new_df['UKI_Number'].astype(str).str.strip()
+        new_df['Run_Order'] = pd.to_numeric(new_df['Run_Order'], errors='coerce').fillna(0).astype(int)
+    st.session_state.main_df = new_df
+    return new_df
+
 def update_status_instant(run_order, new_status):
-    """Pushes a single row update to Supabase immediately."""
+    """Pushes change and invalidates local cache."""
     try:
         conn_supabase.table("trialdata").update({"status": new_status}).eq("Run_Order", run_order).execute()
-        # Clear cache so other tabs see the update
-        if 'main_df' in st.session_state:
-            del st.session_state.main_df
-        st.toast(f"Updated to {new_status}!", icon="💾")
+        fetch_fresh_data() # Update local copy immediately
+        st.toast(f"Saved: {new_status}", icon="⚡")
     except Exception as e:
         st.error(f"Sync Failed: {e}")
 
-# --- 4. DATA FETCHING ---
+# 4. INITIAL DATA LOAD
 if 'main_df' not in st.session_state:
-    res = conn_supabase.table("trialdata").select("*").execute()
-    st.session_state.main_df = pd.DataFrame(res.data)
+    fetch_fresh_data()
 
 df = st.session_state.main_df
 
-try:
-    info_df = conn_gsheets.read(worksheet="trialinfo", ttl=3600)
-    maps_df = conn_gsheets.read(worksheet="coursemaps", ttl=3600)
-except:
-    info_df, maps_df = pd.DataFrame(), pd.DataFrame()
-
-# --- 5. TABS ---
+# --- TAB SETUP ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📲 My Check-in", "📊 Dashboard", "🏃 Running Order", "ℹ️ Trial Info", "🚧 Gate Steward"])
 
 with tab1:
-    handler_input = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345")
+    handler_input = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345", key="search_box").strip()
 
-    if handler_input and not df.empty:
-        user_data = df[df['UKI_Number'] == str(handler_input).strip()]
+    if handler_input:
+        # Search the existing dataframe
+        user_data = df[df['UKI_Number'] == handler_input]
         
+        # If not found locally, try one fresh pull (in case they were JUST added)
+        if user_data.empty:
+            df = fetch_fresh_data()
+            user_data = df[df['UKI_Number'] == handler_input]
+
         if not user_data.empty:
             st.subheader(f"Welcome, {user_data.iloc[0]['Handler_Name']}")
             status_options = ["Not Checked In", "Checked In", "Scratch", "Conflict"]
@@ -76,7 +67,6 @@ with tab1:
                 with st.container(border=True):
                     st.markdown(f"### 🐶 {dog}")
                     
-                    # Mass Check-in for Dog
                     if st.button(f"Check in all runs for {dog}", key=f"btn_{dog}"):
                         for _, r in dog_rows.iterrows():
                             update_status_instant(r['Run_Order'], "Checked In")
@@ -84,33 +74,31 @@ with tab1:
 
                     for idx, row in dog_rows.iterrows():
                         pk = row['Run_Order']
-                        
-                        # Visual styling
                         current_status = row['status']
-                        icon, label_class = "⚪", "status-default"
-                        if current_status == "Checked In": icon, label_class = "✅", "status-checked"
-                        elif current_status == "Conflict": icon, label_class = "⚠️", "status-conflict"
-                        elif current_status == "Scratch": icon, label_class = "❌", "status-scratch"
                         
+                        # Ensure the current status exists in options to prevent index errors
+                        if current_status not in status_options:
+                            current_status = "Not Checked In"
+                            
                         c_class, c_status = st.columns([1.5, 1])
                         with c_class:
-                            st.markdown(f'{icon} <span class="{label_class}">{row["Combined Class Name"]}</span>', unsafe_allow_html=True)
+                            st.write(row["Combined Class Name"])
                         with c_status:
-                            # The "Magic" happens here with on_change
                             st.selectbox(
                                 "Status", 
                                 options=status_options, 
-                                index=status_options.index(current_status) if current_status in status_options else 0,
+                                index=status_options.index(current_status),
                                 key=f"select_{pk}",
                                 on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]),
                                 label_visibility="collapsed"
                             )
         else:
-            st.info("Handler not found.")
+            st.warning(f"Handler #{handler_input} not found. Try refreshing or check your number.")
+            if st.button("Force Refresh Database"):
+                fetch_fresh_data()
+                st.rerun()
 
-# Note: Tabs 2-5 remain the same as the previous version, 
-# but they will feel faster because the data is always fresh!
-
+# ... rest of the app logic ...
 
 # --- TAB 2: DASHBOARD ---
 with tab2:
