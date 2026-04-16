@@ -76,31 +76,48 @@ if not df.empty:
 else:
     sorted_classes = []
 
-# --- 4.5 LIVE "ON DECK" BANNER (Sequential Queue) ---
-handler_id = st.session_state.get("search_box", "").strip()
-
-if handler_id and not df.empty:
-    master_queue = df[~df['status'].isin(['Run Completed', 'Scratch'])].sort_values('Run_Order')
-    my_remaining = master_queue[master_queue['UKI_Number'] == handler_id]
+# --- 4.5 LIVE "ON DECK" BANNER (Fragment Fix) ---
+@st.fragment
+def render_on_deck_banner():
+    handler_id = st.session_state.get("search_box", "").strip()
     
-    if my_remaining.empty:
-        if not df[df['UKI_Number'] == handler_id].empty:
-            st.success("🎉 All your runs for the day are finished!")
-    else:
-        next_run = my_remaining.iloc[0]
-        try:
-            queue_list = list(master_queue['Run_Order'])
-            position = queue_list.index(next_run['Run_Order'])
+    if handler_id:
+        res = conn_supabase.table("trialdata").select("*").execute()
+        f_df = pd.DataFrame(res.data)
+        
+        if not f_df.empty:
+            f_df['UKI_Number'] = f_df['UKI_Number'].astype(str).str.strip()
+            f_df['Run_Order'] = pd.to_numeric(f_df['Run_Order'], errors='coerce').fillna(0).astype(int)
             
-            if position == 0:
-                if next_run['status'] == 'In Ring':
-                    st.warning(f"🚀 **{next_run['Name']} is IN THE RING!** ({next_run['Combined Class Name']})")
-                else:
-                    st.info(f"📣 **{next_run['Name']} is NEXT UP!** Get to the line for {next_run['Combined Class Name']}.")
+            master_queue = f_df[~f_df['status'].isin(['Run Completed', 'Scratch'])].sort_values('Run_Order')
+            my_remaining = master_queue[master_queue['UKI_Number'] == handler_id]
+            
+            if my_remaining.empty:
+                if not f_df[f_df['UKI_Number'] == handler_id].empty:
+                    st.success("🎉 All your runs for the day are finished!")
             else:
-                st.info(f"🐾 **Next Run:** {next_run['Name']} in {next_run['Combined Class Name']}. There are **{position}** dogs before you.")
-        except ValueError:
-            pass
+                next_run = my_remaining.iloc[0]
+                try:
+                    queue_list = list(master_queue['Run_Order'])
+                    position = queue_list.index(next_run['Run_Order'])
+                    
+                    c_msg, c_refresh = st.columns([5, 1])
+                    with c_msg:
+                        if position == 0:
+                            if next_run['status'] == 'In Ring':
+                                st.warning(f"🚀 **{next_run['Name']} is IN THE RING!** ({next_run['Combined Class Name']})")
+                            else:
+                                st.info(f"📣 **{next_run['Name']} is NEXT UP!** Get to the line for {next_run['Combined Class Name']}.")
+                        else:
+                            st.info(f"🐾 **Next Run:** {next_run['Name']} in {next_run['Combined Class Name']}. There are **{position}** dogs before you.")
+                    
+                    with c_refresh:
+                        if st.button("🔄", key="frag_refresh_btn", use_container_width=True):
+                            st.rerun() 
+                except ValueError:
+                    pass
+
+render_on_deck_banner()
 
 # 5. TABS SETUP
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -163,11 +180,11 @@ with tab2:
         total = len(df)
         checked_in = len(df[df['status'] == 'Checked In'])
         scratched = len(df[df['status'] == 'Scratch'])
-        in_ring = len(df[df['status'] == 'In Ring'])
+        completed = len(df[df['status'] == 'Run Completed'])
         
         m1.metric("Total Entries", total)
         m2.metric("Checked In", f"{checked_in} ({(checked_in/total)*100:.1f}%)")
-        m3.metric("Currently in Ring", in_ring)
+        m3.metric("Completed Runs", completed)
         m4.metric("Scratches", scratched, delta_color="inverse")
         
         st.divider()
