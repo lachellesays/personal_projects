@@ -122,6 +122,49 @@ with tab1:
         else:
             st.warning(f"Handler #{handler_input} not found.")
 
+# --- TAB 2: DASHBOARD (BROUGHT BACK & ENHANCED) ---
+with tab2:
+    st.header("📊 Trial Dashboard")
+    
+    if st.button("🔄 Refresh All Data", key="refresh_dash"):
+        fetch_fresh_data()
+        st.rerun()
+
+    if not df.empty:
+        # High-level Metrics
+        m1, m2, m3, m4 = st.columns(4)
+        total = len(df)
+        checked_in = len(df[df['status'] == 'Checked In'])
+        scratched = len(df[df['status'] == 'Scratch'])
+        in_ring = len(df[df['status'] == 'In Ring'])
+        
+        m1.metric("Total Entries", total)
+        m2.metric("Checked In", f"{checked_in} ({(checked_in/total)*100:.1f}%)")
+        m3.metric("Currently In Ring", in_ring)
+        m4.metric("Scratches", scratched, delta_color="inverse")
+        
+        st.divider()
+        
+        # Breakdown by Class
+        st.subheader("Progress by Class")
+        for agility_class in sorted(df['Combined Class Name'].unique()):
+            class_data = df[df['Combined Class Name'] == agility_class]
+            class_total = len(class_data)
+            class_done = len(class_data[class_data['status'] == 'Run Completed'])
+            
+            # Progress bar for the class
+            progress = class_done / class_total if class_total > 0 else 0
+            
+            with st.expander(f"📌 {agility_class} ({int(progress*100)}% Complete)"):
+                col_left, col_right = st.columns([2, 1])
+                with col_left:
+                    st.progress(progress)
+                with col_right:
+                    st.write(f"Done: {class_done} / Total: {class_total}")
+                
+                # Show specific status counts
+                st.write(class_data['status'].value_counts())
+
 # --- TAB 3: RUNNING ORDER (Personalized & Grouped) ---
 with tab3:
     st.header("Class Running Order")
