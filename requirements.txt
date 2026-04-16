@@ -1,0 +1,6 @@
+streamlit
+st-supabase-connection
+st-gsheets-connection
+pandas
+supabase
+gotrue
