@@ -12,56 +12,40 @@ st.set_page_config(page_title="Agility Trial Center", page_icon="🐾", layout="
 st.markdown("""
     <style>
     /* 1. LAYOUT & SPACING */
-    .block-container { 
-        padding-top: 5rem; 
-        padding-bottom: 5rem; 
-    }
-    .stTabs [data-baseweb="tab-list"] { 
-        gap: 8px; 
-    }
-    .main-header { 
-        font-size: 2.2rem; 
-        font-weight: 800; 
-        color: #1E3A8A; 
-    }
+    .block-container { padding-top: 5rem; padding-bottom: 5rem; }
+    .main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
     
-    /* 2. MOBILE SCROLLING FIX (iPhone Optimized) */
-    /* Restore native 'bounce' and momentum to prevent the 'stuck' feeling */
-    html, body {
-        overscroll-behavior-y: auto !important;
-        overflow: auto !important;
+    /* 2. THE SPECIFIC SELECTBOX FIX */
+    /* This targets the pop-up menu that appears when you tap the selectbox */
+    div[data-baseweb="popover"] {
+        z-index: 999999 !important;
     }
 
-    /* Increase dropdown height to reduce need for scrolling in lists */
-    div[data-baseweb="popover"] ul {
-        max-height: 450px !important; 
-        -webkit-overflow-scrolling: touch !important; 
+    div[data-baseweb="menu"] {
+        /* Force the list to be scrollable and smooth on iOS */
+        -webkit-overflow-scrolling: touch !important;
+        overflow-y: auto !important;
+        max-height: 400px !important;
+        /* Prevents the 'stuck' feeling by isolating touch events to the list */
+        touch-action: pan-y !important;
     }
 
-    /* Add room at the bottom so the iPhone Home Bar doesn't block buttons */
-    .main .block-container {
-        padding-bottom: 150px !important;
-    }
-
-    /* 3. STATUS LABEL STYLING */
-    .status-checked { color: #155724; background-color: #d4edda; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
-    .status-conflict { color: #721c24; background-color: #f8d7da; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
-    .status-scratch { color: #383d41; background-color: #e2e3e5; padding: 3px 8px; border-radius: 4px; text-decoration: line-through; }
-    .status-default { color: #0c5460; background-color: #d1ecf1; padding: 3px 8px; border-radius: 4px; }
-    
-    /* 4. THEME-AWARE HEIGHT HEADER (Light & Dark Mode) */
-    /* Uses RGBA transparency so the background adapts to the theme */
+    /* 3. HEIGHT HEADER (Theme-Aware) */
     .height-header { 
         background-color: rgba(30, 58, 138, 0.1); 
-        color: inherit; /* Keeps text white in dark mode, black in light mode */
+        color: inherit;
         padding: 10px; 
         border-radius: 8px; 
         border-left: 5px solid #1E3A8A; 
         margin-top: 20px; 
-        margin-bottom: 10px;
         font-weight: bold;
-        font-size: 1.1rem;
     }
+
+    /* 4. STATUS STYLES */
+    .status-checked { color: #155724; background-color: #d4edda; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+    .status-conflict { color: #721c24; background-color: #f8d7da; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+    .status-scratch { color: #383d41; background-color: #e2e3e5; padding: 3px 8px; border-radius: 4px; text-decoration: line-through; }
+    .status-default { color: #0c5460; background-color: #d1ecf1; padding: 3px 8px; border-radius: 4px; }
     </style>
     """, unsafe_allow_html=True)
 
