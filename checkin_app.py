@@ -33,6 +33,23 @@ st.markdown("""
         font-weight: bold;
         font-size: 1.1rem;
     }
+/* FIX: Prevents iOS 'Rubber-Banding' and Scroll Locking */
+    html, body {
+        overflow-x: hidden;
+        overscroll-behavior-y: none;
+    }
+
+    /* FIX: Enhances dropdown scrolling on touch devices */
+    div[data-baseweb="popover"], div[data-baseweb="menu"] {
+        -webkit-overflow-scrolling: touch !to-allow-smooth-momentum;
+        max-height: 300px !important; 
+    }
+
+    /* FIX: Adds padding to the bottom of the app */
+    /* This ensures the 'Admin' or 'Steward' buttons aren't hidden by the iPhone home bar */
+    .main {
+        padding-bottom: 100px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
