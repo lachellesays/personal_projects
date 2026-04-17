@@ -208,53 +208,51 @@ with tab2:
                     st.write(f"Done: {class_done} / Total: {class_total}")
                 st.write(class_data['status'].value_counts())
 
-# --- TAB 3: RUNNING ORDER (Smart Map & Master Queue) ---
+# --- TAB 3: RUNNING ORDER (Most Recent Map Logic) ---
 with tab3:
     st.header("Class Running Order")
-    
     if not df.empty:
-        # 1. CHRONOLOGICAL CLASS SELECTION
-        # Uses the sorted_classes list we defined in Section 4.1
         selected_class = st.selectbox("Select Class:", sorted_classes, key="run_select")
         
         if selected_class:
-            # --- 2. SMART MAP SEARCH (Supabase Storage) ---
-            # Standardize the name (e.g., "Masters Jumping" -> "masters_jumping")
-            base_name = selected_class.replace(' ', '_').lower()
+            base_search = selected_class.replace(' ', '_').lower()
             map_displayed = False
             
-            # Check for PDF first (better for mobile zoom), then common image types
-            for ext in ['pdf', 'png', 'jpg', 'jpeg']:
-                try:
-                    full_path = f"{base_name}.{ext}"
-                    # Use .client to access the storage bucket
-                    map_url = conn_supabase.client.storage.from_("coursemaps").get_public_url(full_path)
+            try:
+                # 1. List all files in the bucket
+                files = conn_supabase.client.storage.from_("coursemaps").list()
+                
+                # 2. Filter for files belonging to this class (e.g., starts with 'masters_jumping_')
+                # We sort by 'created_at' to get the newest one first
+                valid_files = [f for f in files if f['name'].startswith(base_search)]
+                
+                if valid_files:
+                    # Sort files by created_at timestamp provided by Supabase
+                    valid_files.sort(key=lambda x: x['created_at'], reverse=True)
+                    latest_file = valid_files[0]['name']
                     
-                    # Verify the file actually exists before rendering
-                    import requests
-                    response = requests.head(map_url)
+                    map_url = conn_supabase.client.storage.from_("coursemaps").get_public_url(latest_file)
                     
-                    if response.status_code == 200:
-                        if ext == 'pdf':
-                            # Embed PDF in a mobile-friendly iframe
-                            st.markdown(f'''
-                                <iframe src="{map_url}" width="100%" height="600px" 
-                                style="border:none; border-radius:10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                                </iframe>
-                            ''', unsafe_allow_html=True)
-                        else:
-                            # Standard image display
-                            st.image(map_url, use_container_width=True, caption=f"Map: {selected_class}")
-                        
-                        map_displayed = True
-                        break # Stop looking once we find a match
-                except:
-                    continue
+                    if latest_file.lower().endswith('.pdf'):
+                        # Display PDF
+                        st.markdown(f'''
+                            <div style="width: 100%; border-radius: 10px; overflow: hidden;">
+                                <iframe src="{map_url}#view=FitH" width="100%" height="500px" style="border:none;"></iframe>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    else:
+                        # Display Image
+                        st.image(map_url, use_container_width=True)
+                    map_displayed = True
+                    
+            except Exception as e:
+                st.error(f"Error fetching maps: {e}")
             
             if not map_displayed:
                 st.info("📍 No course map uploaded yet for this class.")
-
+            
             st.divider()
+            # ... [Rest of Run Order Table] ...
 
             # --- 3. RUNNING ORDER TABLE ---
             # Filter and sort by the master Run_Order within the selected class
@@ -370,7 +368,7 @@ with tab5:
                             st.rerun()
 
 
-# --- TAB 6: ADMIN MAP UPLOAD (With Content-Type Header) ---
+# --- TAB 6: ADMIN MAP UPLOAD (Timestamped) ---
 with tab6:
     st.header("🔒 Secretary Admin")
     if st.text_input("Admin PIN:", type="password", key="admin_pin") == "7890":
@@ -381,20 +379,19 @@ with tab6:
         if uploaded_file and upload_class:
             if st.button("🚀 Sync Map to App", use_container_width=True):
                 with st.spinner("Uploading..."):
+                    import time
                     file_ext = uploaded_file.name.split('.')[-1].lower()
-                    clean_filename = f"{upload_class.replace(' ', '_').lower()}.{file_ext}"
+                    # We add a timestamp so the filename is unique: masters_jumping_1713291500.pdf
+                    timestamp = int(time.time())
+                    clean_filename = f"{upload_class.replace(' ', '_').lower()}_{timestamp}.{file_ext}"
                     
-                    # Determine MIME type
                     mime_type = "application/pdf" if file_ext == "pdf" else f"image/{file_ext}"
                     
                     try:
                         conn_supabase.client.storage.from_("coursemaps").upload(
                             path=clean_filename,
                             file=uploaded_file.getvalue(),
-                            file_options={
-                                "upsert": "true",
-                                "content-type": mime_type
-                            }
+                            file_options={"content-type": mime_type}
                         )
                         st.success(f"Success! {upload_class} map is now live.")
                     except Exception as e:
