@@ -119,9 +119,14 @@ def render_on_deck_banner():
 
 render_on_deck_banner()
 
-# 5. TABS SETUP
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📲 My Check-in", "📊 Dashboard", "🏃 Running Order", "ℹ️ Trial Info", "🚧 Gate Steward"
+# --- 5. TABS SETUP (Updated to include Tab 6) ---
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📲 My Check-in", 
+    "📊 Dashboard", 
+    "🏃 Running Order", 
+    "ℹ️ Trial Info", 
+    "🚧 Gate Steward", 
+    "🔒 Admin"
 ])
 
 # --- TAB 1: INDIVIDUAL CHECK-IN ---
@@ -203,26 +208,65 @@ with tab2:
                     st.write(f"Done: {class_done} / Total: {class_total}")
                 st.write(class_data['status'].value_counts())
 
-# --- TAB 3: RUNNING ORDER ---
+# --- TAB 3: RUNNING ORDER (Smart Map & Master Queue) ---
 with tab3:
     st.header("Class Running Order")
+    
     if not df.empty:
+        # 1. CHRONOLOGICAL CLASS SELECTION
+        # Uses the sorted_classes list we defined in Section 4.1
         selected_class = st.selectbox("Select Class:", sorted_classes, key="run_select")
         
         if selected_class:
-            if not maps_df.empty:
-                target = str(selected_class).strip().lower()
-                match = maps_df[maps_df['Class'].str.strip().str.lower() == target] if 'Class' in maps_df.columns else pd.DataFrame()
-                if not match.empty:
-                    st.image(str(match.iloc[0]['Map_Link']), use_container_width=True)
+            # --- 2. SMART MAP SEARCH (Supabase Storage) ---
+            # Standardize the name (e.g., "Masters Jumping" -> "masters_jumping")
+            base_name = selected_class.replace(' ', '_').lower()
+            map_displayed = False
+            
+            # Check for PDF first (better for mobile zoom), then common image types
+            for ext in ['pdf', 'png', 'jpg', 'jpeg']:
+                try:
+                    full_path = f"{base_name}.{ext}"
+                    # Use .client to access the storage bucket
+                    map_url = conn_supabase.client.storage.from_("coursemaps").get_public_url(full_path)
+                    
+                    # Verify the file actually exists before rendering
+                    import requests
+                    response = requests.head(map_url)
+                    
+                    if response.status_code == 200:
+                        if ext == 'pdf':
+                            # Embed PDF in a mobile-friendly iframe
+                            st.markdown(f'''
+                                <iframe src="{map_url}" width="100%" height="600px" 
+                                style="border:none; border-radius:10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                                </iframe>
+                            ''', unsafe_allow_html=True)
+                        else:
+                            # Standard image display
+                            st.image(map_url, use_container_width=True, caption=f"Map: {selected_class}")
+                        
+                        map_displayed = True
+                        break # Stop looking once we find a match
+                except:
+                    continue
+            
+            if not map_displayed:
+                st.info("📍 No course map uploaded yet for this class.")
 
+            st.divider()
+
+            # --- 3. RUNNING ORDER TABLE ---
+            # Filter and sort by the master Run_Order within the selected class
             run_df = df[df['Combined Class Name'] == selected_class].sort_values(['Height', 'Run_Order'])
             current_handler_num = st.session_state.get("search_box", "").strip()
             
+            # Grouping by jump height for visual clarity
             for height in sorted(run_df['Height'].unique()):
                 st.markdown(f'<div class="height-header">📏 Height: {height}"</div>', unsafe_allow_html=True)
                 height_df = run_df[run_df['Height'] == height].copy()
                 
+                # Apply personalized "Star" to the logged-in handler's dogs
                 if current_handler_num:
                     height_df['Dog'] = height_df.apply(
                         lambda x: f"🌟 {x['Name']}" if str(x['UKI_Number']) == current_handler_num else x['Name'], 
@@ -231,22 +275,36 @@ with tab3:
                 else:
                     height_df['Dog'] = height_df['Name']
 
-                display_cols = ['Handler_Name', 'Dog', 'Breed', 'Class_Type', 'status']
-                available_cols = [c for c in display_cols if c in height_df.columns]
-                final_display = height_df[available_cols].copy()
-                final_display = final_display.rename(columns={'Handler_Name': 'Handler', 'Class_Type': 'Type', 'status': 'Status'})
+                # Format columns for display
+                display_cols = ['Handler_Name', 'Dog', 'Breed', 'status']
+                final_display = height_df[display_cols].copy()
+                final_display = final_display.rename(columns={'Handler_Name': 'Handler', 'status': 'Status'})
 
+                # Conditional styling logic
                 def style_running_order(row):
                     styles = [''] * len(row)
+                    # Highlight the user's row
                     if "🌟" in str(row['Dog']):
                         styles = ['background-color: #dbeafe; color: #1e40af; font-weight: bold'] * len(row)
+                    
+                    # High-visibility for the dog currently in the ring
                     if row['Status'] == 'In Ring':
                         styles = ['background-color: #fef08a; color: #854d0e; border: 2px solid #854d0e'] * len(row)
+                    
+                    # Strike-through for finished or scratched runs
                     elif row['Status'] in ['Run Completed', 'Scratch']:
                         styles = ['text-decoration: line-through; color: #adb5bd; background-color: transparent'] * len(row)
+                    
                     return styles
 
-                st.dataframe(final_display.style.apply(style_running_order, axis=1), hide_index=True, use_container_width=True)
+                # Render the stylized dataframe
+                st.dataframe(
+                    final_display.style.apply(style_running_order, axis=1), 
+                    hide_index=True, 
+                    use_container_width=True
+                )
+    else:
+        st.warning("No trial data found. Please check your Supabase connection.")
 
 # --- TAB 4: TRIAL INFO ---
 with tab4:
@@ -310,3 +368,34 @@ with tab5:
                             conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk_val).execute()
                             fetch_fresh_data()
                             st.rerun()
+
+
+# --- TAB 6: ADMIN MAP UPLOAD (With Content-Type Header) ---
+with tab6:
+    st.header("🔒 Secretary Admin")
+    if st.text_input("Admin PIN:", type="password", key="admin_pin") == "7890":
+        st.subheader("Course Map Upload")
+        upload_class = st.selectbox("Assign Map to Class:", sorted_classes, key="map_assign_select")
+        uploaded_file = st.file_uploader("Choose a file (PDF, JPG, PNG)", type=['pdf', 'jpg', 'jpeg', 'png'])
+
+        if uploaded_file and upload_class:
+            if st.button("🚀 Sync Map to App", use_container_width=True):
+                with st.spinner("Uploading..."):
+                    file_ext = uploaded_file.name.split('.')[-1].lower()
+                    clean_filename = f"{upload_class.replace(' ', '_').lower()}.{file_ext}"
+                    
+                    # Determine MIME type
+                    mime_type = "application/pdf" if file_ext == "pdf" else f"image/{file_ext}"
+                    
+                    try:
+                        conn_supabase.client.storage.from_("coursemaps").upload(
+                            path=clean_filename,
+                            file=uploaded_file.getvalue(),
+                            file_options={
+                                "upsert": "true",
+                                "content-type": mime_type
+                            }
+                        )
+                        st.success(f"Success! {upload_class} map is now live.")
+                    except Exception as e:
+                        st.error(f"Upload failed: {e}")
