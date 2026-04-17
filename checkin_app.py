@@ -193,11 +193,21 @@ with tab2:
                 st.progress(progress)
 
 # --- TAB 3: RUNNING ORDER ---
+# --- TAB 3: RUNNING ORDER (Segmented Version) ---
 with tab3:
     st.header("Class Running Order")
     if not df.empty:
-        selected_class = st.selectbox("Select Class:", sorted_classes, key="run_select")
+        # This creates a horizontal scroll of 'pills'
+        selected_class = st.segmented_control(
+            "Select Class:", 
+            options=sorted_classes, 
+            key="run_segment_select",
+            selection_mode="single",
+            default=sorted_classes[0] if sorted_classes else None
+        )
+        
         if selected_class:
+            # ... (Rest of your logic)
             clean_class_search = selected_class.strip().lower()
             base_search = re.sub(r'[^a-z0-9]', '_', clean_class_search)
             map_displayed = False
