@@ -15,12 +15,24 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { gap: 8px; }
     .main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
     
+    /* Visual Status Styles */
     .status-checked { color: #155724; background-color: #d4edda; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
     .status-conflict { color: #721c24; background-color: #f8d7da; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
     .status-scratch { color: #383d41; background-color: #e2e3e5; padding: 3px 8px; border-radius: 4px; text-decoration: line-through; }
     .status-default { color: #0c5460; background-color: #d1ecf1; padding: 3px 8px; border-radius: 4px; }
     
-    .height-header { background-color: #f1f5f9; padding: 10px; border-radius: 8px; border-left: 5px solid #1E3A8A; margin-top: 20px; font-weight: bold; }
+    /* FIX: Theme-Aware Height Header */
+    .height-header { 
+        background-color: rgba(30, 58, 138, 0.1); /* Subtle blue tint that works on light/dark */
+        color: inherit; /* Inherits white in dark mode, black in light mode */
+        padding: 10px; 
+        border-radius: 8px; 
+        border-left: 5px solid #1E3A8A; 
+        margin-top: 20px; 
+        margin-bottom: 10px;
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
     </style>
     """, unsafe_allow_html=True)
 
