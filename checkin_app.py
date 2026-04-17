@@ -208,41 +208,46 @@ with tab2:
                     st.write(f"Done: {class_done} / Total: {class_total}")
                 st.write(class_data['status'].value_counts())
 
-# --- TAB 3: RUNNING ORDER (Most Recent Map Logic) ---
+# --- TAB 3: RUNNING ORDER (Sanitized Map Search) ---
 with tab3:
     st.header("Class Running Order")
     if not df.empty:
+        # 1. DEFINE THE VARIABLE FIRST
         selected_class = st.selectbox("Select Class:", sorted_classes, key="run_select")
         
         if selected_class:
-            base_search = selected_class.replace(' ', '_').lower()
+            # 2. NOW SANITIZE IT (Moved after definition)
+            import re
+            clean_class_search = selected_class.strip().lower()
+            # Replace spaces and special chars with underscores to match Tab 6
+            base_search = re.sub(r'[^a-z0-9]', '_', clean_class_search)
+            
             map_displayed = False
             
             try:
-                # 1. List all files in the bucket
-                files = conn_supabase.client.storage.from_("coursemaps").list()
+                # 3. List all files and find the most recent
+                files_res = conn_supabase.client.storage.from_("coursemaps").list()
                 
-                # 2. Filter for files belonging to this class (e.g., starts with 'masters_jumping_')
-                # We sort by 'created_at' to get the newest one first
-                valid_files = [f for f in files if f['name'].startswith(base_search)]
+                # Look for files starting with 'beginner_agility_'
+                valid_files = [f for f in files_res if f['name'].startswith(base_search)]
                 
                 if valid_files:
-                    # Sort files by created_at timestamp provided by Supabase
+                    # Sort by creation date (newest first)
                     valid_files.sort(key=lambda x: x['created_at'], reverse=True)
                     latest_file = valid_files[0]['name']
                     
                     map_url = conn_supabase.client.storage.from_("coursemaps").get_public_url(latest_file)
                     
                     if latest_file.lower().endswith('.pdf'):
-                        # Display PDF
+                        # Display PDF with horizontal fit
                         st.markdown(f'''
-                            <div style="width: 100%; border-radius: 10px; overflow: hidden;">
+                            <div style="width: 100%; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
                                 <iframe src="{map_url}#view=FitH" width="100%" height="500px" style="border:none;"></iframe>
                             </div>
                         ''', unsafe_allow_html=True)
                     else:
                         # Display Image
-                        st.image(map_url, use_container_width=True)
+                        st.image(map_url, use_container_width=True, caption=f"Latest Map for {selected_class}")
                     map_displayed = True
                     
             except Exception as e:
@@ -367,32 +372,35 @@ with tab5:
                             fetch_fresh_data()
                             st.rerun()
 
-
-# --- TAB 6: ADMIN MAP UPLOAD (Timestamped) ---
-with tab6:
-    st.header("🔒 Secretary Admin")
-    if st.text_input("Admin PIN:", type="password", key="admin_pin") == "7890":
-        st.subheader("Course Map Upload")
-        upload_class = st.selectbox("Assign Map to Class:", sorted_classes, key="map_assign_select")
-        uploaded_file = st.file_uploader("Choose a file (PDF, JPG, PNG)", type=['pdf', 'jpg', 'jpeg', 'png'])
-
-        if uploaded_file and upload_class:
-            if st.button("🚀 Sync Map to App", use_container_width=True):
-                with st.spinner("Uploading..."):
-                    import time
-                    file_ext = uploaded_file.name.split('.')[-1].lower()
-                    # We add a timestamp so the filename is unique: masters_jumping_1713291500.pdf
-                    timestamp = int(time.time())
-                    clean_filename = f"{upload_class.replace(' ', '_').lower()}_{timestamp}.{file_ext}"
-                    
-                    mime_type = "application/pdf" if file_ext == "pdf" else f"image/{file_ext}"
-                    
-                    try:
-                        conn_supabase.client.storage.from_("coursemaps").upload(
-                            path=clean_filename,
-                            file=uploaded_file.getvalue(),
-                            file_options={"content-type": mime_type}
-                        )
-                        st.success(f"Success! {upload_class} map is now live.")
-                    except Exception as e:
-                        st.error(f"Upload failed: {e}")
+# --- TAB 6: ADMIN MAP UPLOAD (Hardened Naming) ---
+if st.button("🚀 Sync Map to App", use_container_width=True):
+    with st.spinner("Uploading..."):
+        import time
+        import re
+        
+        file_ext = uploaded_file.name.split('.')[-1].lower()
+        
+        # 1. STRIP AND CLEAN: 
+        # Convert to lowercase, remove leading/trailing spaces
+        clean_class = upload_class.strip().lower()
+        
+        # 2. REGEX REPLACE: 
+        # This replaces ANY non-alphanumeric character (spaces, slashes, dashes) 
+        # with a single underscore. This is the "SDX Gold Standard" for filenames.
+        safe_class_name = re.sub(r'[^a-z0-9]', '_', clean_class)
+        
+        # 3. TIMESTAMP:
+        timestamp = int(time.time())
+        
+        # Final filename: beginner_agility_1713291500.jpg
+        clean_filename = f"{safe_class_name}_{timestamp}.{file_ext}"
+        
+        try:
+            conn_supabase.client.storage.from_("coursemaps").upload(
+                path=clean_filename,
+                file=uploaded_file.getvalue(),
+                file_options={"content-type": f"application/pdf" if file_ext == 'pdf' else f"image/{file_ext}"}
+            )
+            st.success(f"Success! {upload_class} map is now live as {clean_filename}")
+        except Exception as e:
+            st.error(f"Upload failed: {e}")
