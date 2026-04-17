@@ -11,20 +11,49 @@ st.set_page_config(page_title="Agility Trial Center", page_icon="🐾", layout="
 
 st.markdown("""
     <style>
-    .block-container { padding-top: 5rem; padding-bottom: 2rem; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
+    /* 1. LAYOUT & SPACING */
+    .block-container { 
+        padding-top: 5rem; 
+        padding-bottom: 5rem; 
+    }
+    .stTabs [data-baseweb="tab-list"] { 
+        gap: 8px; 
+    }
+    .main-header { 
+        font-size: 2.2rem; 
+        font-weight: 800; 
+        color: #1E3A8A; 
+    }
     
-    /* Visual Status Styles */
+    /* 2. MOBILE SCROLLING FIX (iPhone Optimized) */
+    /* Restore native 'bounce' and momentum to prevent the 'stuck' feeling */
+    html, body {
+        overscroll-behavior-y: auto !important;
+        overflow: auto !important;
+    }
+
+    /* Increase dropdown height to reduce need for scrolling in lists */
+    div[data-baseweb="popover"] ul {
+        max-height: 450px !important; 
+        -webkit-overflow-scrolling: touch !important; 
+    }
+
+    /* Add room at the bottom so the iPhone Home Bar doesn't block buttons */
+    .main .block-container {
+        padding-bottom: 150px !important;
+    }
+
+    /* 3. STATUS LABEL STYLING */
     .status-checked { color: #155724; background-color: #d4edda; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
     .status-conflict { color: #721c24; background-color: #f8d7da; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
     .status-scratch { color: #383d41; background-color: #e2e3e5; padding: 3px 8px; border-radius: 4px; text-decoration: line-through; }
     .status-default { color: #0c5460; background-color: #d1ecf1; padding: 3px 8px; border-radius: 4px; }
     
-    /* FIX: Theme-Aware Height Header */
+    /* 4. THEME-AWARE HEIGHT HEADER (Light & Dark Mode) */
+    /* Uses RGBA transparency so the background adapts to the theme */
     .height-header { 
-        background-color: rgba(30, 58, 138, 0.1); /* Subtle blue tint that works on light/dark */
-        color: inherit; /* Inherits white in dark mode, black in light mode */
+        background-color: rgba(30, 58, 138, 0.1); 
+        color: inherit; /* Keeps text white in dark mode, black in light mode */
         padding: 10px; 
         border-radius: 8px; 
         border-left: 5px solid #1E3A8A; 
@@ -32,23 +61,6 @@ st.markdown("""
         margin-bottom: 10px;
         font-weight: bold;
         font-size: 1.1rem;
-    }
-/* FIX: Prevents iOS 'Rubber-Banding' and Scroll Locking */
-    html, body {
-        overflow-x: hidden;
-        overscroll-behavior-y: none;
-    }
-
-    /* FIX: Enhances dropdown scrolling on touch devices */
-    div[data-baseweb="popover"], div[data-baseweb="menu"] {
-        -webkit-overflow-scrolling: touch !to-allow-smooth-momentum;
-        max-height: 300px !important; 
-    }
-
-    /* FIX: Adds padding to the bottom of the app */
-    /* This ensures the 'Admin' or 'Steward' buttons aren't hidden by the iPhone home bar */
-    .main {
-        padding-bottom: 100px;
     }
     </style>
     """, unsafe_allow_html=True)
