@@ -103,40 +103,41 @@ if not df.empty:
 else:
     sorted_classes = []
 
-# 4.5 LIVE "ON DECK" BANNER (Fragment Version)
-@st.fragment
-def render_on_deck_banner():
-    handler_id = st.session_state.get("search_box", "").strip()
-    if handler_id:
-        res = conn_supabase.table("trialdata").select("*").execute()
-        f_df = pd.DataFrame(res.data)
-        if not f_df.empty:
-            f_df['UKI_Number'] = f_df['UKI_Number'].astype(str).str.strip()
-            f_df['Run_Order'] = pd.to_numeric(f_df['Run_Order'], errors='coerce').fillna(0).astype(int)
-            master_queue = f_df[~f_df['status'].isin(['Run Completed', 'Scratch'])].sort_values('Run_Order')
-            my_remaining = master_queue[master_queue['UKI_Number'] == handler_id]
+##commenting out to try and prevent TOS issue with too many pings
+# # 4.5 LIVE "ON DECK" BANNER (Fragment Version)
+# @st.fragment
+# def render_on_deck_banner():
+#     handler_id = st.session_state.get("search_box", "").strip()
+#     if handler_id:
+#         res = conn_supabase.table("trialdata").select("*").execute()
+#         f_df = pd.DataFrame(res.data)
+#         if not f_df.empty:
+#             f_df['UKI_Number'] = f_df['UKI_Number'].astype(str).str.strip()
+#             f_df['Run_Order'] = pd.to_numeric(f_df['Run_Order'], errors='coerce').fillna(0).astype(int)
+#             master_queue = f_df[~f_df['status'].isin(['Run Completed', 'Scratch'])].sort_values('Run_Order')
+#             my_remaining = master_queue[master_queue['UKI_Number'] == handler_id]
             
-            if my_remaining.empty:
-                if not f_df[f_df['UKI_Number'] == handler_id].empty:
-                    st.success("🎉 All your runs for the day are finished!")
-            else:
-                next_run = my_remaining.iloc[0]
-                try:
-                    queue_list = list(master_queue['Run_Order'])
-                    position = queue_list.index(next_run['Run_Order'])
-                    c_msg, c_refresh = st.columns([5, 1])
-                    with c_msg:
-                        if position == 0:
-                            st.warning(f"🚀 **{next_run['Name']} is IN THE RING!** ({next_run['Combined Class Name']})")
-                        else:
-                            st.info(f"🐾 **Next Run:** {next_run['Name']} in {next_run['Combined Class Name']}. There are **{position}** dogs before you.")
-                    with c_refresh:
-                        if st.button("🔄", key="frag_refresh_btn", use_container_width=True):
-                            st.rerun()
-                except ValueError:
-                    pass
+#             if my_remaining.empty:
+#                 if not f_df[f_df['UKI_Number'] == handler_id].empty:
+#                     st.success("🎉 All your runs for the day are finished!")
+#             else:
+#                 next_run = my_remaining.iloc[0]
+#                 try:
+#                     queue_list = list(master_queue['Run_Order'])
+#                     position = queue_list.index(next_run['Run_Order'])
+#                     c_msg, c_refresh = st.columns([5, 1])
+#                     with c_msg:
+#                         if position == 0:
+#                             st.warning(f"🚀 **{next_run['Name']} is IN THE RING!** ({next_run['Combined Class Name']})")
+#                         else:
+#                             st.info(f"🐾 **Next Run:** {next_run['Name']} in {next_run['Combined Class Name']}. There are **{position}** dogs before you.")
+#                     with c_refresh:
+#                         if st.button("🔄", key="frag_refresh_btn", use_container_width=True):
+#                             st.rerun()
+#                 except ValueError:
+#                     pass
 
-render_on_deck_banner()
+# render_on_deck_banner()
 
 # 5. TABS SETUP
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -150,7 +151,7 @@ with tab1:
         user_data = df[df['UKI_Number'] == handler_input]
         if not user_data.empty:
             st.subheader(f"Welcome, {user_data.iloc[0]['Handler_Name']}")
-            status_options = ["Not Checked In", "Checked In", "Scratch", "Conflict"]
+            status_options = status_options = ["Not Checked In", "Checked In", "Scratch", "Conflict", "NFC"]
             for dog in user_data['Name'].unique():
                 dog_rows = user_data[user_data['Name'] == dog]
                 with st.container(border=True):
@@ -233,17 +234,40 @@ with tab3:
             for height in sorted(run_df['Height'].unique()):
                 st.markdown(f'<div class="height-header">📏 Height: {height}"</div>', unsafe_allow_html=True)
                 height_df = run_df[run_df['Height'] == height].copy()
+                # Inside the height loop in Tab 3
                 if current_handler_num:
-                    height_df['Dog'] = height_df.apply(lambda x: f"🌟 {x['Name']}" if str(x['UKI_Number']) == current_handler_num else x['Name'], axis=1)
+                    height_df['Dog'] = height_df.apply(
+                        lambda x: f"🌟 {x['Name']}" if str(x['UKI_Number']) == current_handler_num 
+                        else (f"{x['Name']} (NFC)" if x['status'] == "NFC" else x['Name']), 
+                        axis=1
+                    )
                 else:
-                    height_df['Dog'] = height_df['Name']
+                    height_df['Dog'] = height_df.apply(
+                        lambda x: f"{x['Name']} (NFC)" if x['status'] == "NFC" else x['Name'], 
+                        axis=1
+                    )
                 display_cols = ['Handler_Name', 'Dog', 'Breed', 'status']
                 final_display = height_df[display_cols].copy().rename(columns={'Handler_Name': 'Handler', 'status': 'Status'})
                 def style_ro(row):
                     styles = [''] * len(row)
-                    if "🌟" in str(row['Dog']): styles = ['background-color: #dbeafe; color: #1e40af; font-weight: bold'] * len(row)
-                    if row['Status'] == 'In Ring': styles = ['background-color: #fef08a; color: #854d0e; border: 2px solid #854d0e'] * len(row)
-                    elif row['Status'] in ['Run Completed', 'Scratch']: styles = ['text-decoration: line-through; color: #adb5bd'] * len(row)
+                    
+                    # 1. Highlight the user's dog
+                    if "🌟" in str(row['Dog']): 
+                        styles = ['background-color: rgba(30, 58, 138, 0.2); font-weight: bold'] * len(row)
+                    
+                    # 2. DESIGNATION: NFC (Not For Competition)
+                    # We add a subtle italics and a blue badge look
+                    if row['Status'] == 'NFC':
+                        styles = ['color: #6366f1; font-style: italic; font-weight: 500;'] * len(row)
+
+                    # 3. HIGH VISIBILITY: In Ring
+                    if row['Status'] == 'In Ring':
+                        styles = ['background-color: #fef08a; color: #854d0e; border: 2px solid #854d0e'] * len(row)
+                    
+                    # 4. COMPLETED/SCRATCHED
+                    elif row['Status'] in ['Run Completed', 'Scratch']:
+                        styles = ['text-decoration: line-through; color: #adb5bd'] * len(row)
+                        
                     return styles
                 st.dataframe(final_display.style.apply(style_ro, axis=1), hide_index=True, use_container_width=True)
 
