@@ -236,13 +236,63 @@ with tab6:
 
 # --- TAB 7: SCORING (The Scrimer's Interface) ---
 with tab7:
+    # 1. AGGRESSIVE CUSTOM CSS FOR TRUE KEYPAD
+    st.markdown("""
+        <style>
+        /* Force the grid container */
+        .numpad-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        /* Target every button inside the scoring tab */
+        .stButton > button {
+            width: 100% !important;
+            height: 80px !important;
+            font-size: 26px !important;
+            font-weight: bold !important;
+            border-radius: 10px !important;
+        }
+
+        /* Digital Time Display Styling */
+        .time-display {
+            font-size: 65px !important;
+            text-align: center;
+            background: #1e1e1e;
+            color: #00ff41;
+            border-radius: 15px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            border: 3px solid #444;
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        /* Make the Submit button green and massive */
+        .stButton > button[kind="primary"] {
+            background-color: #28a745 !important;
+            height: 100px !important;
+            font-size: 30px !important;
+            margin-top: 20px;
+        }
+        
+        /* Fix for mobile/iPad column stacking */
+        [data-testid="column"] {
+            min-width: 30% !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.header("⏱️ Scrimer's Scoring Booth")
     
-    scoring_class = st.selectbox("Select Class to Score:", sorted_classes, key="score_class_sel")
+    # --- 2. Selection Logic ---
+    scoring_class = st.selectbox("Select Class:", sorted_classes, key="score_class_sel")
     is_nursery = "nursery" in scoring_class.lower()
     is_gamblers = "gamblers" in scoring_class.lower()
     
-    # --- 1. Selection & SCT Logic ---
     current_in_ring = df[(df['Combined Class Name'] == scoring_class) & (df['status'] == 'In Ring')]
     all_dogs_in_class = df[df['Combined Class Name'] == scoring_class].sort_values(['Height', 'Run_Order'])
     dog_names = all_dogs_in_class['Name'].tolist()
@@ -255,7 +305,7 @@ with tab7:
     selected_dog_name = st.selectbox("Active Dog:", dog_names, index=default_idx)
     active_dog = all_dogs_in_class[all_dogs_in_class['Name'] == selected_dog_name].iloc[0]
 
-    # SCT Calculation
+    # SCT Pull
     is_big = int(active_dog['Height']) >= 20
     specs_res = conn_supabase.table("course_specs").select("*").eq("class_name", scoring_class).execute()
     sct = 0
@@ -263,89 +313,73 @@ with tab7:
         specs = specs_res.data[0]
         sct = specs['chosen_sct_big'] if is_big else specs['chosen_sct_small']
 
-    # --- 2. Initialize State ---
+    # --- 3. State ---
     if 't_ref' not in st.session_state: st.session_state.t_ref = 0
     if 't_fault' not in st.session_state: st.session_state.t_fault = 0
     if 'is_e' not in st.session_state: st.session_state.is_e = False
     if 'time_str' not in st.session_state: st.session_state.time_str = ""
 
-    # --- 3. Scoring Buttons ---
+    # --- 4. Judge's Marks (Standard Columns) ---
     c1, c2, c3 = st.columns(3)
     with c1:
         st.image("https://trialsecretary.notion.site/image/attachment%3A53feb389-ccd9-4f6b-a663-0fd46dc5d9a6%3Aimage.png?table=block&id=34ce6efe-88b7-806b-a467-d2033081650c&spaceId=a58286e5-194b-4546-8ee9-b7ebb91914d1&width=1410", width=80)
-        if st.button(f"Refusal ({st.session_state.t_ref})", use_container_width=True):
-            st.session_state.t_ref += 1
-            st.rerun()
+        if st.button(f"R ({st.session_state.t_ref})", key="r_btn"):
+            st.session_state.t_ref += 1; st.rerun()
     with c2:
         st.image("https://trialsecretary.notion.site/image/attachment%3Aeaf1e083-97fb-4aad-8fca-3eba410da7be%3Aimage.png?table=block&id=34ce6efe-88b7-802b-9ef8-c06561fa78e4&spaceId=a58286e5-194b-4546-8ee9-b7ebb91914d1&width=1410", width=80)
-        if st.button(f"Std Fault ({st.session_state.t_fault})", use_container_width=True):
-            st.session_state.t_fault += 1
-            st.rerun()
+        if st.button(f"F ({st.session_state.t_fault})", key="f_btn"):
+            st.session_state.t_fault += 1; st.rerun()
     with c3:
         st.image("https://trialsecretary.notion.site/image/attachment%3Ad1c1f212-0248-4411-ad96-74f00719b948%3Aimage.png?table=block&id=34ce6efe-88b7-8038-a837-e945ab877561&spaceId=a58286e5-194b-4546-8ee9-b7ebb91914d1&width=1410", width=80)
-        if st.button("ELIM (E)", type="primary" if st.session_state.is_e else "secondary", use_container_width=True):
-            st.session_state.is_e = not st.session_state.is_e
-            st.rerun()
+        if st.button("E", type="primary" if st.session_state.is_e else "secondary", key="e_btn"):
+            st.session_state.is_e = not st.session_state.is_e; st.rerun()
 
-    st.divider()
-
-    # --- 4. CALCULATOR STYLE NUMPAD ---
-    st.subheader("⏱️ Enter Time")
-    
-    # Formatting Logic: 3331 -> 33.31
+    # --- 5. Digital Display ---
     display_time = "0.00"
     if st.session_state.time_str:
-        raw = st.session_state.time_str.zfill(3) # Pad with zeros so "5" becomes "0.05"
+        raw = st.session_state.time_str.zfill(3)
         display_time = f"{raw[:-2]}.{raw[-2:]}"
-
-    # Big visual display of the time
-    st.markdown(f"<div style='font-size: 48px; text-align: center; background: #eee; border-radius: 10px; margin-bottom: 10px;'>{display_time}s</div>", unsafe_allow_html=True)
-
-    # Numpad Grid
-    def add_digit(d): st.session_state.time_str += str(d)
-    def clear_digit(): st.session_state.time_str = ""
-
-    col_a, col_b, col_c = st.columns(3)
-    for i in range(1, 10):
-        with [col_a, col_b, col_c][(i-1)%3]:
-            if st.button(str(i), key=f"num_{i}"): add_digit(i); st.rerun()
     
-    with col_a: 
-        if st.button("CLR", type="secondary"): clear_digit(); st.rerun()
-    with col_b: 
-        if st.button("0"): add_digit(0); st.rerun()
-    with col_c:
-        if st.button("⌫"): st.session_state.time_str = st.session_state.time_str[:-1]; st.rerun()
+    st.markdown(f"<div class='time-display'>{display_time}s</div>", unsafe_allow_html=True)
 
-    # --- 5. Submit & Math ---
+    # --- 6. The 3-Column Keypad ---
+    # We use a manual loop to keep the button keys unique and the layout tight
+    def press(v): st.session_state.time_str += str(v)
+    
+    rows = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+        ["CLR", 0, "⌫"]
+    ]
+
+    for row in rows:
+        cols = st.columns(3)
+        for i, val in enumerate(row):
+            with cols[i]:
+                if val == "CLR":
+                    if st.button("CLR", key="clr"): st.session_state.time_str = ""; st.rerun()
+                elif val == "⌫":
+                    if st.button("⌫", key="back"): st.session_state.time_str = st.session_state.time_str[:-1]; st.rerun()
+                else:
+                    if st.button(str(val), key=f"num_{val}"): press(val); st.rerun()
+
+    # --- 7. Submit Math ---
     st.divider()
-    final_float_time = float(display_time)
-    
-    ref_points = 0 if (is_nursery or is_gamblers) else (st.session_state.t_ref * 5)
-    fault_points = (st.session_state.t_fault * 5)
-    time_faults = max(0, final_float_time - sct)
-    total_score = ref_points + fault_points + time_faults
+    final_time = float(display_time)
+    r_pts = 0 if (is_nursery or is_gamblers) else (st.session_state.t_ref * 5)
+    f_pts = (st.session_state.t_fault * 5)
+    t_faults = max(0, final_time - sct)
+    total = r_pts + f_pts + t_faults
 
-    st.write(f"SCT: {sct}s | Score: **{total_score:.2f}**")
+    st.info(f"SCT: {sct}s | Total: {total:.2f}")
 
-    if st.button("🚀 SUBMIT FINAL SCORE", use_container_width=True, type="primary"):
-        status_update = "Eliminated" if st.session_state.is_e else "Run Completed"
-        
+    if st.button("🚀 SUBMIT SCORE", type="primary", use_container_width=True):
+        status = "Eliminated" if st.session_state.is_e else "Run Completed"
         conn_supabase.table("trialdata").update({
-            "status": status_update,
-            "refusals": st.session_state.t_ref,
-            "faults": st.session_state.t_fault,
-            "time": final_float_time,
-            "total_score": total_score if not st.session_state.is_e else 999
+            "status": status, "refusals": st.session_state.t_ref, "faults": st.session_state.t_fault,
+            "time": final_time, "total_score": total if not st.session_state.is_e else 999
         }).eq("Run_Order", active_dog['Run_Order']).execute()
         
-        # Reset everything
-        st.session_state.t_ref = 0
-        st.session_state.t_fault = 0
-        st.session_state.is_e = False
-        st.session_state.time_str = ""
-        
-        st.success(f"Score Saved for {active_dog['Name']}!")
-        time.sleep(1)
-        fetch_fresh_data()
-        st.rerun()
+        st.session_state.t_ref = 0; st.session_state.t_fault = 0; st.session_state.is_e = False; st.session_state.time_str = ""
+        st.success("Score Recorded!"); time.sleep(1); fetch_fresh_data(); st.rerun()
