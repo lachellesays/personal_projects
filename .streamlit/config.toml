@@ -1,6 +1,12 @@
 [server]
-# This stops the server from 'zipping' data, which iPads often hate
 enableWebsocketCompression = false
-# Disabling these can sometimes bypass strict mobile firewalls
 enableCORS = false
 enableXsrfProtection = false
+# ADD THESE TWO LINES:
+headless = true
+address = "0.0.0.0"
+
+[browser]
+# This forces the browser to not 'gather' usage stats, 
+# which DuckDuckGo and Safari often flag as trackers.
+gatherUsageStats = false
