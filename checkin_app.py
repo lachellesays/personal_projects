@@ -1,61 +1,38 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 from st_supabase_connection import SupabaseConnection
 import pandas as pd
 import time
 import re
-import requests
 
 # 1. PAGE CONFIG & UI STYLING
 st.set_page_config(page_title="Agility Trial Center", page_icon="🐾", layout="wide")
 
 st.markdown("""
-    <style>
-    /* 1. LAYOUT & SPACING */
-    .block-container { padding-top: 5rem; padding-bottom: 5rem; }
-    .main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
-    
-    /* 2. THE SPECIFIC SELECTBOX FIX */
-    /* This targets the pop-up menu that appears when you tap the selectbox */
-    div[data-baseweb="popover"] {
-        z-index: 999999 !important;
-    }
-
-    div[data-baseweb="menu"] {
-        /* Force the list to be scrollable and smooth on iOS */
-        -webkit-overflow-scrolling: touch !important;
-        overflow-y: auto !important;
-        max-height: 400px !important;
-        /* Prevents the 'stuck' feeling by isolating touch events to the list */
-        touch-action: pan-y !important;
-    }
-
-    /* 3. HEIGHT HEADER (Theme-Aware) */
-    .height-header { 
-        background-color: rgba(30, 58, 138, 0.1); 
-        color: inherit;
-        padding: 10px; 
-        border-radius: 8px; 
-        border-left: 5px solid #1E3A8A; 
-        margin-top: 20px; 
-        font-weight: bold;
-    }
-
-    /* 4. STATUS STYLES */
-    .status-checked { color: #155724; background-color: #d4edda; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
-    .status-conflict { color: #721c24; background-color: #f8d7da; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
-    .status-scratch { color: #383d41; background-color: #e2e3e5; padding: 3px 8px; border-radius: 4px; text-decoration: line-through; }
-    .status-default { color: #0c5460; background-color: #d1ecf1; padding: 3px 8px; border-radius: 4px; }
-    </style>
-    """, unsafe_allow_html=True)
+<style>
+.block-container { padding-top: 5rem; padding-bottom: 5rem; }
+.main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
+.height-header {
+    background-color: rgba(30, 58, 138, 0.1);
+    padding: 10px;
+    border-radius: 8px;
+    border-left: 5px solid #1E3A8A;
+    margin-top: 20px;
+    font-weight: bold;
+}
+div.stButton > button {
+    height: 3em;
+    width: 100%;
+    font-weight: bold;
+    border-radius: 8px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.markdown('<p class="main-header">🏆 Trial Secretary App</p>', unsafe_allow_html=True)
-st.caption("UKI Agility | Personalized Live Portal")
+st.caption("UKI Agility | Live Portal Powered by Railway & Supabase")
 st.divider()
 
-# 2. ESTABLISH CONNECTIONS
-conn_gsheets = st.connection("gsheets", type=GSheetsConnection)
-
+# 2. ESTABLISH SUPABASE CONNECTION
 try:
     s_url = st.secrets["connections"]["supabase"]["url"]
     s_key = st.secrets["connections"]["supabase"]["key"]
@@ -65,83 +42,37 @@ except KeyError:
 
 conn_supabase = st.connection("supabase", type=SupabaseConnection, url=s_url, key=s_key)
 
-# 3. HELPER FUNCTIONS
+# 3. DATA LOADING HELPERS (Fixed for 'Height' Error)
 def fetch_fresh_data():
     res = conn_supabase.table("trialdata").select("*").execute()
     new_df = pd.DataFrame(res.data)
     if not new_df.empty:
+        # Standardizing common column name variations to 'Height'
+        rename_map = {'Intl_Jump_Ht': 'Height', 'dog_height': 'Height', 'Jump_Height': 'Height'}
+        for old_col, new_col in rename_map.items():
+            if old_col in new_df.columns:
+                new_df = new_df.rename(columns={old_col: new_col})
+        
+        # Ensure UKI number is a string and Run_Order is numeric
         new_df['UKI_Number'] = new_df['UKI_Number'].astype(str).str.strip()
         new_df['Run_Order'] = pd.to_numeric(new_df['Run_Order'], errors='coerce').fillna(0).astype(int)
-        if 'Intl_Jump_Ht' in new_df.columns:
-            new_df = new_df.rename(columns={'Intl_Jump_Ht': 'Height'})
-    st.session_state.main_df = new_df
+        
+        # Final safety check: if 'Height' still doesn't exist, create it from 0 to prevent crash
+        if 'Height' not in new_df.columns:
+            new_df['Height'] = 0
+            
+        st.session_state.main_df = new_df
     return new_df
 
-def update_status_instant(run_order, new_status):
-    try:
-        conn_supabase.table("trialdata").update({"status": new_status}).eq("Run_Order", run_order).execute()
-        fetch_fresh_data()
-        st.toast(f"Saved: {new_status}", icon="⚡")
-    except Exception as e:
-        st.error(f"Sync Failed: {e}")
-
-# 4. INITIAL DATA LOAD
 if 'main_df' not in st.session_state:
     fetch_fresh_data()
 
 df = st.session_state.main_df
+sorted_classes = df.groupby('Combined Class Name')['Run_Order'].min().sort_values().index.tolist() if not df.empty else []
 
-try:
-    info_df = conn_gsheets.read(worksheet="trialinfo", ttl=3600)
-    maps_df = conn_gsheets.read(worksheet="coursemaps", ttl=3600)
-except:
-    info_df, maps_df = pd.DataFrame(), pd.DataFrame()
-
-# 4.1 CHRONOLOGICAL CLASS SORTING
-if not df.empty:
-    sorted_classes = df.groupby('Combined Class Name')['Run_Order'].min().sort_values().index.tolist()
-else:
-    sorted_classes = []
-
-##commenting out to try and prevent TOS issue with too many pings
-# # 4.5 LIVE "ON DECK" BANNER (Fragment Version)
-# @st.fragment
-# def render_on_deck_banner():
-#     handler_id = st.session_state.get("search_box", "").strip()
-#     if handler_id:
-#         res = conn_supabase.table("trialdata").select("*").execute()
-#         f_df = pd.DataFrame(res.data)
-#         if not f_df.empty:
-#             f_df['UKI_Number'] = f_df['UKI_Number'].astype(str).str.strip()
-#             f_df['Run_Order'] = pd.to_numeric(f_df['Run_Order'], errors='coerce').fillna(0).astype(int)
-#             master_queue = f_df[~f_df['status'].isin(['Run Completed', 'Scratch'])].sort_values('Run_Order')
-#             my_remaining = master_queue[master_queue['UKI_Number'] == handler_id]
-            
-#             if my_remaining.empty:
-#                 if not f_df[f_df['UKI_Number'] == handler_id].empty:
-#                     st.success("🎉 All your runs for the day are finished!")
-#             else:
-#                 next_run = my_remaining.iloc[0]
-#                 try:
-#                     queue_list = list(master_queue['Run_Order'])
-#                     position = queue_list.index(next_run['Run_Order'])
-#                     c_msg, c_refresh = st.columns([5, 1])
-#                     with c_msg:
-#                         if position == 0:
-#                             st.warning(f"🚀 **{next_run['Name']} is IN THE RING!** ({next_run['Combined Class Name']})")
-#                         else:
-#                             st.info(f"🐾 **Next Run:** {next_run['Name']} in {next_run['Combined Class Name']}. There are **{position}** dogs before you.")
-#                     with c_refresh:
-#                         if st.button("🔄", key="frag_refresh_btn", use_container_width=True):
-#                             st.rerun()
-#                 except ValueError:
-#                     pass
-
-# render_on_deck_banner()
-
-# 5. TABS SETUP
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📲 My Check-in", "📊 Dashboard", "🏃 Running Order", "ℹ️ Trial Info", "🚧 Gate Steward", "🔒 Admin"
+# 4. TABS SETUP
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "📲 Check-in", "📊 Dash", "🏃 Order", "📐 Math", "🚧 Gate", "🔒 Admin", "⏱️ SCORING"
 ])
 
 # --- TAB 1: INDIVIDUAL CHECK-IN ---
@@ -151,7 +82,7 @@ with tab1:
         user_data = df[df['UKI_Number'] == handler_input]
         if not user_data.empty:
             st.subheader(f"Welcome, {user_data.iloc[0]['Handler_Name']}")
-            status_options = status_options = ["Not Checked In", "Checked In", "Scratch", "Conflict", "NFC"]
+            status_options = ["Not Checked In", "Checked In", "Scratch", "Conflict", "NFC"]
             for dog in user_data['Name'].unique():
                 dog_rows = user_data[user_data['Name'] == dog]
                 with st.container(border=True):
@@ -164,10 +95,8 @@ with tab1:
                         pk = row['Run_Order']
                         current_status = row['status'] if row['status'] in status_options else "Not Checked In"
                         c_class, c_status = st.columns([1.5, 1])
-                        with c_class:
-                            st.markdown(f"**{row['Combined Class Name']}**")
-                        with c_status:
-                            st.selectbox("Status", options=status_options, index=status_options.index(current_status), key=f"select_{pk}", on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]), label_visibility="collapsed")
+                        with c_class: st.markdown(f"**{row['Combined Class Name']}**")
+                        with c_status: st.selectbox("Status", options=status_options, index=status_options.index(current_status), key=f"select_{pk}", on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]), label_visibility="collapsed")
 
 # --- TAB 2: DASHBOARD ---
 with tab2:
@@ -177,106 +106,92 @@ with tab2:
         st.rerun()
     if not df.empty:
         m1, m2, m3, m4 = st.columns(4)
-        total = len(df)
-        checked_in = len(df[df['status'] == 'Checked In'])
-        in_ring = len(df[df['status'] == 'In Ring'])
-        scratched = len(df[df['status'] == 'Scratch'])
-        m1.metric("Total Entries", total)
-        m2.metric("Checked In", f"{checked_in}")
-        m3.metric("Currently in Ring", in_ring)
-        m4.metric("Scratches", scratched)
-        st.divider()
-        for agility_class in sorted_classes:
-            class_data = df[df['Combined Class Name'] == agility_class]
-            class_done = len(class_data[class_data['status'] == 'Run Completed'])
-            progress = class_done / len(class_data) if len(class_data) > 0 else 0
-            with st.expander(f"📌 {agility_class} ({int(progress*100)}% Complete)"):
-                st.progress(progress)
+        m1.metric("Total Entries", len(df))
+        m2.metric("Checked In", len(df[df['status'] == 'Checked In']))
+        m3.metric("Currently in Ring", len(df[df['status'] == 'In Ring']))
+        m4.metric("Scratches", len(df[df['status'] == 'Scratch']))
 
 # --- TAB 3: RUNNING ORDER ---
-# --- TAB 3: RUNNING ORDER (Segmented Version) ---
 with tab3:
     st.header("Class Running Order")
     if not df.empty:
-        # This creates a horizontal scroll of 'pills'
-        selected_class = st.segmented_control(
-            "Select Class:", 
-            options=sorted_classes, 
-            key="run_segment_select",
-            selection_mode="single",
-            default=sorted_classes[0] if sorted_classes else None
-        )
-        
+        selected_class = st.segmented_control("Select Class:", options=sorted_classes, key="run_segment_select", selection_mode="single", default=sorted_classes[0] if sorted_classes else None)
         if selected_class:
-            # ... (Rest of your logic)
             clean_class_search = selected_class.strip().lower()
             base_search = re.sub(r'[^a-z0-9]', '_', clean_class_search)
-            map_displayed = False
             try:
                 files_res = conn_supabase.client.storage.from_("coursemaps").list()
                 valid_files = [f for f in files_res if f['name'].startswith(base_search)]
                 if valid_files:
                     valid_files.sort(key=lambda x: x['created_at'], reverse=True)
-                    latest_file = valid_files[0]['name']
-                    map_url = conn_supabase.client.storage.from_("coursemaps").get_public_url(latest_file)
-                    if latest_file.lower().endswith('.pdf'):
-                        st.markdown(f'<div style="width: 100%; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1);"><iframe src="{map_url}#view=FitH" width="100%" height="500px" style="border:none;"></iframe></div>', unsafe_allow_html=True)
-                    else:
-                        st.image(map_url, use_container_width=True, caption=f"Latest Map for {selected_class}")
-                    map_displayed = True
-            except Exception as e:
-                st.error(f"Error fetching maps: {e}")
-            if not map_displayed:
-                st.info("📍 No course map uploaded yet for this class.")
-            st.divider()
+                    map_url = conn_supabase.client.storage.from_("coursemaps").get_public_url(valid_files[0]['name'])
+                    st.image(map_url, use_container_width=True)
+            except: pass
+            
             run_df = df[df['Combined Class Name'] == selected_class].sort_values(['Height', 'Run_Order'])
-            current_handler_num = st.session_state.get("search_box", "").strip()
             for height in sorted(run_df['Height'].unique()):
                 st.markdown(f'<div class="height-header">📏 Height: {height}"</div>', unsafe_allow_html=True)
-                height_df = run_df[run_df['Height'] == height].copy()
-                # Inside the height loop in Tab 3
-                if current_handler_num:
-                    height_df['Dog'] = height_df.apply(
-                        lambda x: f"🌟 {x['Name']}" if str(x['UKI_Number']) == current_handler_num 
-                        else (f"{x['Name']} (NFC)" if x['status'] == "NFC" else x['Name']), 
-                        axis=1
-                    )
-                else:
-                    height_df['Dog'] = height_df.apply(
-                        lambda x: f"{x['Name']} (NFC)" if x['status'] == "NFC" else x['Name'], 
-                        axis=1
-                    )
-                display_cols = ['Handler_Name', 'Dog', 'Breed', 'status']
-                final_display = height_df[display_cols].copy().rename(columns={'Handler_Name': 'Handler', 'status': 'Status'})
-                def style_ro(row):
-                    styles = [''] * len(row)
-                    
-                    # 1. Highlight the user's dog
-                    if "🌟" in str(row['Dog']): 
-                        styles = ['background-color: rgba(30, 58, 138, 0.2); font-weight: bold'] * len(row)
-                    
-                    # 2. DESIGNATION: NFC (Not For Competition)
-                    # We add a subtle italics and a blue badge look
-                    if row['Status'] == 'NFC':
-                        styles = ['color: #6366f1; font-style: italic; font-weight: 500;'] * len(row)
+                st.dataframe(run_df[run_df['Height'] == height][['Handler_Name', 'Name', 'Breed', 'status']], hide_index=True, use_container_width=True)
 
-                    # 3. HIGH VISIBILITY: In Ring
-                    if row['Status'] == 'In Ring':
-                        styles = ['background-color: #fef08a; color: #854d0e; border: 2px solid #854d0e'] * len(row)
-                    
-                    # 4. COMPLETED/SCRATCHED
-                    elif row['Status'] in ['Run Completed', 'Scratch']:
-                        styles = ['text-decoration: line-through; color: #adb5bd'] * len(row)
-                        
-                    return styles
-                st.dataframe(final_display.style.apply(style_ro, axis=1), hide_index=True, use_container_width=True)
-
-# --- TAB 4: TRIAL INFO ---
+# --- TAB 4: COURSE MATH & SCT (Now with Auto-Detection) ---
 with tab4:
-    st.header("Trial Information")
-    if not info_df.empty:
-        for _, row in info_df.iterrows():
-            st.write(f"**{row['Parameter']}:** {row['Value']}")
+    st.header("📐 Course Math & SCT")
+    if st.text_input("PIN to access calculations:", type="password", key="math_pin") == "7890":
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            target_class = st.selectbox("Select Class to Calculate:", sorted_classes)
+            yardage = st.number_input("Measured Course (Yards):", min_value=0, step=1)
+        
+        # AUTO-DETECTION LOGIC
+        detected_index = 0  # Default to Beginner/Novice
+        if target_class:
+            tc_lower = target_class.lower()
+            if any(word in tc_lower for word in ["senior", "champ"]):
+                detected_index = 1
+            elif any(word in tc_lower for word in ["beginner", "novice"]):
+                detected_index = 0
+
+        with col2:
+            lvl_group = st.selectbox(
+                "Level Group:", 
+                ["Beginner/Novice", "Senior/Champion"], 
+                index=detected_index
+            )
+            is_ss = st.checkbox("Is Speedstakes?", value=("speedstakes" in target_class.lower() if target_class else False))
+        
+        rates = {
+            "Agility/Jumping": {"Beginner/Novice": (2.5, 2.9), "Senior/Champion": (2.9, 3.15)},
+            "Speedstakes": {"Beginner/Novice": (2.75, 3.25), "Senior/Champion": (3.25, 3.5)}
+        }
+        small_inc = {"Beginner/Novice": 1.20, "Senior/Champion": 1.10}
+        
+        type_key = "Speedstakes" if is_ss else "Agility/Jumping"
+        r_low, r_high = rates[type_key][lvl_group]
+        
+        if yardage > 0:
+            sct_big_f, sct_big_s = round(yardage/r_high), round(yardage/r_low)
+            inc = small_inc[lvl_group]
+            sct_small_f, sct_small_s = round(sct_big_f * inc), round(sct_big_s * inc)
+            
+            st.divider()
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("Big Dogs (20-24\")")
+                choice_big = st.radio("Select Big Dog SCT:", [f"Fast: {sct_big_f}s", f"Slow: {sct_big_s}s"], key="big_rad")
+                st.info(f"Select Big Dogs (20-16): {int(choice_big.split(': ')[1][:-1]) + 3}s")
+            with c2:
+                st.subheader("Small Dogs (8-16\")")
+                choice_small = st.radio("Select Small Dog SCT:", [f"Fast: {sct_small_f}s", f"Slow: {sct_small_s}s"], key="small_rad")
+                st.info(f"Select Small Dogs (12-4): {int(choice_small.split(': ')[1][:-1]) + 3}s")
+            
+            if st.button("💾 Save SCT to Supabase", use_container_width=True):
+                final_big = int(choice_big.split(": ")[1][:-1])
+                final_small = int(choice_small.split(": ")[1][:-1])
+                conn_supabase.table("course_specs").upsert({
+                    "class_name": target_class, "yardage": yardage, "level_group": lvl_group, "is_speedstakes": is_ss,
+                    "chosen_sct_big": final_big, "chosen_sct_small": final_small
+                }).execute()
+                st.success(f"SCTs saved for {target_class}!")
 
 # --- TAB 5: GATE STEWARD ---
 with tab5:
@@ -287,45 +202,150 @@ with tab5:
         for _, row in gate_df.iterrows():
             if row['status'] == 'Scratch': continue
             pk_val = row['Run_Order']
-            is_done = row['status'] == "Run Completed"
-            is_in_ring = row['status'] == "In Ring"
+            is_done, is_in_ring = row['status'] == "Run Completed", row['status'] == "In Ring"
             border_color = "#28a745" if row['status'] == "Checked In" else "#ffc107" if is_in_ring else "#adb5bd"
-            c_main, c_btn = st.columns([5, 1])
+            c_main, c_btn = st.columns([3, 2])
             with c_main:
-                st.markdown(f'<div style="padding: 10px; border-left: 6px solid {border_color}; border-radius: 4px; background-color: white;">{row["Name"]} | {row["Height"]}"</div>', unsafe_allow_html=True)
+                st.markdown(f'''<div style="padding: 12px; border-left: 8px solid {border_color}; border-radius: 6px; background-color: #f8f9fa; height: 80px;">
+                    <div style="font-size: 18px; font-weight: bold; color: #333;">{row["Name"]}</div>
+                    <div style="font-size: 14px; color: #666;">{row["Breed"]} | {row["Height"]}"</div></div>''', unsafe_allow_html=True)
             with c_btn:
                 if not is_done and not is_in_ring:
-                    if st.button("▶️", key=f"ring_{pk_val}", use_container_width=True):
+                    if st.button("START RUN", key=f"ring_{pk_val}"):
                         conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", gate_class).eq("status", "In Ring").execute()
                         conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute()
-                        fetch_fresh_data()
-                        st.rerun()
-                elif is_in_ring or is_done:
-                    if st.button("↩️", key=f"undo_{pk_val}", use_container_width=True):
-                        conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk_val).execute()
-                        fetch_fresh_data()
-                        st.rerun()
+                        fetch_fresh_data(); st.rerun()
+                elif is_in_ring:
+                    if st.button("FINISH ✅", key=f"finish_{pk_val}"):
+                        conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Run_Order", pk_val).execute(); fetch_fresh_data(); st.rerun()
+                elif is_done:
+                    if st.button("UNDO ↩️", key=f"undo_{pk_val}"):
+                        conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute(); fetch_fresh_data(); st.rerun()
 
-# --- TAB 6: ADMIN MAP UPLOAD ---
+# --- TAB 6: ADMIN ---
 with tab6:
     st.header("🔒 Secretary Admin")
     if st.text_input("Admin PIN:", type="password", key="admin_pin") == "7890":
         st.subheader("Course Map Upload")
         upload_class = st.selectbox("Assign Map to Class:", sorted_classes, key="map_assign_select")
-        uploaded_file = st.file_uploader("Choose a file (PDF, JPG, PNG)", type=['pdf', 'jpg', 'jpeg', 'png'])
-        if uploaded_file and upload_class:
-            if st.button("🚀 Sync Map to App", use_container_width=True):
-                with st.spinner("Uploading..."):
-                    file_ext = uploaded_file.name.split('.')[-1].lower()
-                    clean_class = upload_class.strip().lower()
-                    safe_class_name = re.sub(r'[^a-z0-9]', '_', clean_class)
-                    clean_filename = f"{safe_class_name}_{int(time.time())}.{file_ext}"
-                    try:
-                        conn_supabase.client.storage.from_("coursemaps").upload(
-                            path=clean_filename,
-                            file=uploaded_file.getvalue(),
-                            file_options={"upsert": "true", "content-type": f"application/pdf" if file_ext == 'pdf' else f"image/{file_ext}"}
-                        )
-                        st.success(f"Success! {upload_class} map is live.")
-                    except Exception as e:
-                        st.error(f"Upload failed: {e}")
+        uploaded_file = st.file_uploader("Choose a file", type=['pdf', 'jpg', 'png', 'jpeg'])
+        if uploaded_file and st.button("🚀 Sync Map to App"):
+            clean_filename = f"{re.sub(r'[^a-z0-9]', '_', upload_class.lower())}_{int(time.time())}.{uploaded_file.name.split('.')[-1]}"
+            conn_supabase.client.storage.from_("coursemaps").upload(path=clean_filename, file=uploaded_file.getvalue())
+            st.success("Map live!")
+
+# --- TAB 7: SCORING (The Scrimer's Interface) ---
+with tab7:
+    st.header("⏱️ Scrimer's Scoring Booth")
+    
+    scoring_class = st.selectbox("Select Class to Score:", sorted_classes, key="score_class_sel")
+    is_nursery = "nursery" in scoring_class.lower()
+    is_gamblers = "gamblers" in scoring_class.lower()
+    
+    # --- 1. Selection & SCT Logic ---
+    current_in_ring = df[(df['Combined Class Name'] == scoring_class) & (df['status'] == 'In Ring')]
+    all_dogs_in_class = df[df['Combined Class Name'] == scoring_class].sort_values(['Height', 'Run_Order'])
+    dog_names = all_dogs_in_class['Name'].tolist()
+    
+    default_idx = 0
+    if not current_in_ring.empty:
+        try: default_idx = dog_names.index(current_in_ring.iloc[0]['Name'])
+        except: pass
+    
+    selected_dog_name = st.selectbox("Active Dog:", dog_names, index=default_idx)
+    active_dog = all_dogs_in_class[all_dogs_in_class['Name'] == selected_dog_name].iloc[0]
+
+    # SCT Calculation
+    is_big = int(active_dog['Height']) >= 20
+    specs_res = conn_supabase.table("course_specs").select("*").eq("class_name", scoring_class).execute()
+    sct = 0
+    if specs_res.data:
+        specs = specs_res.data[0]
+        sct = specs['chosen_sct_big'] if is_big else specs['chosen_sct_small']
+
+    # --- 2. Initialize State ---
+    if 't_ref' not in st.session_state: st.session_state.t_ref = 0
+    if 't_fault' not in st.session_state: st.session_state.t_fault = 0
+    if 'is_e' not in st.session_state: st.session_state.is_e = False
+    if 'time_str' not in st.session_state: st.session_state.time_str = ""
+
+    # --- 3. Scoring Buttons ---
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.image("https://trialsecretary.notion.site/image/attachment%3A53feb389-ccd9-4f6b-a663-0fd46dc5d9a6%3Aimage.png?table=block&id=34ce6efe-88b7-806b-a467-d2033081650c&spaceId=a58286e5-194b-4546-8ee9-b7ebb91914d1&width=1410", width=80)
+        if st.button(f"Refusal ({st.session_state.t_ref})", use_container_width=True):
+            st.session_state.t_ref += 1
+            st.rerun()
+    with c2:
+        st.image("https://trialsecretary.notion.site/image/attachment%3Aeaf1e083-97fb-4aad-8fca-3eba410da7be%3Aimage.png?table=block&id=34ce6efe-88b7-802b-9ef8-c06561fa78e4&spaceId=a58286e5-194b-4546-8ee9-b7ebb91914d1&width=1410", width=80)
+        if st.button(f"Std Fault ({st.session_state.t_fault})", use_container_width=True):
+            st.session_state.t_fault += 1
+            st.rerun()
+    with c3:
+        st.image("https://trialsecretary.notion.site/image/attachment%3Ad1c1f212-0248-4411-ad96-74f00719b948%3Aimage.png?table=block&id=34ce6efe-88b7-8038-a837-e945ab877561&spaceId=a58286e5-194b-4546-8ee9-b7ebb91914d1&width=1410", width=80)
+        if st.button("ELIM (E)", type="primary" if st.session_state.is_e else "secondary", use_container_width=True):
+            st.session_state.is_e = not st.session_state.is_e
+            st.rerun()
+
+    st.divider()
+
+    # --- 4. CALCULATOR STYLE NUMPAD ---
+    st.subheader("⏱️ Enter Time")
+    
+    # Formatting Logic: 3331 -> 33.31
+    display_time = "0.00"
+    if st.session_state.time_str:
+        raw = st.session_state.time_str.zfill(3) # Pad with zeros so "5" becomes "0.05"
+        display_time = f"{raw[:-2]}.{raw[-2:]}"
+
+    # Big visual display of the time
+    st.markdown(f"<div style='font-size: 48px; text-align: center; background: #eee; border-radius: 10px; margin-bottom: 10px;'>{display_time}s</div>", unsafe_allow_html=True)
+
+    # Numpad Grid
+    def add_digit(d): st.session_state.time_str += str(d)
+    def clear_digit(): st.session_state.time_str = ""
+
+    col_a, col_b, col_c = st.columns(3)
+    for i in range(1, 10):
+        with [col_a, col_b, col_c][(i-1)%3]:
+            if st.button(str(i), key=f"num_{i}"): add_digit(i); st.rerun()
+    
+    with col_a: 
+        if st.button("CLR", type="secondary"): clear_digit(); st.rerun()
+    with col_b: 
+        if st.button("0"): add_digit(0); st.rerun()
+    with col_c:
+        if st.button("⌫"): st.session_state.time_str = st.session_state.time_str[:-1]; st.rerun()
+
+    # --- 5. Submit & Math ---
+    st.divider()
+    final_float_time = float(display_time)
+    
+    ref_points = 0 if (is_nursery or is_gamblers) else (st.session_state.t_ref * 5)
+    fault_points = (st.session_state.t_fault * 5)
+    time_faults = max(0, final_float_time - sct)
+    total_score = ref_points + fault_points + time_faults
+
+    st.write(f"SCT: {sct}s | Score: **{total_score:.2f}**")
+
+    if st.button("🚀 SUBMIT FINAL SCORE", use_container_width=True, type="primary"):
+        status_update = "Eliminated" if st.session_state.is_e else "Run Completed"
+        
+        conn_supabase.table("trialdata").update({
+            "status": status_update,
+            "refusals": st.session_state.t_ref,
+            "faults": st.session_state.t_fault,
+            "time": final_float_time,
+            "total_score": total_score if not st.session_state.is_e else 999
+        }).eq("Run_Order", active_dog['Run_Order']).execute()
+        
+        # Reset everything
+        st.session_state.t_ref = 0
+        st.session_state.t_fault = 0
+        st.session_state.is_e = False
+        st.session_state.time_str = ""
+        
+        st.success(f"Score Saved for {active_dog['Name']}!")
+        time.sleep(1)
+        fetch_fresh_data()
+        st.rerun()
