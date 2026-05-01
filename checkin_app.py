@@ -153,7 +153,7 @@ with tab2:
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total Entries", len(df))
         c2.metric("Checked In", len(df[df['status'] == 'Checked In']))
-        c3.metric("In Ring", len(df[df['status'] == 'In Ring']))
+        c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
         c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
 
 # --- TAB 3: RUNNING ORDER ---
