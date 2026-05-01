@@ -63,7 +63,7 @@ except KeyError:
 
 conn_supabase = st.connection("supabase", type=SupabaseConnection, url=s_url, key=s_key)
 
-# --- 3. DATA HELPERS ---
+# --- 3. DATA HELPERS & CALLBACKS ---
 def fetch_fresh_data():
     res = conn_supabase.table("trialdata").select("*").execute()
     new_df = pd.DataFrame(res.data)
@@ -81,11 +81,31 @@ def fetch_fresh_data():
 
 def update_status_instant(run_order, new_status):
     try:
+        # 1. Update Database
         conn_supabase.table("trialdata").update({"status": new_status}).eq("Run_Order", run_order).execute()
-        # We don't fetch_fresh_data here to keep the UI from lagging on every click
-        st.toast(f"Status: {new_status}")
+        # 2. Update local state immediately
+        if 'main_df' in st.session_state:
+            st.session_state.main_df.loc[st.session_state.main_df['Run_Order'] == run_order, 'status'] = new_status
     except Exception as e:
         st.error(f"Sync Error: {e}")
+
+# NEW: The callback function that runs BEFORE the page renders
+def check_in_all_callback(run_orders):
+    for pk in run_orders:
+        try:
+            # 1. Update Database
+            conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk).execute()
+        except Exception as e:
+            pass
+        
+        # 2. Hard-code the update into local memory (bypasses Supabase read-latency)
+        if 'main_df' in st.session_state:
+            st.session_state.main_df.loc[st.session_state.main_df['Run_Order'] == pk, 'status'] = "Checked In"
+        
+        # 3. Nuke the widget from Streamlit's memory so it is forced to read the new local memory
+        widget_key = f"select_{pk}"
+        if widget_key in st.session_state:
+            del st.session_state[widget_key]
 
 if 'main_df' not in st.session_state:
     fetch_fresh_data()
@@ -93,18 +113,12 @@ if 'main_df' not in st.session_state:
 df = st.session_state.main_df
 sorted_classes = df.groupby('Combined Class Name')['Run_Order'].min().sort_values().index.tolist() if not df.empty else []
 
-# # --- 4. TABS SETUP ---
-# tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-#     "📲 Check-in", "📊 Dash", "🏃 Order", "📐 Math", "🚧 Gate", "🔒 Admin", "⏱️ SCORING"
-# ])
-
 # --- 4. TABS SETUP ---
 tab1, tab2, tab3, tab5, tab6 = st.tabs([
     "📲 Check-in", "📊 Dash", "🏃 Order", "🚧 Gate", "🔒 Admin"
 ])
 
-
-# --- TAB 1: INDIVIDUAL CHECK-IN (Restored) ---
+# --- TAB 1: INDIVIDUAL CHECK-IN ---
 with tab1:
     handler_input = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345", key="search_box").strip()
     if handler_input:
@@ -118,28 +132,44 @@ with tab1:
                 with st.container(border=True):
                     st.markdown(f"### 🐶 {dog}")
                     
-                    # THE RESTORED LOOP:
+                    # --- The "Check In All" Button ---
                     if st.button(f"Check in all runs for {dog}", key=f"btn_all_{dog}"):
                         for _, r in dog_rows.iterrows():
-                            # Update each individual Run_Order for this dog
-                            conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", r['Run_Order']).execute()
-                        
-                        # CRITICAL: Force refresh of the local dataframe to show the green "Checked In" status
-                        fetch_fresh_data()
+                            pk = r['Run_Order']
+                            key_name = f"select_{pk}"
+                            
+                            # 1. Update Database silently
+                            conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk).execute()
+                            
+                            # 2. Update local dataframe
+                            if 'main_df' in st.session_state:
+                                st.session_state.main_df.loc[st.session_state.main_df['Run_Order'] == pk, 'status'] = "Checked In"
+                            
+                            # 3. CRITICAL: Force the widget's internal memory to update
+                            st.session_state[key_name] = "Checked In"
+                            
+                        # 4. Instant UI Refresh
                         st.rerun()
 
-                    # Individual Class Selectors
+                    # --- Individual Class Selectors ---
                     for idx, row in dog_rows.iterrows():
                         pk = row['Run_Order']
-                        current_status = row['status'] if row['status'] in status_options else "Not Checked In"
+                        key_name = f"select_{pk}"
+                        db_status = row['status'] if row['status'] in status_options else "Not Checked In"
+                        
+                        # Initialize the widget memory manually if it's the first time seeing it
+                        if key_name not in st.session_state:
+                            st.session_state[key_name] = db_status
+                        
                         c_class, c_status = st.columns([1.5, 1])
-                        with c_class: st.markdown(f"**{row['Combined Class Name']}**")
+                        with c_class: 
+                            st.markdown(f"**{row['Combined Class Name']}**")
                         with c_status: 
+                            # Notice NO index=... parameter here. This stops the warning and fixes the bug!
                             st.selectbox(
                                 "Status", 
                                 options=status_options, 
-                                index=status_options.index(current_status), 
-                                key=f"select_{pk}", 
+                                key=key_name, 
                                 on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]), 
                                 label_visibility="collapsed"
                             )
@@ -160,32 +190,26 @@ with tab2:
 with tab3:
     if not df.empty:
         sel_c = st.selectbox("Select Class:", sorted_classes, key="ro_sel")
+        
+        # --- RESTORED: Fetch & Display Course Map ---
+        clean_class_search = sel_c.strip().lower()
+        base_search = re.sub(r'[^a-z0-9]', '_', clean_class_search)
+        try:
+            files_res = conn_supabase.client.storage.from_("coursemaps").list()
+            valid_files = [f for f in files_res if f['name'].startswith(base_search)]
+            if valid_files:
+                # Sort to get the most recently uploaded map for this class
+                valid_files.sort(key=lambda x: x['created_at'], reverse=True)
+                map_url = conn_supabase.client.storage.from_("coursemaps").get_public_url(valid_files[0]['name'])
+                st.image(map_url, use_container_width=True)
+        except Exception:
+            pass # Fail silently if no map exists yet or if storage isn't set up
+        # --------------------------------------------
+
         r_df = df[df['Combined Class Name'] == sel_c].sort_values(['Height', 'Run_Order'])
         for h in sorted(r_df['Height'].unique()):
             st.markdown(f'<div class="height-header">{h}" Height</div>', unsafe_allow_html=True)
             st.dataframe(r_df[r_df['Height'] == h][['Handler_Name', 'Name', 'Breed', 'status']], use_container_width=True, hide_index=True)
-
-# # --- TAB 4: COURSE MATH ---
-# with tab4:
-#     if st.text_input("Math PIN:", type="password", key="m_p_v") == "7890":
-#         m_cls = st.selectbox("Class:", sorted_classes, key="m_cls")
-#         yrds = st.number_input("Measured Yards:", step=1.0)
-#         is_ss = st.checkbox("Is Speedstakes?", value="speedstakes" in m_cls.lower())
-        
-#         if yrds > 0:
-#             lvl_idx = 1 if any(w in m_cls.lower() for w in ["senior", "champ"]) else 0
-#             lvl = st.selectbox("Level Group:", ["Beginner/Novice", "Senior/Champion"], index=lvl_idx)
-            
-#             rate = (2.9, 3.15) if lvl == "Senior/Champion" else (2.5, 2.9)
-#             if is_ss: rate = (3.25, 3.5) if lvl == "Senior/Champion" else (2.75, 3.25)
-            
-#             sct_b = round(yrds/rate[1])
-#             sct_s = round(sct_b * (1.1 if lvl == "Senior/Champion" else 1.2))
-            
-#             st.info(f"Calculated SCTs -> Big: {sct_b}s | Small: {sct_s}s")
-#             if st.button("Save SCT to Database"):
-#                 conn_supabase.table("course_specs").upsert({"class_name": m_cls, "chosen_sct_big": sct_b, "chosen_sct_small": sct_s}).execute()
-#                 st.success("Saved!")
 
 # --- TAB 5: GATE ---
 with tab5:
@@ -205,71 +229,28 @@ with tab5:
 
 # --- TAB 6: ADMIN ---
 with tab6:
+    st.header("🔒 Secretary Admin")
     if st.text_input("Admin PIN:", type="password", key="a_p_v") == "7890":
+        
         if st.button("Reset All Run Statuses"):
             conn_supabase.table("trialdata").update({"status": "Not Checked In"}).neq("status", "Scratch").execute()
-            fetch_fresh_data()
+            # Clear local state so it triggers a full refresh
+            if 'main_df' in st.session_state:
+                del st.session_state.main_df
             st.rerun()
-
-# # --- TAB 7: SCORING ---
-# with tab7:
-#     st.header("⏱️ Scoring Booth")
-#     s_cls = st.selectbox("Class:", sorted_classes, key="s_tab_cls")
-#     is_nur = any(x in s_cls.lower() for x in ["nursery", "gamblers"])
-    
-#     s_df = df[df['Combined Class Name'] == s_cls].sort_values(['Height', 'Run_Order'])
-#     in_ring = s_df[s_df['status'] == 'In Ring']
-#     dog_list = s_df['Name'].tolist()
-#     d_idx = dog_list.index(in_ring.iloc[0]['Name']) if not in_ring.empty else 0
-    
-#     a_dog_name = st.selectbox("Active Dog:", dog_list, index=d_idx)
-#     a_dog = s_df[s_df['Name'] == a_dog_name].iloc[0]
-    
-#     # State Setup
-#     for k in ['t_ref', 't_fault', 'is_e', 'time_str']:
-#         if k not in st.session_state: st.session_state[k] = False if k == 'is_e' else (0 if k != 'time_str' else "")
-
-#     # Restored Image Buttons
-#     c1, c2, c3 = st.columns(3)
-#     with c1:
-#         st.image("https://trialsecretary.notion.site/image/attachment%3A53feb389-ccd9-4f6b-a663-0fd46dc5d9a6%3Aimage.png?table=block&id=34ce6efe-88b7-806b-a467-d2033081650c&spaceId=a58286e5-194b-4546-8ee9-b7ebb91914d1&width=1410", width=80)
-#         if st.button(f"Refusal ({st.session_state.t_ref})", key="r_btn"): st.session_state.t_ref += 1; st.rerun()
-#     with c2:
-#         st.image("https://trialsecretary.notion.site/image/attachment%3Aeaf1e083-97fb-4aad-8fca-3eba410da7be%3Aimage.png?table=block&id=34ce6efe-88b7-802b-9ef8-c06561fa78e4&spaceId=a58286e5-194b-4546-8ee9-b7ebb91914d1&width=1410", width=80)
-#         if st.button(f"Fault ({st.session_state.t_fault})", key="f_btn"): st.session_state.t_fault += 1; st.rerun()
-#     with c3:
-#         st.image("https://trialsecretary.notion.site/image/attachment%3Ad1c1f212-0248-4411-ad96-74f00719b948%3Aimage.png?table=block&id=34ce6efe-88b7-8038-a837-e945ab877561&spaceId=a58286e5-194b-4546-8ee9-b7ebb91914d1&width=1410", width=80)
-#         if st.button("ELIM", type="primary" if st.session_state.is_e else "secondary"): st.session_state.is_e = not st.session_state.is_e; st.rerun()
-
-#     st.divider()
-#     raw_t = st.session_state.time_str.zfill(3)
-#     disp_t = f"{raw_t[:-2]}.{raw_t[-2:]}"
-#     st.markdown(f"<div class='time-display'>{disp_t}s</div>", unsafe_allow_html=True)
-
-#     # Snappy Numpad Grid
-#     rows = [[1, 2, 3], [4, 5, 6], [7, 8, 9], ["CLR", 0, "⌫"]]
-#     for r in rows:
-#         cols = st.columns(3)
-#         for i, v in enumerate(r):
-#             with cols[i]:
-#                 if v == "CLR":
-#                     if st.button("CLR", key="clr_btn"): st.session_state.time_str = ""; st.rerun()
-#                 elif v == "⌫":
-#                     if st.button("⌫", key="bk_btn"): st.session_state.time_str = st.session_state.time_str[:-1]; st.rerun()
-#                 else:
-#                     if st.button(str(v), key=f"n_{v}"): st.session_state.time_str += str(v); st.rerun()
-
-#     if st.button("🚀 SUBMIT FINAL SCORE", type="primary", use_container_width=True):
-#         specs = conn_supabase.table("course_specs").select("*").eq("class_name", s_cls).execute()
-#         sct_val = specs.data[0]['chosen_sct_big' if int(a_dog['Height']) >= 20 else 'chosen_sct_small'] if specs.data else 0
-#         cur_t = float(disp_t)
-#         total = (0 if is_nur else st.session_state.t_ref * 5) + (st.session_state.t_fault * 5) + max(0, cur_t - sct_val)
+            
+        st.divider()
         
-#         conn_supabase.table("trialdata").update({
-#             "status": "Eliminated" if st.session_state.is_e else "Run Completed",
-#             "refusals": st.session_state.t_ref, "faults": st.session_state.t_fault, 
-#             "time": cur_t, "total_score": total if not st.session_state.is_e else 999
-#         }).eq("Run_Order", a_dog['Run_Order']).execute()
+        # --- RESTORED: Course Map Uploader ---
+        st.subheader("🗺️ Course Map Upload")
+        upload_class = st.selectbox("Assign Map to Class:", sorted_classes, key="map_assign_select")
+        uploaded_file = st.file_uploader("Choose a file", type=['jpg', 'png', 'jpeg'])
         
-#         st.session_state.t_ref = 0; st.session_state.t_fault = 0; st.session_state.is_e = False; st.session_state.time_str = ""
-#         st.success("Score Saved!"); time.sleep(0.5); fetch_fresh_data(); st.rerun()
+        if uploaded_file and st.button("🚀 Sync Map to App"):
+            with st.spinner("Uploading to Supabase..."):
+                clean_filename = f"{re.sub(r'[^a-z0-9]', '_', upload_class.lower())}_{int(time.time())}.{uploaded_file.name.split('.')[-1]}"
+                try:
+                    conn_supabase.client.storage.from_("coursemaps").upload(path=clean_filename, file=uploaded_file.getvalue())
+                    st.success(f"Map for {upload_class} is live!")
+                except Exception as e:
+                    st.error(f"Upload failed: Make sure the 'coursemaps' bucket exists in Supabase Storage. Error: {e}")
