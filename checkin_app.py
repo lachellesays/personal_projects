@@ -9,7 +9,7 @@ st.set_page_config(page_title="Agility Trial Center", page_icon="🐾", layout="
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 2rem; padding-bottom: 2rem; }
+    .block-container { padding-top: 5rem; padding-bottom: 2rem; }
     .main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
     
     /* Global Button Styling */
@@ -204,6 +204,7 @@ with tab3:
 
 # --- TAB 5: GATE STEWARD (LIVE DISPLAY via Fragment) ---
 with tab5:
+    st.header("🔒 For Gate Steward Only")
     if st.text_input("Gate PIN:", type="password", key="g_p_v") == "7890":
         # Dropdown outside fragment
         g_cls = st.selectbox("Current Class:", sorted_classes, key="g_cls")
