@@ -21,23 +21,10 @@ st.markdown("""
         border-radius: 12px !important;
     }
 
-    /* Scoring Display */
-    .time-display {
-        font-size: 60px !important;
-        text-align: center;
-        background: #1e1e1e;
-        color: #00ff41;
-        border-radius: 15px;
-        padding: 15px;
-        font-family: monospace;
-        border: 3px solid #444;
-        margin-bottom: 15px;
-    }
-    
-    /* Force 3 columns on mobile */
-    [data-testid="column"] {
-        min-width: 30% !important;
-        flex: 1 1 30% !important;
+    /* Highlight for Handler's own dogs in Dataframe */
+    .highlight-row {
+        background-color: #e3f2fd !important;
+        font-weight: bold;
     }
     
     .height-header {
@@ -63,12 +50,11 @@ except KeyError:
 
 conn_supabase = st.connection("supabase", type=SupabaseConnection, url=s_url, key=s_key)
 
-# --- 3. DATA HELPERS & CALLBACKS ---
+# --- 3. DATA HELPERS & AUTO-REFRESH ---
 def fetch_fresh_data():
     res = conn_supabase.table("trialdata").select("*").execute()
     new_df = pd.DataFrame(res.data)
     if not new_df.empty:
-        # Standardize Height Column
         rename_map = {'Intl_Jump_Ht': 'Height', 'dog_height': 'Height', 'Jump_Height': 'Height'}
         for old_col, new_col in rename_map.items():
             if old_col in new_df.columns:
@@ -77,38 +63,30 @@ def fetch_fresh_data():
         new_df['UKI_Number'] = new_df['UKI_Number'].astype(str).str.strip()
         new_df['Run_Order'] = pd.to_numeric(new_df['Run_Order'], errors='coerce').fillna(0).astype(int)
         st.session_state.main_df = new_df
+        st.session_state.last_sync = time.time()
     return new_df
 
 def update_status_instant(run_order, new_status):
     try:
-        # 1. Update Database
         conn_supabase.table("trialdata").update({"status": new_status}).eq("Run_Order", run_order).execute()
-        # 2. Update local state immediately
         if 'main_df' in st.session_state:
             st.session_state.main_df.loc[st.session_state.main_df['Run_Order'] == run_order, 'status'] = new_status
     except Exception as e:
         st.error(f"Sync Error: {e}")
 
-# NEW: The callback function that runs BEFORE the page renders
-def check_in_all_callback(run_orders):
-    for pk in run_orders:
-        try:
-            # 1. Update Database
-            conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk).execute()
-        except Exception as e:
-            pass
-        
-        # 2. Hard-code the update into local memory (bypasses Supabase read-latency)
-        if 'main_df' in st.session_state:
-            st.session_state.main_df.loc[st.session_state.main_df['Run_Order'] == pk, 'status'] = "Checked In"
-        
-        # 3. Nuke the widget from Streamlit's memory so it is forced to read the new local memory
-        widget_key = f"select_{pk}"
-        if widget_key in st.session_state:
-            del st.session_state[widget_key]
-
+# Initialize State
 if 'main_df' not in st.session_state:
     fetch_fresh_data()
+
+# --- AUTO-REFRESH LOGIC (Every 10 Seconds) ---
+# This ensures the "Big Screen" stays updated without manual intervention
+if "last_sync" not in st.session_state:
+    st.session_state.last_sync = time.time()
+
+refresh_interval = 10 # seconds
+if time.time() - st.session_state.last_sync > refresh_interval:
+    fetch_fresh_data()
+    st.rerun()
 
 df = st.session_state.main_df
 sorted_classes = df.groupby('Combined Class Name')['Run_Order'].min().sort_values().index.tolist() if not df.empty else []
@@ -120,8 +98,10 @@ tab1, tab2, tab3, tab5, tab6 = st.tabs([
 
 # --- TAB 1: INDIVIDUAL CHECK-IN ---
 with tab1:
+    # We store the active UKI number in session state to use for highlighting in Tab 3
     handler_input = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345", key="search_box").strip()
     if handler_input:
+        st.session_state.active_handler = handler_input
         user_data = df[df['UKI_Number'] == handler_input]
         if not user_data.empty:
             st.subheader(f"Welcome, {user_data.iloc[0]['Handler_Name']}")
@@ -131,85 +111,75 @@ with tab1:
                 dog_rows = user_data[user_data['Name'] == dog]
                 with st.container(border=True):
                     st.markdown(f"### 🐶 {dog}")
-                    
-                    # --- The "Check In All" Button ---
                     if st.button(f"Check in all runs for {dog}", key=f"btn_all_{dog}"):
                         for _, r in dog_rows.iterrows():
                             pk = r['Run_Order']
-                            key_name = f"select_{pk}"
-                            
-                            # 1. Update Database silently
                             conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk).execute()
-                            
-                            # 2. Update local dataframe
-                            if 'main_df' in st.session_state:
-                                st.session_state.main_df.loc[st.session_state.main_df['Run_Order'] == pk, 'status'] = "Checked In"
-                            
-                            # 3. CRITICAL: Force the widget's internal memory to update
-                            st.session_state[key_name] = "Checked In"
-                            
-                        # 4. Instant UI Refresh
+                            st.session_state[f"select_{pk}"] = "Checked In"
+                        fetch_fresh_data()
                         st.rerun()
 
-                    # --- Individual Class Selectors ---
                     for idx, row in dog_rows.iterrows():
                         pk = row['Run_Order']
                         key_name = f"select_{pk}"
-                        db_status = row['status'] if row['status'] in status_options else "Not Checked In"
-                        
-                        # Initialize the widget memory manually if it's the first time seeing it
                         if key_name not in st.session_state:
-                            st.session_state[key_name] = db_status
+                            st.session_state[key_name] = row['status']
                         
                         c_class, c_status = st.columns([1.5, 1])
-                        with c_class: 
-                            st.markdown(f"**{row['Combined Class Name']}**")
+                        with c_class: st.markdown(f"**{row['Combined Class Name']}**")
                         with c_status: 
-                            # Notice NO index=... parameter here. This stops the warning and fixes the bug!
-                            st.selectbox(
-                                "Status", 
-                                options=status_options, 
-                                key=key_name, 
-                                on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]), 
-                                label_visibility="collapsed"
-                            )
+                            st.selectbox("Status", options=status_options, key=key_name, 
+                                         on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]), 
+                                         label_visibility="collapsed")
 
-# --- TAB 2: DASHBOARD ---
-with tab2:
-    if st.button("🔄 Refresh Data"): 
-        fetch_fresh_data()
-        st.rerun()
-    if not df.empty:
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Entries", len(df))
-        c2.metric("Checked In", len(df[df['status'] == 'Checked In']))
-        c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
-        c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
-
-# --- TAB 3: RUNNING ORDER ---
+# --- TAB 3: RUNNING ORDER (With Highlighting & Star) ---
 with tab3:
     if not df.empty:
         sel_c = st.selectbox("Select Class:", sorted_classes, key="ro_sel")
         
-        # --- RESTORED: Fetch & Display Course Map ---
+        # Course Map Display
         clean_class_search = sel_c.strip().lower()
         base_search = re.sub(r'[^a-z0-9]', '_', clean_class_search)
         try:
             files_res = conn_supabase.client.storage.from_("coursemaps").list()
             valid_files = [f for f in files_res if f['name'].startswith(base_search)]
             if valid_files:
-                # Sort to get the most recently uploaded map for this class
                 valid_files.sort(key=lambda x: x['created_at'], reverse=True)
                 map_url = conn_supabase.client.storage.from_("coursemaps").get_public_url(valid_files[0]['name'])
                 st.image(map_url, use_container_width=True)
-        except Exception:
-            pass # Fail silently if no map exists yet or if storage isn't set up
-        # --------------------------------------------
+        except: pass
 
-        r_df = df[df['Combined Class Name'] == sel_c].sort_values(['Height', 'Run_Order'])
+        r_df = df[df['Combined Class Name'] == sel_c].sort_values(['Height', 'Run_Order']).copy()
+        
+        # --- LOGIC: Highlight & Star Handler's Dogs ---
+        current_handler = st.session_state.get('active_handler', None)
+        
+        def style_running_order(row):
+            is_mine = str(row['UKI_Number']) == str(current_handler)
+            # Add Star to name if it's the handler's dog
+            display_name = f"⭐ {row['Name']}" if is_mine else row['Name']
+            return display_name, is_mine
+
         for h in sorted(r_df['Height'].unique()):
             st.markdown(f'<div class="height-header">{h}" Height</div>', unsafe_allow_html=True)
-            st.dataframe(r_df[r_df['Height'] == h][['Handler_Name', 'Name', 'Breed', 'status']], use_container_width=True, hide_index=True)
+            
+            subset = r_df[r_df['Height'] == h].copy()
+            
+            # Apply the star and identify rows to highlight
+            subset['Name'], subset['is_mine'] = zip(*subset.apply(style_running_order, axis=1))
+            
+            # Display using a styled dataframe
+            def apply_row_style(s):
+                return ['background-color: #D1E9FF' if s.is_mine else '' for _ in s]
+
+            styled_subset = subset[['Handler_Name', 'Name', 'Breed', 'status', 'is_mine']].style.apply(apply_row_style, axis=1)
+            
+            st.dataframe(
+                styled_subset, 
+                column_order=("Handler_Name", "Name", "Breed", "status"),
+                use_container_width=True, 
+                hide_index=True
+            )
 
 # --- TAB 5: GATE ---
 with tab5:
