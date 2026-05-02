@@ -231,8 +231,17 @@ with tab3:
                                 styles[i] = 'background-color: #E3F2FD; color: #000000;' # Light blue for My Dogs
                         return styles
 
+                    # 1. Apply our row colors, then chain .set_properties for the font
+                    styled_table = subset[['Handler_Name', 'Name', 'Breed', 'status', 'UKI_Number']].style \
+                        .apply(highlight_row, axis=1) \
+                        .set_properties(**{
+                            'font-size': '18px', 
+                            'font-weight': 'bold'
+                        })
+
+                    # 2. Render the dataframe
                     st.dataframe(
-                        subset[['Handler_Name', 'Name', 'Breed', 'status', 'UKI_Number']].style.apply(highlight_row, axis=1),
+                        styled_table,
                         column_order=("Handler_Name", "Name", "Breed", "status"),
                         use_container_width=True,
                         hide_index=True,
