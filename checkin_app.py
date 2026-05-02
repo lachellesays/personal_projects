@@ -93,17 +93,31 @@ tab1, tab2, tab3, tab5, tab6 = st.tabs([
 # --- TAB 1: INDIVIDUAL CHECK-IN ---
 with tab1:
     handler_input = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345", key="search_box").strip()
+    
     if handler_input:
         st.session_state.active_handler = handler_input
         user_data = df[df['UKI_Number'] == handler_input]
+        
         if not user_data.empty:
             st.subheader(f"Welcome, {user_data.iloc[0]['Handler_Name']}")
             status_options = ["Not Checked In", "Checked In", "Scratch", "Conflict", "NFC"]
             
+            # --- NEW SORTING LOGIC ---
+            # 1. Determine the "global" order of classes based on the very first dog to run in each
+            class_order_map = df.groupby('Combined Class Name')['Run_Order'].min().sort_values().to_dict()
+            
+            # 2. Assign a sort priority to the handler's data based on that global order
+            user_data = user_data.copy() # Avoid slice warnings
+            user_data['class_priority'] = user_data['Combined Class Name'].map(class_order_map)
+            # --------------------------
+
             for dog in user_data['Name'].unique():
-                dog_rows = user_data[user_data['Name'] == dog]
+                # Filter for this dog and sort its classes by the trial's running order
+                dog_rows = user_data[user_data['Name'] == dog].sort_values('class_priority')
+                
                 with st.container(border=True):
                     st.markdown(f"### 🐶 {dog}")
+                    
                     if st.button(f"Check in all runs for {dog}", key=f"btn_all_{dog}"):
                         for _, r in dog_rows.iterrows():
                             update_status_instant(r['Run_Order'], "Checked In")
@@ -113,15 +127,21 @@ with tab1:
                     for idx, row in dog_rows.iterrows():
                         pk = row['Run_Order']
                         key_name = f"select_{pk}"
+                        
                         if key_name not in st.session_state:
                             st.session_state[key_name] = row['status']
                         
                         c_class, c_status = st.columns([1.5, 1])
-                        with c_class: st.markdown(f"**{row['Combined Class Name']}**")
+                        with c_class: 
+                            st.markdown(f"**{row['Combined Class Name']}**")
                         with c_status: 
-                            st.selectbox("Status", options=status_options, key=key_name, 
-                                         on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]), 
-                                         label_visibility="collapsed")
+                            st.selectbox(
+                                "Status", 
+                                options=status_options, 
+                                key=key_name, 
+                                on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]), 
+                                label_visibility="collapsed"
+                            )
 
 # --- TAB 2: DASHBOARD ---
 # --- TAB 2: DASHBOARD ---
