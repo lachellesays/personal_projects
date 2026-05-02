@@ -178,7 +178,6 @@ with tab3:
         except: pass
 
         # --- THE FRAGMENT ---
-        # This function isolates the auto-refresh to just the table
         @st.fragment(run_every=10)
         def live_running_order_view(target_class, handler_num):
             st.caption(f"Live Sync Active • Last Update: {time.strftime('%H:%M:%S')}")
@@ -197,6 +196,10 @@ with tab3:
                 r_df['Run_Order'] = pd.to_numeric(r_df['Run_Order'], errors='coerce').fillna(0).astype(int)
                 r_df = r_df.sort_values(['Height', 'Run_Order'])
 
+                # --- HELPER: Unicode Strikethrough ---
+                def to_strikethrough(text):
+                    return ''.join(c + '\u0336' for c in str(text))
+
                 for h in sorted(r_df['Height'].unique()):
                     st.markdown(f'<div class="height-header">{h}" Height</div>', unsafe_allow_html=True)
                     subset = r_df[r_df['Height'] == h].copy()
@@ -207,27 +210,25 @@ with tab3:
                         axis=1
                     )
 
+                    # --- APPLY STRIKETHROUGH DIRECTLY TO TEXT ---
+                    completed_mask = subset['status'] == 'Run Completed'
+                    for col in ['Handler_Name', 'Name', 'Breed']:
+                        subset.loc[completed_mask, col] = subset.loc[completed_mask, col].apply(to_strikethrough)
+
                     # Highlight row logic
                     def highlight_row(s):
                         styles = [''] * len(s)
-                        is_mine = str(s.UKI_Number).strip() == str(handler_num).strip() and handler_num != ""
-                        is_done = s.status == 'Run Completed'
-                        is_in_ring = s.status == 'In Ring'
+                        is_mine = str(s['UKI_Number']).strip() == str(handler_num).strip() and handler_num != ""
+                        is_in_ring = s['status'] == 'In Ring'
+                        is_done = s['status'] == 'Run Completed'
 
                         for i in range(len(s)):
-                            style_str = ''
-                            
-                            # Apply highlight based on status
                             if is_in_ring:
-                                style_str += 'background-color: #FFF59D; font-weight: bold; ' # Yellow highlight for dog in ring
+                                styles[i] = 'background-color: #FFF59D; color: #000000;' # Solid Yellow for In Ring
+                            elif is_done:
+                                styles[i] = 'color: #A0A0A0;' # Ghosted Grey color for Completed
                             elif is_mine:
-                                style_str += 'background-color: #E3F2FD; '
-                            
-                            # Apply strikethrough if completed
-                            if is_done:
-                                style_str += 'text-decoration: line-through; color: #9E9E9E; '
-                                
-                            styles[i] = style_str
+                                styles[i] = 'background-color: #E3F2FD; color: #000000;' # Light blue for My Dogs
                         return styles
 
                     st.dataframe(
@@ -242,7 +243,6 @@ with tab3:
 
         # Execute the fragment
         live_running_order_view(sel_c, st.session_state.active_handler)
-
 
 # --- TAB 5: GATE STEWARD (LIVE DISPLAY via Fragment) ---
 with tab5:
