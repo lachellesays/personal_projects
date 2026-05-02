@@ -124,14 +124,19 @@ with tab1:
                                          label_visibility="collapsed")
 
 # --- TAB 2: DASHBOARD ---
+# --- TAB 2: DASHBOARD ---
 with tab2:
     if st.button("🔄 Manual Force Refresh", key="dash_refresh"): 
         fetch_global_data()
         st.rerun()
+        
     if not df.empty:
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total Entries", len(df))
-        c2.metric("Checked In", len(df[df['status'] == 'Checked In']))
+        
+        # Updated to include both 'Checked In' and 'Conflict'
+        c2.metric("Checked In", len(df[df['status'].isin(['Checked In', 'Conflict'])]))
+        
         c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
         c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
 
