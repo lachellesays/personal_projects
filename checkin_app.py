@@ -144,7 +144,6 @@ with tab1:
                             )
 
 # --- TAB 2: DASHBOARD ---
-# --- TAB 2: DASHBOARD ---
 with tab2:
     if st.button("🔄 Manual Force Refresh", key="dash_refresh"): 
         fetch_global_data()
@@ -210,8 +209,26 @@ with tab3:
 
                     # Highlight row logic
                     def highlight_row(s):
+                        styles = [''] * len(s)
                         is_mine = str(s.UKI_Number).strip() == str(handler_num).strip() and handler_num != ""
-                        return ['background-color: #E3F2FD' if is_mine else '' for _ in s]
+                        is_done = s.status == 'Run Completed'
+                        is_in_ring = s.status == 'In Ring'
+
+                        for i in range(len(s)):
+                            style_str = ''
+                            
+                            # Apply highlight based on status
+                            if is_in_ring:
+                                style_str += 'background-color: #FFF59D; font-weight: bold; ' # Yellow highlight for dog in ring
+                            elif is_mine:
+                                style_str += 'background-color: #E3F2FD; '
+                            
+                            # Apply strikethrough if completed
+                            if is_done:
+                                style_str += 'text-decoration: line-through; color: #9E9E9E; '
+                                
+                            styles[i] = style_str
+                        return styles
 
                     st.dataframe(
                         subset[['Handler_Name', 'Name', 'Breed', 'status', 'UKI_Number']].style.apply(highlight_row, axis=1),
@@ -260,8 +277,13 @@ with tab5:
                         st.write(f"**{r['Name']}** ({r['Height']}\")")
                         st.caption(f"Status: {r['status']}")
                     with cb:
-                        if r['status'] != "Run Completed":
-                            # Button interaction inside a fragment auto-reruns ONLY the fragment
+                        if r['status'] == "In Ring":
+                            # Button changes to 'IN RING' once started. Clicking it marks the run complete.
+                            if st.button("IN RING", key=f"g_{r['Run_Order']}", type="primary"):
+                                conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Run_Order", r['Run_Order']).execute()
+                                # Streamlit will automatically rerun this fragment now, fetching the new data
+                        elif r['status'] != "Run Completed":
+                            # Standard Start button for waiting dogs
                             if st.button("START", key=f"g_{r['Run_Order']}"):
                                 # Mark previous "In Ring" as completed
                                 conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", target_class).eq("status", "In Ring").execute()
