@@ -9,22 +9,22 @@ st.set_page_config(page_title="Agility Trial Center", page_icon="🐾", layout="
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 5rem; padding-bottom: 5rem; }
+    .block-container { padding-top: 2rem; padding-bottom: 2rem; }
     .main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
     
     /* Global Button Styling */
     .stButton > button {
         width: 100% !important;
-        height: 70px !important;
-        font-size: 20px !important;
+        height: 60px !important;
+        font-size: 18px !important;
         font-weight: bold !important;
         border-radius: 12px !important;
     }
 
-    /* Highlight for Handler's own dogs in Dataframe */
-    .highlight-row {
-        background-color: #e3f2fd !important;
-        font-weight: bold;
+    /* Column layout for mobile */
+    [data-testid="column"] {
+        min-width: 30% !important;
+        flex: 1 1 30% !important;
     }
     
     .height-header {
@@ -50,8 +50,9 @@ except KeyError:
 
 conn_supabase = st.connection("supabase", type=SupabaseConnection, url=s_url, key=s_key)
 
-# --- 3. DATA HELPERS & AUTO-REFRESH ---
-def fetch_fresh_data():
+# --- 3. GLOBAL DATA HELPERS ---
+# We still use a global fetch for static tabs like Dashboard and Check-in
+def fetch_global_data():
     res = conn_supabase.table("trialdata").select("*").execute()
     new_df = pd.DataFrame(res.data)
     if not new_df.empty:
@@ -63,7 +64,6 @@ def fetch_fresh_data():
         new_df['UKI_Number'] = new_df['UKI_Number'].astype(str).str.strip()
         new_df['Run_Order'] = pd.to_numeric(new_df['Run_Order'], errors='coerce').fillna(0).astype(int)
         st.session_state.main_df = new_df
-        st.session_state.last_sync = time.time()
     return new_df
 
 def update_status_instant(run_order, new_status):
@@ -74,19 +74,13 @@ def update_status_instant(run_order, new_status):
     except Exception as e:
         st.error(f"Sync Error: {e}")
 
-# Initialize State
+# Initial Load for the session
 if 'main_df' not in st.session_state:
-    fetch_fresh_data()
+    fetch_global_data()
 
-# --- AUTO-REFRESH LOGIC (Every 10 Seconds) ---
-# This ensures the "Big Screen" stays updated without manual intervention
-if "last_sync" not in st.session_state:
-    st.session_state.last_sync = time.time()
-
-refresh_interval = 10 # seconds
-if time.time() - st.session_state.last_sync > refresh_interval:
-    fetch_fresh_data()
-    st.rerun()
+# Ensure active_handler exists in session state
+if 'active_handler' not in st.session_state:
+    st.session_state.active_handler = ""
 
 df = st.session_state.main_df
 sorted_classes = df.groupby('Combined Class Name')['Run_Order'].min().sort_values().index.tolist() if not df.empty else []
@@ -98,7 +92,6 @@ tab1, tab2, tab3, tab5, tab6 = st.tabs([
 
 # --- TAB 1: INDIVIDUAL CHECK-IN ---
 with tab1:
-    # We store the active UKI number in session state to use for highlighting in Tab 3
     handler_input = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345", key="search_box").strip()
     if handler_input:
         st.session_state.active_handler = handler_input
@@ -113,10 +106,8 @@ with tab1:
                     st.markdown(f"### 🐶 {dog}")
                     if st.button(f"Check in all runs for {dog}", key=f"btn_all_{dog}"):
                         for _, r in dog_rows.iterrows():
-                            pk = r['Run_Order']
-                            conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk).execute()
-                            st.session_state[f"select_{pk}"] = "Checked In"
-                        fetch_fresh_data()
+                            update_status_instant(r['Run_Order'], "Checked In")
+                            st.session_state[f"select_{r['Run_Order']}"] = "Checked In"
                         st.rerun()
 
                     for idx, row in dog_rows.iterrows():
@@ -132,12 +123,25 @@ with tab1:
                                          on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]), 
                                          label_visibility="collapsed")
 
-# --- TAB 3: RUNNING ORDER (With Highlighting & Star) ---
+# --- TAB 2: DASHBOARD ---
+with tab2:
+    if st.button("🔄 Manual Force Refresh", key="dash_refresh"): 
+        fetch_global_data()
+        st.rerun()
+    if not df.empty:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total Entries", len(df))
+        c2.metric("Checked In", len(df[df['status'] == 'Checked In']))
+        c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
+        c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
+
+# --- TAB 3: RUNNING ORDER (LIVE DISPLAY via Fragment) ---
 with tab3:
     if not df.empty:
+        # Dropdown is OUTSIDE the fragment so it doesn't blink or reset
         sel_c = st.selectbox("Select Class:", sorted_classes, key="ro_sel")
         
-        # Course Map Display
+        # Course Map Display (Outside Fragment)
         clean_class_search = sel_c.strip().lower()
         base_search = re.sub(r'[^a-z0-9]', '_', clean_class_search)
         try:
@@ -149,78 +153,119 @@ with tab3:
                 st.image(map_url, use_container_width=True)
         except: pass
 
-        r_df = df[df['Combined Class Name'] == sel_c].sort_values(['Height', 'Run_Order']).copy()
-        
-        # --- LOGIC: Highlight & Star Handler's Dogs ---
-        current_handler = st.session_state.get('active_handler', None)
-        
-        def style_running_order(row):
-            is_mine = str(row['UKI_Number']) == str(current_handler)
-            # Add Star to name if it's the handler's dog
-            display_name = f"⭐ {row['Name']}" if is_mine else row['Name']
-            return display_name, is_mine
+        # --- THE FRAGMENT ---
+        # This function isolates the auto-refresh to just the table
+        @st.fragment(run_every=10)
+        def live_running_order_view(target_class, handler_num):
+            st.caption(f"Live Sync Active • Last Update: {time.strftime('%H:%M:%S')}")
+            
+            # Fetch *only* the required data directly from DB to ensure it's fresh
+            res = conn_supabase.table("trialdata").select("*").eq("Combined Class Name", target_class).execute()
+            r_df = pd.DataFrame(res.data)
+            
+            if not r_df.empty:
+                # Standardize heights for this fragment
+                rename_map = {'Intl_Jump_Ht': 'Height', 'dog_height': 'Height', 'Jump_Height': 'Height'}
+                for old_col, new_col in rename_map.items():
+                    if old_col in r_df.columns:
+                        r_df = r_df.rename(columns={old_col: new_col})
+                
+                r_df['Run_Order'] = pd.to_numeric(r_df['Run_Order'], errors='coerce').fillna(0).astype(int)
+                r_df = r_df.sort_values(['Height', 'Run_Order'])
 
-        for h in sorted(r_df['Height'].unique()):
-            st.markdown(f'<div class="height-header">{h}" Height</div>', unsafe_allow_html=True)
-            
-            subset = r_df[r_df['Height'] == h].copy()
-            
-            # Apply the star and identify rows to highlight
-            subset['Name'], subset['is_mine'] = zip(*subset.apply(style_running_order, axis=1))
-            
-            # Display using a styled dataframe
-            def apply_row_style(s):
-                return ['background-color: #D1E9FF' if s.is_mine else '' for _ in s]
+                for h in sorted(r_df['Height'].unique()):
+                    st.markdown(f'<div class="height-header">{h}" Height</div>', unsafe_allow_html=True)
+                    subset = r_df[r_df['Height'] == h].copy()
+                    
+                    # Add star to active handler's dogs
+                    subset['Name'] = subset.apply(
+                        lambda r: f"⭐ {r['Name']}" if str(r['UKI_Number']).strip() == str(handler_num).strip() and handler_num != "" else r['Name'], 
+                        axis=1
+                    )
 
-            styled_subset = subset[['Handler_Name', 'Name', 'Breed', 'status', 'is_mine']].style.apply(apply_row_style, axis=1)
-            
-            st.dataframe(
-                styled_subset, 
-                column_order=("Handler_Name", "Name", "Breed", "status"),
-                use_container_width=True, 
-                hide_index=True
-            )
+                    # Highlight row logic
+                    def highlight_row(s):
+                        is_mine = str(s.UKI_Number).strip() == str(handler_num).strip() and handler_num != ""
+                        return ['background-color: #E3F2FD' if is_mine else '' for _ in s]
 
-# --- TAB 5: GATE ---
+                    st.dataframe(
+                        subset[['Handler_Name', 'Name', 'Breed', 'status', 'UKI_Number']].style.apply(highlight_row, axis=1),
+                        column_order=("Handler_Name", "Name", "Breed", "status"),
+                        use_container_width=True,
+                        hide_index=True,
+                        key=f"table_{h}_{target_class}"
+                    )
+            else:
+                st.info("No data found for this class.")
+
+        # Execute the fragment
+        live_running_order_view(sel_c, st.session_state.active_handler)
+
+
+# --- TAB 5: GATE STEWARD (LIVE DISPLAY via Fragment) ---
 with tab5:
     if st.text_input("Gate PIN:", type="password", key="g_p_v") == "7890":
+        # Dropdown outside fragment
         g_cls = st.selectbox("Current Class:", sorted_classes, key="g_cls")
-        g_df = df[df['Combined Class Name'] == g_cls].sort_values(['Height', 'Run_Order'])
-        for _, r in g_df.iterrows():
-            if r['status'] == "Scratch": continue
-            cm, cb = st.columns([3, 1])
-            cm.write(f"**{r['Name']}** ({r['Height']}\") - {r['status']}")
-            if r['status'] != "Run Completed":
-                if cb.button("START", key=f"g_{r['Run_Order']}"):
-                    conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", g_cls).eq("status", "In Ring").execute()
-                    update_status_instant(r['Run_Order'], "In Ring")
-                    fetch_fresh_data()
-                    st.rerun()
+        
+        @st.fragment(run_every=5) # Gate updates slightly faster (every 5s)
+        def gate_steward_view(target_class):
+            st.caption(f"Gate Live Sync • Last Update: {time.strftime('%H:%M:%S')}")
+            
+            # Fetch fresh data for this class
+            res = conn_supabase.table("trialdata").select("*").eq("Combined Class Name", target_class).execute()
+            g_df = pd.DataFrame(res.data)
+            
+            if not g_df.empty:
+                # Standardize heights
+                rename_map = {'Intl_Jump_Ht': 'Height', 'dog_height': 'Height', 'Jump_Height': 'Height'}
+                for old_col, new_col in rename_map.items():
+                    if old_col in g_df.columns:
+                        g_df = g_df.rename(columns={old_col: new_col})
+                        
+                g_df['Run_Order'] = pd.to_numeric(g_df['Run_Order'], errors='coerce').fillna(0).astype(int)
+                g_df = g_df.sort_values(['Height', 'Run_Order'])
+
+                for _, r in g_df.iterrows():
+                    if r['status'] == "Scratch": continue
+                    
+                    cm, cb = st.columns([3, 1])
+                    with cm:
+                        st.write(f"**{r['Name']}** ({r['Height']}\")")
+                        st.caption(f"Status: {r['status']}")
+                    with cb:
+                        if r['status'] != "Run Completed":
+                            # Button interaction inside a fragment auto-reruns ONLY the fragment
+                            if st.button("START", key=f"g_{r['Run_Order']}"):
+                                # Mark previous "In Ring" as completed
+                                conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", target_class).eq("status", "In Ring").execute()
+                                # Mark this one as "In Ring"
+                                conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", r['Run_Order']).execute()
+                                # Streamlit will automatically rerun this fragment now, fetching the new data
+            else:
+                st.info("No data found for this class.")
+
+        # Execute the fragment
+        gate_steward_view(g_cls)
+
 
 # --- TAB 6: ADMIN ---
 with tab6:
     st.header("🔒 Secretary Admin")
     if st.text_input("Admin PIN:", type="password", key="a_p_v") == "7890":
-        
-        if st.button("Reset All Run Statuses"):
+        if st.button("Reset All Statuses"):
             conn_supabase.table("trialdata").update({"status": "Not Checked In"}).neq("status", "Scratch").execute()
-            # Clear local state so it triggers a full refresh
-            if 'main_df' in st.session_state:
-                del st.session_state.main_df
+            fetch_global_data()
+            st.success("All statuses reset!")
             st.rerun()
             
         st.divider()
-        
-        # --- RESTORED: Course Map Uploader ---
         st.subheader("🗺️ Course Map Upload")
-        upload_class = st.selectbox("Assign Map to Class:", sorted_classes, key="map_assign_select")
-        uploaded_file = st.file_uploader("Choose a file", type=['jpg', 'png', 'jpeg'])
+        upload_class = st.selectbox("Assign Map to Class:", sorted_classes, key="map_up_sel")
+        uploaded_file = st.file_uploader("Choose Image", type=['jpg', 'png', 'jpeg'])
         
-        if uploaded_file and st.button("🚀 Sync Map to App"):
+        if uploaded_file and st.button("🚀 Sync Map"):
             with st.spinner("Uploading to Supabase..."):
                 clean_filename = f"{re.sub(r'[^a-z0-9]', '_', upload_class.lower())}_{int(time.time())}.{uploaded_file.name.split('.')[-1]}"
-                try:
-                    conn_supabase.client.storage.from_("coursemaps").upload(path=clean_filename, file=uploaded_file.getvalue())
-                    st.success(f"Map for {upload_class} is live!")
-                except Exception as e:
-                    st.error(f"Upload failed: Make sure the 'coursemaps' bucket exists in Supabase Storage. Error: {e}")
+                conn_supabase.client.storage.from_("coursemaps").upload(path=clean_filename, file=uploaded_file.getvalue())
+                st.success("Map Uploaded!")
