@@ -158,6 +158,7 @@ with tab2:
         
         c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
         c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
+
 # --- TAB 3: RUNNING ORDER (LIVE DISPLAY via Fragment) ---
 with tab3:
     if not df.empty:
@@ -186,23 +187,23 @@ with tab3:
             r_df = pd.DataFrame(res.data)
             
             if not r_df.empty:
-                # Standardize heights
+                # Standardize height columns
                 rename_map = {'Intl_Jump_Ht': 'Height', 'dog_height': 'Height', 'Jump_Height': 'Height'}
                 for old_col, new_col in rename_map.items():
                     if old_col in r_df.columns:
                         r_df = r_df.rename(columns={old_col: new_col})
                 
-                # Convert Run_Order to numeric for correct sorting
-                r_df['Run_Order'] = pd.to_numeric(r_df['Run_Order'], errors='coerce').fillna(0).astype(int)
+                # --- UPDATED: Handle Run_Order as Float ---
+                # This ensures 1.5 stays between 1 and 2
+                r_df['Run_Order'] = pd.to_numeric(r_df['Run_Order'], errors='coerce').fillna(0.0)
                 
-                # --- UPDATED SORTING: Solid list strictly by Run Order ---
+                # Sort strictly by the float value
                 r_df = r_df.sort_values('Run_Order')
 
                 # --- HELPER: Unicode Strikethrough ---
                 def to_strikethrough(text):
                     return ''.join(c + '\u0336' for c in str(text))
 
-                # Process the full list (No more height loop)
                 subset = r_df.copy()
                 
                 # Add star to active handler's dogs
@@ -211,7 +212,7 @@ with tab3:
                     axis=1
                 )
 
-                # --- APPLY STRIKETHROUGH DIRECTLY TO TEXT ---
+                # --- APPLY STRIKETHROUGH ---
                 completed_mask = subset['status'] == 'Run Completed'
                 for col in ['Handler_Name', 'Name', 'Breed', 'Height']:
                     subset.loc[completed_mask, col] = subset.loc[completed_mask, col].apply(to_strikethrough)
@@ -225,40 +226,40 @@ with tab3:
 
                     for i in range(len(s)):
                         if is_in_ring:
-                            styles[i] = 'background-color: #FFF59D; color: #000000;' # Solid Yellow for In Ring
+                            styles[i] = 'background-color: #FFF59D; color: #000000;' # Yellow for In Ring
                         elif is_done:
-                            styles[i] = 'color: #A0A0A0;' # Ghosted Grey color for Completed
+                            styles[i] = 'color: #A0A0A0;' # Grey for Completed
                         elif is_mine:
-                            styles[i] = 'background-color: #E3F2FD; color: #000000;' # Light blue for My Dogs
+                            styles[i] = 'background-color: #E3F2FD; color: #000000;' # Blue for My Dogs
                     return styles
 
-                # 1. Apply our row colors, then chain .set_properties for the font
+                # 1. Apply styles and font properties
+                # Formatting Run_Order to 1 decimal place if needed, or keeping it as is
                 styled_table = subset[['Run_Order', 'Handler_Name', 'Name', 'Breed', 'Height', 'status', 'UKI_Number']].style \
                     .apply(highlight_row, axis=1) \
+                    .format({"Run_Order": "{:.1f}"}) \
                     .set_properties(**{
                         'font-size': '24px', 
                         'font-weight': 'bold'
                     })
 
-                # 2. Render the single solid dataframe
+                # 2. Render the dataframe
                 st.dataframe(
                     styled_table,
                     column_order=("Run_Order", "Handler_Name", "Name", "Breed", "Height", "status"),
                     use_container_width=True,
                     hide_index=True,
-                    key=f"table_full_{target_class}"
+                    key=f"table_float_{target_class}"
                 )
             else:
                 st.info("No data found for this class.")
 
-        # Execute the fragment
-        # Note: Ensure st.session_state.active_handler is initialized in your main app block
+        # Execute
         h_num = st.session_state.get('active_handler', "")
         live_running_order_view(sel_c, h_num)
-        
 # --- TAB 5: GATE STEWARD (LIVE DISPLAY via Fragment) ---
 with tab5:
-    st.header("🔒 For Gate Steward Only")
+    st.header("🚧 Gate Steward")
     if st.text_input("Gate PIN:", type="password", key="g_p_v") == "7890":
         # Dropdown outside fragment
         g_cls = st.selectbox("Current Class:", sorted_classes, key="g_cls")
@@ -278,37 +279,58 @@ with tab5:
                     if old_col in g_df.columns:
                         g_df = g_df.rename(columns={old_col: new_col})
                         
-                g_df['Run_Order'] = pd.to_numeric(g_df['Run_Order'], errors='coerce').fillna(0).astype(int)
-                g_df = g_df.sort_values(['Height', 'Run_Order'])
+                # --- UPDATED: Handle Run_Order as Float for inserted dogs ---
+                g_df['Run_Order'] = pd.to_numeric(g_df['Run_Order'], errors='coerce').fillna(0.0)
+                
+                # Sort strictly by Run_Order (removes height segmentation)
+                g_df = g_df.sort_values('Run_Order')
 
                 for _, r in g_df.iterrows():
                     if r['status'] == "Scratch": continue
                     
-                    cm, cb = st.columns([3, 1])
-                    with cm:
-                        st.write(f"**{r['Name']}** ({r['Height']}\")")
-                        st.caption(f"Status: {r['status']}")
-                    with cb:
-                        if r['status'] == "In Ring":
-                            # Button changes to 'IN RING' once started. Clicking it marks the run complete.
-                            if st.button("IN RING", key=f"g_{r['Run_Order']}", type="primary"):
-                                conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Run_Order", r['Run_Order']).execute()
-                                # Streamlit will automatically rerun this fragment now, fetching the new data
-                        elif r['status'] != "Run Completed":
-                            # Standard Start button for waiting dogs
-                            if st.button("START", key=f"g_{r['Run_Order']}"):
-                                # Mark previous "In Ring" as completed
+                    # Determine border color based on status
+                    is_in_ring = r['status'] == "In Ring"
+                    is_done = r['status'] == "Run Completed"
+                    border_color = "#ffc107" if is_in_ring else "#28a745" if r['status'] == "Checked In" else "#adb5bd"
+                    
+                    # Card-style display
+                    c_main, c_btn = st.columns([3, 2])
+                    
+                    with c_main:
+                        # Display Run Order as float (1.0, 1.5, etc)
+                        ro_display = f"{float(r['Run_Order']):.1f}"
+                        st.markdown(f'''
+                            <div style="padding: 10px; border-left: 10px solid {border_color}; border-radius: 8px; background-color: #f8f9fa; margin-bottom: 10px;">
+                                <div style="font-size: 20px; font-weight: bold; color: #333;">{ro_display} | {r["Name"]}</div>
+                                <div style="font-size: 14px; color: #666;">{r["Handler_Name"]} • {r["Height"]}" • {r["status"]}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                        
+                    with c_btn:
+                        # Logic for buttons
+                        pk_val = r['Run_Order']
+                        if is_in_ring:
+                            if st.button("FINISH ✅", key=f"finish_{pk_val}", use_container_width=True, type="primary"):
+                                conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Run_Order", pk_val).execute()
+                                st.rerun()
+                        elif not is_done:
+                            if st.button("START RUN", key=f"start_{pk_val}", use_container_width=True):
+                                # Mark any existing "In Ring" as completed automatically
                                 conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", target_class).eq("status", "In Ring").execute()
-                                # Mark this one as "In Ring"
-                                conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", r['Run_Order']).execute()
-                                # Streamlit will automatically rerun this fragment now, fetching the new data
+                                # Set this dog to In Ring
+                                conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute()
+                                st.rerun()
+                        else:
+                            # Completed runs get a disabled state or "Undo"
+                            if st.button("UNDO FINISH", key=f"undo_{pk_val}", use_container_width=True):
+                                conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk_val).execute()
+                                st.rerun()
             else:
                 st.info("No data found for this class.")
 
         # Execute the fragment
         gate_steward_view(g_cls)
-
-
+        
 # --- TAB 6: ADMIN ---
 with tab6:
     st.header("🔒 Secretary Admin")
