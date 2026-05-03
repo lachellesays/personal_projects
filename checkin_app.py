@@ -158,7 +158,6 @@ with tab2:
         
         c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
         c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
-
 # --- TAB 3: RUNNING ORDER (LIVE DISPLAY via Fragment) ---
 with tab3:
     if not df.empty:
@@ -175,46 +174,51 @@ with tab3:
                 valid_files.sort(key=lambda x: x['created_at'], reverse=True)
                 map_url = conn_supabase.client.storage.from_("coursemaps").get_public_url(valid_files[0]['name'])
                 st.image(map_url, use_container_width=True)
-        except: pass
+        except: 
+            pass
 
         # --- THE FRAGMENT ---
         @st.fragment(run_every=10)
         def live_running_order_view(target_class, handler_num):
             st.caption(f"Live Sync Active • Last Update: {time.strftime('%H:%M:%S')}")
             
-            # Fetch *only* the required data directly from DB to ensure it's fresh
+            # Fetch fresh data
             res = conn_supabase.table("trialdata").select("*").eq("Combined Class Name", target_class).execute()
             r_df = pd.DataFrame(res.data)
             
             if not r_df.empty:
-                # Standardize height columns
+                # Standardize heights
                 rename_map = {'Intl_Jump_Ht': 'Height', 'dog_height': 'Height', 'Jump_Height': 'Height'}
                 for old_col, new_col in rename_map.items():
                     if old_col in r_df.columns:
                         r_df = r_df.rename(columns={old_col: new_col})
                 
-                # --- UPDATED: Handle Run_Order as Float ---
-                # This ensures 1.5 stays between 1 and 2
+                # Sort by Float first to get correct order
                 r_df['Run_Order'] = pd.to_numeric(r_df['Run_Order'], errors='coerce').fillna(0.0)
-                
-                # Sort strictly by the float value
                 r_df = r_df.sort_values('Run_Order')
+
+                # Create a copy for display processing
+                subset = r_df.copy()
+                
+                # CRITICAL: Convert numeric columns to string BEFORE applying strikethrough
+                # This prevents the TypeError when inserting Unicode strike characters
+                for col in ['Run_Order', 'Handler_Name', 'Name', 'Breed', 'Height']:
+                    if col in subset.columns:
+                        subset[col] = subset[col].astype(str)
 
                 # --- HELPER: Unicode Strikethrough ---
                 def to_strikethrough(text):
                     return ''.join(c + '\u0336' for c in str(text))
 
-                subset = r_df.copy()
-                
                 # Add star to active handler's dogs
                 subset['Name'] = subset.apply(
                     lambda r: f"⭐ {r['Name']}" if str(r['UKI_Number']).strip() == str(handler_num).strip() and handler_num != "" else r['Name'], 
                     axis=1
                 )
 
-                # --- APPLY STRIKETHROUGH ---
+                # Apply strikethrough to completed runs
                 completed_mask = subset['status'] == 'Run Completed'
-                for col in ['Handler_Name', 'Name', 'Breed', 'Height']:
+                for col in ['Run_Order', 'Handler_Name', 'Name', 'Breed', 'Height']:
                     subset.loc[completed_mask, col] = subset.loc[completed_mask, col].apply(to_strikethrough)
 
                 # Highlight row logic
@@ -226,37 +230,36 @@ with tab3:
 
                     for i in range(len(s)):
                         if is_in_ring:
-                            styles[i] = 'background-color: #FFF59D; color: #000000;' # Yellow for In Ring
+                            styles[i] = 'background-color: #FFF59D; color: #000000;' # Yellow
                         elif is_done:
-                            styles[i] = 'color: #A0A0A0;' # Grey for Completed
+                            styles[i] = 'color: #A0A0A0;' # Grey
                         elif is_mine:
-                            styles[i] = 'background-color: #E3F2FD; color: #000000;' # Blue for My Dogs
+                            styles[i] = 'background-color: #E3F2FD; color: #000000;' # Blue
                     return styles
 
-                # 1. Apply styles and font properties
-                # Formatting Run_Order to 1 decimal place if needed, or keeping it as is
+                # Apply styling and set font properties
                 styled_table = subset[['Run_Order', 'Handler_Name', 'Name', 'Breed', 'Height', 'status', 'UKI_Number']].style \
                     .apply(highlight_row, axis=1) \
-                    .format({"Run_Order": "{:.1f}"}) \
                     .set_properties(**{
                         'font-size': '24px', 
                         'font-weight': 'bold'
                     })
 
-                # 2. Render the dataframe
+                # Render the single solid dataframe
                 st.dataframe(
                     styled_table,
                     column_order=("Run_Order", "Handler_Name", "Name", "Breed", "Height", "status"),
                     use_container_width=True,
                     hide_index=True,
-                    key=f"table_float_{target_class}"
+                    key=f"table_final_{target_class}"
                 )
             else:
                 st.info("No data found for this class.")
 
-        # Execute
+        # Execute the fragment
         h_num = st.session_state.get('active_handler', "")
         live_running_order_view(sel_c, h_num)
+               
 # --- TAB 5: GATE STEWARD (LIVE DISPLAY via Fragment) ---
 with tab5:
     st.header("🚧 Gate Steward")
@@ -330,7 +333,7 @@ with tab5:
 
         # Execute the fragment
         gate_steward_view(g_cls)
-        
+
 # --- TAB 6: ADMIN ---
 with tab6:
     st.header("🔒 Secretary Admin")
