@@ -158,6 +158,7 @@ with tab2:
         
         c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
         c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
+
 # --- TAB 3: RUNNING ORDER (LIVE DISPLAY via Fragment) ---
 with tab3:
     if not df.empty:
@@ -182,84 +183,72 @@ with tab3:
         def live_running_order_view(target_class, handler_num):
             st.caption(f"Live Sync Active • Last Update: {time.strftime('%H:%M:%S')}")
             
-            # Fetch fresh data
+            # Fetch fresh data directly from DB
             res = conn_supabase.table("trialdata").select("*").eq("Combined Class Name", target_class).execute()
             r_df = pd.DataFrame(res.data)
             
             if not r_df.empty:
-                # Standardize heights
+                # Standardize height columns
                 rename_map = {'Intl_Jump_Ht': 'Height', 'dog_height': 'Height', 'Jump_Height': 'Height'}
                 for old_col, new_col in rename_map.items():
                     if old_col in r_df.columns:
                         r_df = r_df.rename(columns={old_col: new_col})
                 
-                # Sort by Float first to get correct order
+                # Handle Run_Order as Float and Sort
                 r_df['Run_Order'] = pd.to_numeric(r_df['Run_Order'], errors='coerce').fillna(0.0)
                 r_df = r_df.sort_values('Run_Order')
 
-                # Create a copy for display processing
+                # Create display copy
                 subset = r_df.copy()
-                
-                # CRITICAL: Convert numeric columns to string BEFORE applying strikethrough
-                # This prevents the TypeError when inserting Unicode strike characters
-                for col in ['Run_Order', 'Handler_Name', 'Name', 'Breed', 'Height']:
-                    if col in subset.columns:
-                        subset[col] = subset[col].astype(str)
 
-                # --- HELPER: Unicode Strikethrough ---
-                def to_strikethrough(text):
-                    return ''.join(c + '\u0336' for c in str(text))
-
-                # Add star to active handler's dogs
+                # Add star to active handler's dogs (No strikethrough logic here)
                 subset['Name'] = subset.apply(
                     lambda r: f"⭐ {r['Name']}" if str(r['UKI_Number']).strip() == str(handler_num).strip() and handler_num != "" else r['Name'], 
                     axis=1
                 )
 
-                # Apply strikethrough to completed runs
-                completed_mask = subset['status'] == 'Run Completed'
-                for col in ['Run_Order', 'Handler_Name', 'Name', 'Breed', 'Height']:
-                    subset.loc[completed_mask, col] = subset.loc[completed_mask, col].apply(to_strikethrough)
-
-                # Highlight row logic
+                # --- ROW STYLING (The "Grey Out" Logic) ---
                 def highlight_row(s):
                     styles = [''] * len(s)
+                    # Check status and handler ownership
                     is_mine = str(s['UKI_Number']).strip() == str(handler_num).strip() and handler_num != ""
                     is_in_ring = s['status'] == 'In Ring'
                     is_done = s['status'] == 'Run Completed'
+                    is_scratch = s['status'] == 'Scratch'
 
                     for i in range(len(s)):
                         if is_in_ring:
-                            styles[i] = 'background-color: #FFF59D; color: #000000;' # Yellow
-                        elif is_done:
-                            styles[i] = 'color: #A0A0A0;' # Grey
+                            styles[i] = 'background-color: #FFF59D; color: #000000; border: 2px solid #FFD600;' # Bright Yellow
+                        elif is_done or is_scratch:
+                            styles[i] = 'color: #A0A0A0; font-style: italic;' # Greyed Out + Italic
                         elif is_mine:
-                            styles[i] = 'background-color: #E3F2FD; color: #000000;' # Blue
+                            styles[i] = 'background-color: #E3F2FD; color: #000000;' # Light Blue for "My Dogs"
                     return styles
 
-                # Apply styling and set font properties
+                # Apply styling and formatting
                 styled_table = subset[['Run_Order', 'Handler_Name', 'Name', 'Breed', 'Height', 'status', 'UKI_Number']].style \
                     .apply(highlight_row, axis=1) \
+                    .format({"Run_Order": "{:.1f}"}) \
                     .set_properties(**{
-                        'font-size': '24px', 
+                        'font-size': '22px', 
                         'font-weight': 'bold'
                     })
 
-                # Render the single solid dataframe
+                # Render the dataframe
                 st.dataframe(
                     styled_table,
                     column_order=("Run_Order", "Handler_Name", "Name", "Breed", "Height", "status"),
                     use_container_width=True,
                     hide_index=True,
-                    key=f"table_final_{target_class}"
+                    key=f"ro_table_{target_class}"
                 )
             else:
                 st.info("No data found for this class.")
 
-        # Execute the fragment
+        # Execute
         h_num = st.session_state.get('active_handler', "")
         live_running_order_view(sel_c, h_num)
-               
+
 # --- TAB 5: GATE STEWARD (LIVE DISPLAY via Fragment) ---
 with tab5:
     st.header("🚧 Gate Steward")
