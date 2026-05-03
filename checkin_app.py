@@ -158,7 +158,6 @@ with tab2:
         
         c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
         c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
-
 # --- TAB 3: RUNNING ORDER (LIVE DISPLAY via Fragment) ---
 with tab3:
     if not df.empty:
@@ -187,72 +186,76 @@ with tab3:
             r_df = pd.DataFrame(res.data)
             
             if not r_df.empty:
-                # Standardize heights for this fragment
+                # Standardize heights
                 rename_map = {'Intl_Jump_Ht': 'Height', 'dog_height': 'Height', 'Jump_Height': 'Height'}
                 for old_col, new_col in rename_map.items():
                     if old_col in r_df.columns:
                         r_df = r_df.rename(columns={old_col: new_col})
                 
+                # Convert Run_Order to numeric for correct sorting
                 r_df['Run_Order'] = pd.to_numeric(r_df['Run_Order'], errors='coerce').fillna(0).astype(int)
-                r_df = r_df.sort_values(['Height', 'Run_Order'])
+                
+                # --- UPDATED SORTING: Solid list strictly by Run Order ---
+                r_df = r_df.sort_values('Run_Order')
 
                 # --- HELPER: Unicode Strikethrough ---
                 def to_strikethrough(text):
                     return ''.join(c + '\u0336' for c in str(text))
 
-                for h in sorted(r_df['Height'].unique()):
-                    st.markdown(f'<div class="height-header">{h}" Height</div>', unsafe_allow_html=True)
-                    subset = r_df[r_df['Height'] == h].copy()
-                    
-                    # Add star to active handler's dogs
-                    subset['Name'] = subset.apply(
-                        lambda r: f"⭐ {r['Name']}" if str(r['UKI_Number']).strip() == str(handler_num).strip() and handler_num != "" else r['Name'], 
-                        axis=1
-                    )
+                # Process the full list (No more height loop)
+                subset = r_df.copy()
+                
+                # Add star to active handler's dogs
+                subset['Name'] = subset.apply(
+                    lambda r: f"⭐ {r['Name']}" if str(r['UKI_Number']).strip() == str(handler_num).strip() and handler_num != "" else r['Name'], 
+                    axis=1
+                )
 
-                    # --- APPLY STRIKETHROUGH DIRECTLY TO TEXT ---
-                    completed_mask = subset['status'] == 'Run Completed'
-                    for col in ['Handler_Name', 'Name', 'Breed']:
-                        subset.loc[completed_mask, col] = subset.loc[completed_mask, col].apply(to_strikethrough)
+                # --- APPLY STRIKETHROUGH DIRECTLY TO TEXT ---
+                completed_mask = subset['status'] == 'Run Completed'
+                for col in ['Handler_Name', 'Name', 'Breed', 'Height']:
+                    subset.loc[completed_mask, col] = subset.loc[completed_mask, col].apply(to_strikethrough)
 
-                    # Highlight row logic
-                    def highlight_row(s):
-                        styles = [''] * len(s)
-                        is_mine = str(s['UKI_Number']).strip() == str(handler_num).strip() and handler_num != ""
-                        is_in_ring = s['status'] == 'In Ring'
-                        is_done = s['status'] == 'Run Completed'
+                # Highlight row logic
+                def highlight_row(s):
+                    styles = [''] * len(s)
+                    is_mine = str(s['UKI_Number']).strip() == str(handler_num).strip() and handler_num != ""
+                    is_in_ring = s['status'] == 'In Ring'
+                    is_done = s['status'] == 'Run Completed'
 
-                        for i in range(len(s)):
-                            if is_in_ring:
-                                styles[i] = 'background-color: #FFF59D; color: #000000;' # Solid Yellow for In Ring
-                            elif is_done:
-                                styles[i] = 'color: #A0A0A0;' # Ghosted Grey color for Completed
-                            elif is_mine:
-                                styles[i] = 'background-color: #E3F2FD; color: #000000;' # Light blue for My Dogs
-                        return styles
+                    for i in range(len(s)):
+                        if is_in_ring:
+                            styles[i] = 'background-color: #FFF59D; color: #000000;' # Solid Yellow for In Ring
+                        elif is_done:
+                            styles[i] = 'color: #A0A0A0;' # Ghosted Grey color for Completed
+                        elif is_mine:
+                            styles[i] = 'background-color: #E3F2FD; color: #000000;' # Light blue for My Dogs
+                    return styles
 
-                    # 1. Apply our row colors, then chain .set_properties for the font
-                    styled_table = subset[['Handler_Name', 'Name', 'Breed', 'status', 'UKI_Number']].style \
-                        .apply(highlight_row, axis=1) \
-                        .set_properties(**{
-                            'font-size': '18px', 
-                            'font-weight': 'bold'
-                        })
+                # 1. Apply our row colors, then chain .set_properties for the font
+                styled_table = subset[['Run_Order', 'Handler_Name', 'Name', 'Breed', 'Height', 'status', 'UKI_Number']].style \
+                    .apply(highlight_row, axis=1) \
+                    .set_properties(**{
+                        'font-size': '24px', 
+                        'font-weight': 'bold'
+                    })
 
-                    # 2. Render the dataframe
-                    st.dataframe(
-                        styled_table,
-                        column_order=("Handler_Name", "Name", "Breed", "status"),
-                        use_container_width=True,
-                        hide_index=True,
-                        key=f"table_{h}_{target_class}"
-                    )
+                # 2. Render the single solid dataframe
+                st.dataframe(
+                    styled_table,
+                    column_order=("Run_Order", "Handler_Name", "Name", "Breed", "Height", "status"),
+                    use_container_width=True,
+                    hide_index=True,
+                    key=f"table_full_{target_class}"
+                )
             else:
                 st.info("No data found for this class.")
 
         # Execute the fragment
-        live_running_order_view(sel_c, st.session_state.active_handler)
-
+        # Note: Ensure st.session_state.active_handler is initialized in your main app block
+        h_num = st.session_state.get('active_handler', "")
+        live_running_order_view(sel_c, h_num)
+        
 # --- TAB 5: GATE STEWARD (LIVE DISPLAY via Fragment) ---
 with tab5:
     st.header("🔒 For Gate Steward Only")
