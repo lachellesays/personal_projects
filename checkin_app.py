@@ -226,7 +226,7 @@ with tab3:
                     return styles
 
                 # Apply styling and formatting
-                styled_table = subset[['Run_Order', 'Handler_Name', 'Name', 'Breed', 'Height', 'status', 'UKI_Number']].style \
+                styled_table = subset[[ 'Height', 'Handler_Name', 'Name', 'Breed', 'status', 'UKI_Number']].style \
                     .apply(highlight_row, axis=1) \
                     .format({"Run_Order": "{:.1f}"}) \
                     .set_properties(**{
@@ -237,7 +237,7 @@ with tab3:
                 # Render the dataframe
                 st.dataframe(
                     styled_table,
-                    column_order=("Run_Order", "Handler_Name", "Name", "Breed", "Height", "status"),
+                    column_order=("Height", "Handler_Name", "Name", "Breed", "status"),
                     use_container_width=True,
                     hide_index=True,
                     key=f"ro_table_{target_class}"
