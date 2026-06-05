@@ -92,10 +92,15 @@ tab1, tab2, tab3, tab5, tab6 = st.tabs([
 
 # --- TAB 1: INDIVIDUAL CHECK-IN ---
 with tab1:
-    handler_input = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345", key="search_box").strip()
-    
+    with st.form("checkin_form"):
+        handler_input_raw = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345", key="search_box_input")
+        submitted = st.form_submit_button("Submit", use_container_width=True, type="primary")
+
+    if submitted:
+        st.session_state.active_handler = handler_input_raw.strip()
+
+    handler_input = st.session_state.get('active_handler', '')
     if handler_input:
-        st.session_state.active_handler = handler_input
         user_data = df[df['UKI_Number'] == handler_input]
         
         if not user_data.empty:
@@ -252,7 +257,11 @@ with tab3:
 # --- TAB 5: GATE STEWARD (LIVE DISPLAY via Fragment) ---
 with tab5:
     st.header("🚧 Gate Steward")
-    if st.text_input("Gate PIN:", type="password", key="g_p_v") == "7890":
+    with st.form("gate_pin_form"):
+        st.text_input("Gate PIN:", type="password", key="g_p_v")
+        st.form_submit_button("Enter", use_container_width=True, type="primary")
+
+    if st.session_state.get("g_p_v", "") == "7890":
         # Dropdown outside fragment
         g_cls = st.selectbox("Current Class:", sorted_classes, key="g_cls")
         
