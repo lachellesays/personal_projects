@@ -139,14 +139,22 @@ with tab1:
                         c_class, c_status = st.columns([1.5, 1])
                         with c_class: 
                             st.markdown(f"**{row['Combined Class Name']}**")
-                        with c_status: 
+                        with c_status:
                             st.selectbox(
-                                "Status", 
-                                options=status_options, 
-                                key=key_name, 
-                                on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]), 
+                                "Status",
+                                options=status_options,
+                                key=key_name,
+                                on_change=lambda p=pk: update_status_instant(p, st.session_state[f"select_{p}"]),
                                 label_visibility="collapsed"
                             )
+        else:
+            trial_days = df['Day'].dropna().unique() if 'Day' in df.columns else []
+            trial_dates = df['Date'].dropna().unique() if 'Date' in df.columns else []
+            day_str = trial_days[0] if len(trial_days) > 0 else ""
+            date_str = trial_dates[0] if len(trial_dates) > 0 else ""
+            day_date = f"{day_str} {date_str}".strip()
+            loaded_for = f" Data loaded for **{day_date}** only." if day_date else ""
+            st.warning(f"Handler not found.{loaded_for} If you're entered in this data and feel like this is a mistake, please reach out to the trial secretary!")
 
 # --- TAB 2: DASHBOARD ---
 with tab2:
