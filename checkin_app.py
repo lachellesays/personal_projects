@@ -175,8 +175,18 @@ with tab2:
 # --- TAB 3: RUNNING ORDER (LIVE DISPLAY via Fragment) ---
 with tab3:
     if not df.empty:
-        # Dropdown is OUTSIDE the fragment so it doesn't blink or reset
-        sel_c = st.selectbox("Select Class:", sorted_classes, key="ro_sel")
+        # Class selector grid — no keyboard on mobile
+        if 'ro_sel' not in st.session_state or st.session_state.ro_sel not in sorted_classes:
+            st.session_state.ro_sel = sorted_classes[0] if sorted_classes else None
+        st.markdown("**Select Class:**")
+        ro_cols = st.columns(2)
+        for _i, _cls in enumerate(sorted_classes):
+            with ro_cols[_i % 2]:
+                if st.button(_cls, key=f"ro_btn_{_i}", use_container_width=True,
+                             type="primary" if st.session_state.ro_sel == _cls else "secondary"):
+                    st.session_state.ro_sel = _cls
+                    st.rerun()
+        sel_c = st.session_state.ro_sel
         
         # Course Map Display (Outside Fragment)
         clean_class_search = sel_c.strip().lower()
@@ -270,8 +280,18 @@ with tab5:
         st.form_submit_button("Enter", use_container_width=True, type="primary")
 
     if st.session_state.get("g_p_v", "") == "7890":
-        # Dropdown outside fragment
-        g_cls = st.selectbox("Current Class:", sorted_classes, key="g_cls")
+        # Class selector grid — no keyboard on mobile
+        if 'g_cls' not in st.session_state or st.session_state.g_cls not in sorted_classes:
+            st.session_state.g_cls = sorted_classes[0] if sorted_classes else None
+        st.markdown("**Current Class:**")
+        g_cols = st.columns(2)
+        for _i, _cls in enumerate(sorted_classes):
+            with g_cols[_i % 2]:
+                if st.button(_cls, key=f"g_btn_{_i}", use_container_width=True,
+                             type="primary" if st.session_state.g_cls == _cls else "secondary"):
+                    st.session_state.g_cls = _cls
+                    st.rerun()
+        g_cls = st.session_state.g_cls
         
         @st.fragment(run_every=5) # Gate updates slightly faster (every 5s)
         def gate_steward_view(target_class):
