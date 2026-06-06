@@ -294,24 +294,38 @@ with tab5:
                 # Sort strictly by Run_Order (removes height segmentation)
                 g_df = g_df.sort_values('Run_Order')
 
+                prev_aframe = None
                 for _, r in g_df.iterrows():
                     if r['status'] == "Scratch": continue
-                    
+
                     # Determine border color based on status
                     is_in_ring = r['status'] == "In Ring"
                     is_done = r['status'] == "Run Completed"
                     border_color = "#ffc107" if is_in_ring else "#28a745" if r['status'] == "Checked In" else "#adb5bd"
-                    
+
                     # Card-style display
                     c_main, c_btn = st.columns([3, 2])
-                    
+
                     with c_main:
                         # Display Run Order as float (1.0, 1.5, etc)
                         ro_display = f"{float(r['Run_Order']):.1f}"
+                        try:
+                            height_val = float(re.sub(r'[^0-9.]', '', str(r['Height'])))
+                        except (ValueError, TypeError):
+                            height_val = 999
+                        is_select = str(r.get('Class_Type', '')).strip().lower() == 'select'
+                        aframe = "A-Frame: Down" if (height_val <= 12 or is_select) else "A-Frame: Up"
+                        aframe_changed = aframe != prev_aframe
+                        if aframe_changed:
+                            aframe_style = f"font-size: 14px; font-weight: bold; color: {'#dc3545' if aframe == 'A-Frame: Down' else '#198754'};"
+                        else:
+                            aframe_style = "font-size: 14px; color: #adb5bd;"
+                        prev_aframe = aframe
                         st.markdown(f'''
                             <div style="padding: 10px; border-left: 10px solid {border_color}; border-radius: 8px; background-color: #f8f9fa; margin-bottom: 10px;">
-                                <div style="font-size: 20px; font-weight: bold; color: #333;">{r["Height"]}|{r["Name"]}</div>
-                                <div style="font-size: 14px; color: #666;">{r["Handler_Name"]} • {r["status"]}</div>
+                                <div style="font-size: 20px; font-weight: bold; color: #333;">{r["Height"]} | {r["Name"]}</div>
+                                <div style="font-size: 14px; color: #666;">{r["Handler_Name"]} • {r["Class_Type"]} • {r["status"]}</div>
+                                <div style="{aframe_style}">{aframe}</div>
                             </div>
                         ''', unsafe_allow_html=True)
                         
