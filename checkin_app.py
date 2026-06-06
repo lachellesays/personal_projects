@@ -298,16 +298,17 @@ with tab5:
                 for _, r in g_df.iterrows():
                     if r['status'] == "Scratch": continue
 
-                    # Determine border color based on status
                     is_in_ring = r['status'] == "In Ring"
                     is_done = r['status'] == "Run Completed"
-                    border_color = "#ffc107" if is_in_ring else "#28a745" if r['status'] == "Checked In" else "#adb5bd"
+                    is_checked_in = r['status'] == "Checked In"
+                    pk_val = r['Run_Order']
+
+                    border_color = "#ffc107" if is_in_ring else "#28a745" if is_checked_in else "#adb5bd"
 
                     # Card-style display
                     c_main, c_btn = st.columns([3, 2])
 
                     with c_main:
-                        # Display Run Order as float (1.0, 1.5, etc)
                         ro_display = f"{float(r['Run_Order']):.1f}"
                         try:
                             height_val = float(re.sub(r'[^0-9.]', '', str(r['Height'])))
@@ -328,26 +329,31 @@ with tab5:
                                 <div style="{aframe_style}">{aframe}</div>
                             </div>
                         ''', unsafe_allow_html=True)
-                        
+
                     with c_btn:
-                        # Logic for buttons
-                        pk_val = r['Run_Order']
                         if is_in_ring:
                             if st.button("FINISH ✅", key=f"finish_{pk_val}", use_container_width=True, type="primary"):
                                 conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Run_Order", pk_val).execute()
                                 st.rerun()
-                        elif not is_done:
-                            if st.button("START RUN", key=f"start_{pk_val}", use_container_width=True):
-                                # Mark any existing "In Ring" as completed automatically
-                                conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", target_class).eq("status", "In Ring").execute()
-                                # Set this dog to In Ring
-                                conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute()
-                                st.rerun()
-                        else:
-                            # Completed runs get a disabled state or "Undo"
+                        elif is_done:
                             if st.button("UNDO FINISH", key=f"undo_{pk_val}", use_container_width=True):
                                 conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk_val).execute()
                                 st.rerun()
+                        elif is_checked_in:
+                            if st.button("START RUN", key=f"start_{pk_val}", use_container_width=True):
+                                conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", target_class).eq("status", "In Ring").execute()
+                                conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute()
+                                st.rerun()
+                        else:
+                            b1, b2 = st.columns(2)
+                            with b1:
+                                if st.button("CHECK IN", key=f"checkin_{pk_val}", use_container_width=True):
+                                    conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk_val).execute()
+                                    st.rerun()
+                            with b2:
+                                if st.button("SCRATCH", key=f"scratch_{pk_val}", use_container_width=True):
+                                    conn_supabase.table("trialdata").update({"status": "Scratch"}).eq("Run_Order", pk_val).execute()
+                                    st.rerun()
             else:
                 st.info("No data found for this class.")
 
