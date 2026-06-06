@@ -310,8 +310,8 @@ with tab5:
                         ro_display = f"{float(r['Run_Order']):.1f}"
                         st.markdown(f'''
                             <div style="padding: 10px; border-left: 10px solid {border_color}; border-radius: 8px; background-color: #f8f9fa; margin-bottom: 10px;">
-                                <div style="font-size: 20px; font-weight: bold; color: #333;">{r["Name"]}</div>
-                                <div style="font-size: 14px; color: #666;">{r["Handler_Name"]} • {r["Height"]}" • {r["status"]}</div>
+                                <div style="font-size: 20px; font-weight: bold; color: #333;">{r["Height"]}|{r["Name"]}</div>
+                                <div style="font-size: 14px; color: #666;">{r["Handler_Name"]} • {r["status"]}</div>
                             </div>
                         ''', unsafe_allow_html=True)
                         
