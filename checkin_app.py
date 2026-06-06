@@ -323,7 +323,7 @@ with tab5:
                         prev_aframe = aframe
                         st.markdown(f'''
                             <div style="padding: 10px; border-left: 10px solid {border_color}; border-radius: 8px; background-color: #f8f9fa; margin-bottom: 10px;">
-                                <div style="font-size: 20px; font-weight: bold; color: #333;">{r["Height"]} | {r["Name"]}</div>
+                                <div style="font-size: 20px; font-weight: bold; color: #333;">{r["Height"]} | {r["Name"]} <span style="font-weight: normal;">({r["Breed"]})</span></div>
                                 <div style="font-size: 14px; color: #666;">{r["Handler_Name"]} • {r["Class_Type"]} • {r["status"]}</div>
                                 <div style="{aframe_style}">{aframe}</div>
                             </div>
