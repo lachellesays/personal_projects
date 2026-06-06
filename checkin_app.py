@@ -154,7 +154,7 @@ with tab1:
             date_str = trial_dates[0] if len(trial_dates) > 0 else ""
             day_date = f"{day_str} {date_str}".strip()
             loaded_for = f" Data loaded for **{day_date}** only." if day_date else ""
-            st.warning(f"Handler not found.{loaded_for} If you're entered in this data and feel like this is a mistake, please reach out to the trial secretary!")
+            st.warning(f"Handler not found.{loaded_for} If you're entered for this date and feel like this is a mistake, please reach out to the trial secretary!")
 
 # --- TAB 2: DASHBOARD ---
 with tab2:
@@ -310,7 +310,7 @@ with tab5:
                         ro_display = f"{float(r['Run_Order']):.1f}"
                         st.markdown(f'''
                             <div style="padding: 10px; border-left: 10px solid {border_color}; border-radius: 8px; background-color: #f8f9fa; margin-bottom: 10px;">
-                                <div style="font-size: 20px; font-weight: bold; color: #333;">{ro_display} | {r["Name"]}</div>
+                                <div style="font-size: 20px; font-weight: bold; color: #333;">{r["Name"]}</div>
                                 <div style="font-size: 14px; color: #666;">{r["Handler_Name"]} • {r["Height"]}" • {r["status"]}</div>
                             </div>
                         ''', unsafe_allow_html=True)
