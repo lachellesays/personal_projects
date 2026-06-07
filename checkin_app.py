@@ -442,6 +442,7 @@ with tab5:
                 g_df = g_df.sort_values('Run_Order')
 
                 prev_aframe = None
+                prev_height = None
                 for _, r in g_df.iterrows():
                     is_in_ring = r['status'] == "In Ring"
                     is_done = r['status'] == "Run Completed"
@@ -452,23 +453,36 @@ with tab5:
 
                     border_color = "#ffc107" if is_in_ring else "#28a745" if is_checked_in else "#dc3545" if is_scratch else "#adb5bd"
 
+                    # Figure out height & A-Frame up front so we can drop a full-width divider on height changes
+                    height_label = r["Height"]
+                    try:
+                        height_val = float(re.sub(r'[^0-9.]', '', str(height_label)))
+                    except (ValueError, TypeError):
+                        height_val = 999
+                    is_select = str(r.get('Class_Type', '')).strip().lower() == 'select'
+                    aframe = "A-Frame: Down" if (height_val <= 12 or is_select) else "A-Frame: Up"
+
+                    # --- HEIGHT CHANGE DIVIDER ---
+                    if prev_height is not None and height_label != prev_height:
+                        st.markdown(f'''
+                            <div style="text-align: center; margin: 16px 0; padding: 10px; background-color: #FEE2E2; border: 2px dashed #DC2626; border-radius: 8px;">
+                                <span style="font-size: 16px; font-weight: bold; color: #991B1B;">JUMP HEIGHT CHANGE → {height_label}"</span>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    prev_height = height_label
+
+                    aframe_changed = aframe != prev_aframe
+                    if aframe_changed:
+                        aframe_style = f"font-size: 14px; font-weight: bold; color: {'#dc3545' if aframe == 'A-Frame: Down' else '#198754'};"
+                    else:
+                        aframe_style = "font-size: 14px; color: #adb5bd;"
+                    prev_aframe = aframe
+
                     # Card-style display
                     c_main, c_btn = st.columns([3, 2])
 
                     with c_main:
                         ro_display = f"{float(r['Run_Order']):.1f}"
-                        try:
-                            height_val = float(re.sub(r'[^0-9.]', '', str(r['Height'])))
-                        except (ValueError, TypeError):
-                            height_val = 999
-                        is_select = str(r.get('Class_Type', '')).strip().lower() == 'select'
-                        aframe = "A-Frame: Down" if (height_val <= 12 or is_select) else "A-Frame: Up"
-                        aframe_changed = aframe != prev_aframe
-                        if aframe_changed:
-                            aframe_style = f"font-size: 14px; font-weight: bold; color: {'#dc3545' if aframe == 'A-Frame: Down' else '#198754'};"
-                        else:
-                            aframe_style = "font-size: 14px; color: #adb5bd;"
-                        prev_aframe = aframe
                         st.markdown(f'''
                             <div style="padding: 10px; border-left: 10px solid {border_color}; border-radius: 8px; background-color: #f8f9fa; margin-bottom: 10px;">
                                 <div style="font-size: 20px; font-weight: bold; color: #333;">{r["Height"]} | {r["Name"]} <span style="font-weight: normal;">({r["Breed"]})</span></div>
