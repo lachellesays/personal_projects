@@ -476,16 +476,18 @@ with tab5:
                     prev_height = height_label
 
                     # --- A-FRAME CHANGE DIVIDER (flagged BEFORE the run it applies to, so the crew has time to reset it) ---
-                    aframe_changed = aframe != prev_aframe
-                    if has_aframe and aframe_changed:
-                        a_color = "#DC2626" if aframe == "A-Frame: Down" else "#198754"
-                        a_bg = "#FEE2E2" if aframe == "A-Frame: Down" else "#D1FAE5"
-                        st.markdown(f'''
-                            <div style="text-align: center; margin: 8px 0 16px 0; padding: 10px; background-color: {a_bg}; border: 2px dashed {a_color}; border-radius: 8px;">
-                                <span style="font-size: 16px; font-weight: bold; color: {a_color};">🔺 SET {aframe.upper()}</span>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    prev_aframe = aframe
+                    # Scratched dogs aren't running, so they're ignored entirely for A-Frame tracking
+                    if not is_scratch:
+                        aframe_changed = aframe != prev_aframe
+                        if has_aframe and aframe_changed:
+                            a_color = "#DC2626" if aframe == "A-Frame: Down" else "#198754"
+                            a_bg = "#FEE2E2" if aframe == "A-Frame: Down" else "#D1FAE5"
+                            st.markdown(f'''
+                                <div style="text-align: center; margin: 8px 0 16px 0; padding: 10px; background-color: {a_bg}; border: 2px dashed {a_color}; border-radius: 8px;">
+                                    <span style="font-size: 16px; font-weight: bold; color: {a_color};">🔺 SET {aframe.upper()}</span>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        prev_aframe = aframe
 
                     # Card-style display
                     c_main, c_btn = st.columns([3, 2])
