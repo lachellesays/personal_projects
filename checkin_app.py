@@ -149,8 +149,6 @@ def render_formatted_results(data):
                 f_val = str(row['Faults']).strip().upper()
                 if f_val in ('E', 'NFC', 'ABS'):
                     return ['color: #A0A0A0; font-style: italic;'] * len(row)
-                if row['Q'] == '✅ Q':
-                    return ['background-color: #FEF9C3;'] * len(row)
                 return [''] * len(row)
 
             styled = disp_df.style.apply(_style_results_row, axis=1)
