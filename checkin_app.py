@@ -423,7 +423,11 @@ with tab5:
         @st.fragment(run_every=5) # Gate updates slightly faster (every 5s)
         def gate_steward_view(target_class):
             st.caption(f"Gate Live Sync • Last Update: {time.strftime('%H:%M:%S')}")
-            
+
+            # Speedstakes / Jumping classes don't run the A-Frame — skip the equipment-change banners
+            class_name_lower = target_class.lower()
+            has_aframe = not any(kw in class_name_lower for kw in ('speedstakes', 'jumping'))
+
             # Fetch fresh data for this class
             res = conn_supabase.table("trialdata").select("*").eq("Combined Class Name", target_class).execute()
             g_df = pd.DataFrame(res.data)
@@ -471,11 +475,16 @@ with tab5:
                         ''', unsafe_allow_html=True)
                     prev_height = height_label
 
+                    # --- A-FRAME CHANGE DIVIDER (flagged BEFORE the run it applies to, so the crew has time to reset it) ---
                     aframe_changed = aframe != prev_aframe
-                    if aframe_changed:
-                        aframe_style = f"font-size: 14px; font-weight: bold; color: {'#dc3545' if aframe == 'A-Frame: Down' else '#198754'};"
-                    else:
-                        aframe_style = "font-size: 14px; color: #adb5bd;"
+                    if has_aframe and aframe_changed:
+                        a_color = "#DC2626" if aframe == "A-Frame: Down" else "#198754"
+                        a_bg = "#FEE2E2" if aframe == "A-Frame: Down" else "#D1FAE5"
+                        st.markdown(f'''
+                            <div style="text-align: center; margin: 8px 0 16px 0; padding: 10px; background-color: {a_bg}; border: 2px dashed {a_color}; border-radius: 8px;">
+                                <span style="font-size: 16px; font-weight: bold; color: {a_color};">🔺 SET {aframe.upper()}</span>
+                            </div>
+                        ''', unsafe_allow_html=True)
                     prev_aframe = aframe
 
                     # Card-style display
@@ -487,7 +496,6 @@ with tab5:
                             <div style="padding: 10px; border-left: 10px solid {border_color}; border-radius: 8px; background-color: #f8f9fa; margin-bottom: 10px;">
                                 <div style="font-size: 20px; font-weight: bold; color: #333;">{r["Height"]} | {r["Name"]} <span style="font-weight: normal;">({r["Breed"]})</span></div>
                                 <div style="font-size: 14px; color: #666;">{r["Handler_Name"]} • {r["Class_Type"]} • {r["status"]}</div>
-                                <div style="{aframe_style}">{aframe}</div>
                             </div>
                         ''', unsafe_allow_html=True)
 
