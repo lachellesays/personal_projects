@@ -398,14 +398,14 @@ with tab5:
 
                 prev_aframe = None
                 for _, r in g_df.iterrows():
-                    if r['status'] == "Scratch": continue
-
                     is_in_ring = r['status'] == "In Ring"
                     is_done = r['status'] == "Run Completed"
-                    is_checked_in = r['status'] == "Checked In"
+                    is_scratch = r['status'] == "Scratch"
+                    # NFC runs still need to go through the ring — treat them like Checked In
+                    is_checked_in = r['status'] in ("Checked In", "NFC")
                     pk_val = r['Run_Order']
 
-                    border_color = "#ffc107" if is_in_ring else "#28a745" if is_checked_in else "#adb5bd"
+                    border_color = "#ffc107" if is_in_ring else "#28a745" if is_checked_in else "#dc3545" if is_scratch else "#adb5bd"
 
                     # Card-style display
                     c_main, c_btn = st.columns([3, 2])
@@ -440,6 +440,10 @@ with tab5:
                         elif is_done:
                             if st.button("UNDO FINISH", key=f"undo_{pk_val}", use_container_width=True):
                                 conn_supabase.table("trialdata").update({"status": "Checked In"}).eq("Run_Order", pk_val).execute()
+                                st.rerun()
+                        elif is_scratch:
+                            if st.button("UN-SCRATCH", key=f"unscratch_{pk_val}", use_container_width=True):
+                                conn_supabase.table("trialdata").update({"status": "Not Checked In"}).eq("Run_Order", pk_val).execute()
                                 st.rerun()
                         elif is_checked_in:
                             if st.button("START RUN", key=f"start_{pk_val}", use_container_width=True):
