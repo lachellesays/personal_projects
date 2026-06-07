@@ -515,10 +515,16 @@ with tab5:
                                 conn_supabase.table("trialdata").update({"status": "Not Checked In"}).eq("Run_Order", pk_val).execute()
                                 st.rerun()
                         elif is_checked_in:
-                            if st.button("START RUN", key=f"start_{pk_val}", use_container_width=True):
-                                conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", target_class).eq("status", "In Ring").execute()
-                                conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute()
-                                st.rerun()
+                            cb1, cb2 = st.columns(2)
+                            with cb1:
+                                if st.button("START RUN", key=f"start_{pk_val}", use_container_width=True):
+                                    conn_supabase.table("trialdata").update({"status": "Run Completed"}).eq("Combined Class Name", target_class).eq("status", "In Ring").execute()
+                                    conn_supabase.table("trialdata").update({"status": "In Ring"}).eq("Run_Order", pk_val).execute()
+                                    st.rerun()
+                            with cb2:
+                                if st.button("SCRATCH", key=f"scratch_checkedin_{pk_val}", use_container_width=True):
+                                    conn_supabase.table("trialdata").update({"status": "Scratch"}).eq("Run_Order", pk_val).execute()
+                                    st.rerun()
                         else:
                             b1, b2 = st.columns(2)
                             with b1:
