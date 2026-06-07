@@ -180,8 +180,9 @@ with tab3:
             st.session_state.ro_sel = sorted_classes[0] if sorted_classes else None
         st.markdown("**Select Class:**")
         ro_cols = st.columns(2)
+        ro_half = (len(sorted_classes) + 1) // 2
         for _i, _cls in enumerate(sorted_classes):
-            with ro_cols[_i % 2]:
+            with ro_cols[0 if _i < ro_half else 1]:
                 if st.button(_cls, key=f"ro_btn_{_i}", use_container_width=True,
                              type="primary" if st.session_state.ro_sel == _cls else "secondary"):
                     st.session_state.ro_sel = _cls
@@ -285,8 +286,9 @@ with tab5:
             st.session_state.g_cls = sorted_classes[0] if sorted_classes else None
         st.markdown("**Current Class:**")
         g_cols = st.columns(2)
+        g_half = (len(sorted_classes) + 1) // 2
         for _i, _cls in enumerate(sorted_classes):
-            with g_cols[_i % 2]:
+            with g_cols[0 if _i < g_half else 1]:
                 if st.button(_cls, key=f"g_btn_{_i}", use_container_width=True,
                              type="primary" if st.session_state.g_cls == _cls else "secondary"):
                     st.session_state.g_cls = _cls
