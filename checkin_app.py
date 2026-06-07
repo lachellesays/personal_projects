@@ -323,10 +323,14 @@ with tab3:
                     for i in range(len(s)):
                         if is_in_ring:
                             styles[i] = 'background-color: #FFF59D; color: #000000; border: 2px solid #FFD600;' # Bright Yellow
-                        elif is_done or is_scratch:
+                        elif is_done:
                             styles[i] = 'color: #A0A0A0; font-style: italic;' # Greyed Out + Italic
                         elif is_mine:
                             styles[i] = 'background-color: #E3F2FD; color: #000000;' # Light Blue for "My Dogs"
+
+                    # Highlight ONLY the status cell's "Scratch" text in red — leave the rest of the row alone
+                    if is_scratch:
+                        styles[list(s.index).index('status')] = 'color: #DC2626; font-weight: bold;'
                     return styles
 
                 # Apply styling and formatting
@@ -361,6 +365,47 @@ with tab5:
         st.form_submit_button("Enter", use_container_width=True, type="primary")
 
     if st.session_state.get("g_p_v", "") == "7890":
+        # --- OPTIONAL CONFLICT TIMER ---
+        with st.expander("⏱️ Conflict Timer (optional)", expanded=False):
+            if 'gate_timer_minutes' not in st.session_state:
+                st.session_state.gate_timer_minutes = 6
+            if 'gate_timer_end' not in st.session_state:
+                st.session_state.gate_timer_end = None
+
+            t_cols = st.columns([2, 1, 1])
+            with t_cols[0]:
+                st.number_input("Minutes:", min_value=1, max_value=60, step=1, key='gate_timer_minutes')
+            with t_cols[1]:
+                if st.button("▶️ Start", use_container_width=True, key="gate_timer_start"):
+                    st.session_state.gate_timer_end = time.time() + st.session_state.gate_timer_minutes * 60
+                    st.rerun()
+            with t_cols[2]:
+                if st.button("⏹️ Reset", use_container_width=True, key="gate_timer_reset"):
+                    st.session_state.gate_timer_end = None
+                    st.rerun()
+
+            @st.fragment(run_every=1)
+            def conflict_timer_display():
+                end_time = st.session_state.get('gate_timer_end')
+                if end_time is None:
+                    st.caption("Timer not running — set the minutes above and hit Start.")
+                else:
+                    remaining = end_time - time.time()
+                    if remaining <= 0:
+                        st.markdown(
+                            '<div style="font-size: 32px; font-weight: bold; color: #dc3545; text-align: center;">⏰ TIME\'S UP</div>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        mins, secs = divmod(int(remaining) + 1, 60)
+                        color = "#dc3545" if remaining <= 30 else "#1E3A8A"
+                        st.markdown(
+                            f'<div style="font-size: 32px; font-weight: bold; color: {color}; text-align: center;">{mins:02d}:{secs:02d}</div>',
+                            unsafe_allow_html=True
+                        )
+
+            conflict_timer_display()
+
         # Class selector grid — no keyboard on mobile
         if 'g_cls' not in st.session_state or st.session_state.g_cls not in sorted_classes:
             st.session_state.g_cls = sorted_classes[0] if sorted_classes else None
