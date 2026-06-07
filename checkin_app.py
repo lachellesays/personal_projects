@@ -3,6 +3,10 @@ from st_supabase_connection import SupabaseConnection
 import pandas as pd
 import time
 import re
+import json
+from datetime import datetime, timezone
+
+RESULTS_PIN = "7890"
 
 # --- 1. PAGE CONFIG & UI STYLING ---
 st.set_page_config(page_title="Agility Trial Center", page_icon="🐾", layout="wide")
@@ -74,6 +78,84 @@ def update_status_instant(run_order, new_status):
     except Exception as e:
         st.error(f"Sync Error: {e}")
 
+# --- RESULTS HELPERS ---
+def _clean_val(val):
+    """Turn blank/whitespace placeholders and raw floats into readable display text."""
+    if val is None:
+        return "—"
+    if isinstance(val, float):
+        return f"{val:.2f}"
+    s = str(val).strip()
+    return s if s else "—"
+
+def _results_sort_key(row):
+    """Placed runs first (by place), then completed-but-unplaced (by time), then E/NFC/ABS last."""
+    faults_val = str(row.get('faults', '')).strip().upper()
+    is_elim = 1 if faults_val in ('E', 'NFC', 'ABS') else 0
+    place_str = str(row.get('place', '')).strip()
+    try:
+        place_num = int(place_str)
+        no_place = 0
+    except ValueError:
+        place_num = 9999
+        no_place = 1
+    try:
+        time_val = float(row.get('time') or 0)
+    except (ValueError, TypeError):
+        time_val = 9999.0
+    return (is_elim, no_place, place_num, time_val)
+
+def render_formatted_results(data):
+    """Render a list of result-row dicts grouped by class type, then by height (placed runs first)."""
+    if not data:
+        st.info("No results to display yet.")
+        return
+
+    r_df = pd.DataFrame(data)
+    r_df['height_num'] = pd.to_numeric(r_df['height'], errors='coerce').fillna(999)
+
+    for class_type in sorted(r_df['class_type'].dropna().astype(str).unique()):
+        st.markdown(f"### {class_type}")
+        ct_df = r_df[r_df['class_type'].astype(str) == class_type]
+
+        for height_num in sorted(ct_df['height_num'].unique()):
+            height_rows = ct_df[ct_df['height_num'] == height_num]
+            height_label = height_rows.iloc[0]['height']
+            st.markdown(f'<div class="height-header">📏 {height_label}" Height</div>', unsafe_allow_html=True)
+
+            rows = sorted(height_rows.to_dict('records'), key=_results_sort_key)
+            display_rows = []
+            for r in rows:
+                faults_raw = r.get('faults', '')
+                qualify_val = str(r.get('qualify', '')).strip().upper()
+                place_raw = str(r.get('place', '')).strip()
+
+                display_rows.append({
+                    "Place": place_raw if place_raw else "—",
+                    "Handler": r.get('uki_number', ''),
+                    "Dog": r.get('uki_dog_number', ''),
+                    "Time": _clean_val(r.get('time')),
+                    "SCT": _clean_val(r.get('sct')),
+                    "Faults": _clean_val(faults_raw),
+                    "YPS": _clean_val(r.get('yps')),
+                    "Time Faults": _clean_val(r.get('timefaults')),
+                    "Pts": _clean_val(r.get('level_points')),
+                    "Q": "✅ Q" if qualify_val == 'Y' else "",
+                })
+
+            disp_df = pd.DataFrame(display_rows)
+
+            def _style_results_row(row):
+                f_val = str(row['Faults']).strip().upper()
+                if f_val in ('E', 'NFC', 'ABS'):
+                    return ['color: #A0A0A0; font-style: italic;'] * len(row)
+                if row['Q'] == '✅ Q':
+                    return ['background-color: #FEF9C3;'] * len(row)
+                return [''] * len(row)
+
+            styled = disp_df.style.apply(_style_results_row, axis=1)
+            st.dataframe(styled, use_container_width=True, hide_index=True)
+
 # Initial Load for the session
 if 'main_df' not in st.session_state:
     fetch_global_data()
@@ -86,8 +168,8 @@ df = st.session_state.main_df
 sorted_classes = df.groupby('Combined Class Name')['Run_Order'].min().sort_values().index.tolist() if not df.empty else []
 
 # --- 4. TABS SETUP ---
-tab1, tab2, tab3, tab5, tab6 = st.tabs([
-    "📲 Check-in", "📊 Dash", "🏃 Order", "🚧 Gate", "🔒 Admin"
+tab1, tab2, tab3, tab5, tab6, tab7 = st.tabs([
+    "📲 Check-in", "📊 Dash", "🏃 Order", "🚧 Gate", "🔒 Admin", "🏆 Results"
 ])
 
 # --- TAB 1: INDIVIDUAL CHECK-IN ---
@@ -402,3 +484,80 @@ with tab6:
                 clean_filename = f"{re.sub(r'[^a-z0-9]', '_', upload_class.lower())}_{int(time.time())}.{uploaded_file.name.split('.')[-1]}"
                 conn_supabase.client.storage.from_("coursemaps").upload(path=clean_filename, file=uploaded_file.getvalue())
                 st.success("Map Uploaded!")
+
+# --- TAB 7: RESULTS ---
+with tab7:
+    st.header("🏆 Results")
+    res_mode = st.radio(
+        "Mode", ["View Results", "Submit Results"],
+        horizontal=True, label_visibility="collapsed", key="res_mode_sel"
+    )
+    st.divider()
+
+    # --- VIEW RESULTS (open to everyone) ---
+    if res_mode == "View Results":
+        try:
+            res_rows = conn_supabase.table("results").select("class_name, data, submitted_at").execute().data
+        except Exception as e:
+            res_rows = []
+            st.error(f"Could not load results: {e}")
+
+        if not res_rows:
+            st.info("No results have been posted yet. Check back after the class runs!")
+        else:
+            res_class_map = {r['class_name']: r for r in res_rows}
+            # Order by the trial's run order where possible, append anything else alphabetically
+            ordered_res_classes = [c for c in sorted_classes if c in res_class_map]
+            ordered_res_classes += sorted(c for c in res_class_map if c not in sorted_classes)
+            sel_res_class = st.selectbox("Select Class:", ordered_res_classes, key="res_view_class_sel")
+            render_formatted_results(res_class_map[sel_res_class]['data'])
+
+    # --- SUBMIT RESULTS (PIN-gated) ---
+    else:
+        with st.form("results_pin_form"):
+            st.text_input("Results PIN:", type="password", key="res_pin_v")
+            st.form_submit_button("Unlock", use_container_width=True, type="primary")
+
+        entered_pin = st.session_state.get("res_pin_v", "")
+        if entered_pin == "":
+            pass
+        elif entered_pin != RESULTS_PIN:
+            st.error("Incorrect PIN.")
+        else:
+            sel_input_class = st.selectbox(
+                "Which class are these results for?", sorted_classes, key="res_input_class_sel"
+            )
+            json_text = st.text_area(
+                "Paste results JSON here:",
+                height=280,
+                key="res_json_text",
+                placeholder='[ { "class_type": "Regular", "height": "8", "uki_number": "...", "uki_dog_number": "...", ... } ]'
+            )
+
+            if st.button("👀 Preview Formatted Results", use_container_width=True):
+                try:
+                    parsed = json.loads(json_text)
+                    if not isinstance(parsed, list):
+                        st.error("That JSON parsed, but it needs to be a list of result entries (e.g. `[ {...}, {...} ]`).")
+                    else:
+                        st.session_state.res_parsed_preview = parsed
+                except json.JSONDecodeError as e:
+                    st.session_state.pop('res_parsed_preview', None)
+                    st.error(f"Couldn't parse that JSON: {e}")
+
+            if 'res_parsed_preview' in st.session_state:
+                st.divider()
+                st.subheader(f"Preview — {sel_input_class}")
+                render_formatted_results(st.session_state.res_parsed_preview)
+
+                if st.button("✅ Publish These Results", type="primary", use_container_width=True):
+                    try:
+                        conn_supabase.table("results").upsert({
+                            "class_name": sel_input_class,
+                            "data": st.session_state.res_parsed_preview,
+                            "submitted_at": datetime.now(timezone.utc).isoformat(),
+                        }, on_conflict="class_name").execute()
+                        st.success(f"Results for '{sel_input_class}' are now live on the View Results tab!")
+                        del st.session_state['res_parsed_preview']
+                    except Exception as e:
+                        st.error(f"Sync Error: {e}")
