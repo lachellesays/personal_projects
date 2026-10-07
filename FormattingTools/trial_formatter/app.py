@@ -17,7 +17,7 @@ from core import (
     Show, fetch_submissions, parse_entries, entrant_summary, transform, to_xlsx_bytes,
     apply_corrections, handler_table, dog_table, diff_corrections, HANDLER_FIELDS, DOG_FIELDS,
 )
-from shows import list_shows, save_show, load_show, show_path, dump_show
+from shows import list_shows, save_show, load_show, show_path, dump_show, storage_problem
 from cli import load_dotenv
 
 load_dotenv()
@@ -45,6 +45,9 @@ def check_password() -> bool:
 
 if not check_password():
     st.stop()
+
+if problem := storage_problem():
+    st.error('⚠ ' + problem)
 
 API_KEY = os.environ.get('JOTFORM_API_KEY')
 if not API_KEY:

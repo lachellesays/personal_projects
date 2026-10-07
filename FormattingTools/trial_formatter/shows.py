@@ -13,8 +13,24 @@ import yaml
 
 from core import Show
 
-DATA_DIR = Path(os.environ.get('DATA_DIR') or Path(__file__).parent)
+# Railway sets RAILWAY_VOLUME_MOUNT_PATH when a volume is attached, so DATA_DIR is optional there.
+VOLUME_PATH = os.environ.get('RAILWAY_VOLUME_MOUNT_PATH')
+DATA_DIR = Path(os.environ.get('DATA_DIR') or VOLUME_PATH or Path(__file__).parent)
 SHOWS_DIR = DATA_DIR / 'shows'
+
+
+def storage_problem():
+    """On Railway, explain why saved shows would be lost on redeploy (None if storage is fine)."""
+    if not os.environ.get('RAILWAY_ENVIRONMENT_NAME') and not os.environ.get('RAILWAY_ENVIRONMENT'):
+        return None  # running locally
+    if not VOLUME_PATH:
+        return ('No Railway volume is attached to this service, so saved shows, scratches and '
+                'corrections will be erased on the next deploy. Attach a volume to this service '
+                '(mount path /data).')
+    if Path(VOLUME_PATH).resolve() not in (DATA_DIR.resolve(), *DATA_DIR.resolve().parents):
+        return (f'DATA_DIR is "{DATA_DIR}" but the volume is mounted at "{VOLUME_PATH}", so saves '
+                f'are not going to the volume. Delete the DATA_DIR variable or set it to {VOLUME_PATH}.')
+    return None
 
 
 def slugify(name: str) -> str:
