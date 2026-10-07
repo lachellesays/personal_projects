@@ -13,7 +13,10 @@ import pandas as pd
 import streamlit as st
 import yaml
 
-from core import Show, fetch_submissions, parse_entries, entrant_summary, transform, to_xlsx_bytes
+from core import (
+    Show, fetch_submissions, parse_entries, entrant_summary, transform, to_xlsx_bytes,
+    apply_corrections, handler_table, dog_table, diff_corrections, HANDLER_FIELDS, DOG_FIELDS,
+)
 from shows import list_shows, save_show, load_show, show_path, dump_show
 from cli import load_dotenv
 
@@ -199,8 +202,96 @@ if 'flash' in st.session_state:
 if dirty:
     st.warning('You have unsaved scratch changes. The workbook below already reflects them.')
 
+# ── Corrections ──────────────────────────────────────────────────────────────
+
+st.subheader('Fix typos')
+st.caption('Click any cell to fix what someone typed, then click **Save corrections**. '
+           'Fixes are kept with this show and re-applied every time you refresh from JotForm. '
+           'They show up on every tab (e.g. a corrected name changes Contact, Balances and Raw Results). '
+           'Save before changing the search box, or unsaved edits are dropped.')
+
+FIELD_LABELS = {
+    'handler_number': 'Handler #', 'first_name': 'First name', 'last_name': 'Last name',
+    'email': 'Email', 'addr_line1': 'Address 1', 'addr_line2': 'Address 2', 'city': 'Town',
+    'state': 'State (County)', 'postal': 'Zip', 'dog_number': 'Dog #', 'handler': 'Handler',
+    'dog_name': 'Dog name', 'dog_breed': 'Breed', 'jump_height': 'Jump height',
+    'international_level': 'Level', 'speedstakes_level': 'Speedstakes level',
+}
+corrected = apply_corrections(entries, show)
+orig_h, orig_d = handler_table(entries), dog_table(entries)
+cur_h, cur_d = handler_table(corrected), dog_table(corrected)
+search = st.text_input('Search', placeholder='Type a name or number to filter the tables',
+                       key=f'fix_search_{slug}')
+
+
+def _filter(df):
+    if not search:
+        return df
+    mask = df.astype(str).apply(lambda col: col.str.contains(search, case=False, regex=False)).any(axis=1)
+    return df[mask]
+
+
+fix_h, fix_d = st.tabs([f'Handlers ({len(cur_h)})', f'Dogs ({len(cur_d)})'])
+with fix_h:
+    view_h = _filter(cur_h)
+    edited_fix_h = st.data_editor(
+        view_h, hide_index=True, use_container_width=True, key=f'fix_h_{slug}_{search}',
+        disabled=['handler_number'], column_config=FIELD_LABELS,
+    )
+with fix_d:
+    st.caption('Jump height and levels use the JotForm wording, e.g. "20 regular", "16 select", "Champion".')
+    view_d = _filter(cur_d)
+    edited_fix_d = st.data_editor(
+        view_d, hide_index=True, use_container_width=True, key=f'fix_d_{slug}_{search}',
+        disabled=['dog_number', 'handler'], column_config=FIELD_LABELS,
+    )
+
+# Start from the saved corrections, then overwrite the rows visible in the (possibly filtered) tables
+new_hc = {k: v for k, v in show.handler_corrections.items() if k not in set(view_h['handler_number'])}
+new_hc.update(diff_corrections(orig_h, edited_fix_h, 'handler_number', HANDLER_FIELDS))
+new_dc = {k: v for k, v in show.dog_corrections.items() if k not in set(view_d['dog_number'])}
+new_dc.update(diff_corrections(orig_d, edited_fix_d, 'dog_number', DOG_FIELDS))
+
+# List every correction, with a way to undo it
+orig_h_idx, orig_d_idx = orig_h.set_index('handler_number'), orig_d.set_index('dog_number')
+fix_rows = []
+for kind, corrections, idx in (('Handler', new_hc, orig_h_idx), ('Dog', new_dc, orig_d_idx)):
+    for num, fields in corrections.items():
+        for f, val in fields.items():
+            before = idx.at[num, f] if num in idx.index else '(not in JotForm)'
+            fix_rows.append({'undo': False, 'kind': kind, 'number': num, 'field': FIELD_LABELS[f],
+                             'from_jotform': before, 'corrected_to': val, '_field': f})
+if fix_rows:
+    with st.expander(f'{len(fix_rows)} correction(s)', expanded=True):
+        fixes = st.data_editor(
+            pd.DataFrame(fix_rows), hide_index=True, use_container_width=True, key=f'fix_list_{slug}',
+            disabled=['kind', 'number', 'field', 'from_jotform', 'corrected_to'],
+            column_order=['undo', 'kind', 'number', 'field', 'from_jotform', 'corrected_to'],
+            column_config={'undo': st.column_config.CheckboxColumn('Undo'), 'kind': '', 'number': '#',
+                           'field': 'Field', 'from_jotform': 'From JotForm', 'corrected_to': 'Corrected to'},
+        )
+    for _, r in fixes[fixes['undo']].iterrows():
+        target = new_hc if r['kind'] == 'Handler' else new_dc
+        target.get(r['number'], {}).pop(r['_field'], None)
+        if not target.get(r['number'], True):
+            del target[r['number']]
+
+fixes_dirty = new_hc != show.handler_corrections or new_dc != show.dog_corrections
+if st.button('Save corrections', type='primary' if fixes_dirty else 'secondary', disabled=not fixes_dirty):
+    show.handler_corrections, show.dog_corrections = new_hc, new_dc
+    save_show(show, slug)
+    for k in [k for k in st.session_state if str(k).startswith(('fix_h_', 'fix_d_', 'fix_list_'))]:
+        del st.session_state[k]
+    st.session_state.flash_fix = 'Corrections saved.'
+    st.rerun()
+if 'flash_fix' in st.session_state:
+    st.success(st.session_state.pop('flash_fix'))
+if fixes_dirty:
+    st.warning('You have unsaved corrections. The workbook below already reflects them.')
+
 # Generate using the on-screen selections, saved or not
-preview = Show(**{**show.__dict__, 'scratched_handlers': new_h, 'scratched_dogs': new_d})
+preview = Show(**{**show.__dict__, 'scratched_handlers': new_h, 'scratched_dogs': new_d,
+                  'handler_corrections': new_hc, 'dog_corrections': new_dc})
 result = transform(entries, preview)
 
 st.subheader('Workbook')

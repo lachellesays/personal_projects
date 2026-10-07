@@ -56,8 +56,17 @@ Open the service → **Variables** tab → **New Variable**. Add these three:
 | `DATA_DIR` | `/data` |
 
 ### 4. Add storage for your saved shows
-Right-click the service (or use **+ New**) → **Volume** → set the mount path to `/data`.
-Without this, your shows and scratches are erased every time Railway redeploys.
+A "volume" is a small permanent disk. Without one, your shows and scratches are erased every time Railway redeploys.
+
+Use whichever of these your Railway screen offers:
+- **Command palette:** on the project page (the canvas with your service box), press **Cmd + K**, type `volume`, and choose the option to add or attach a volume to this service.
+- **Right-click the service box** on the canvas → **Attach Volume**.
+- **Right-click an empty spot** on the canvas (not on the service box) → **Volume** → choose this service.
+- **Terminal** (if you have the Railway CLI): `railway link`, then `railway volume add --mount-path /data`.
+
+When it asks for a **mount path**, enter `/data`. Railway redeploys automatically afterward.
+
+To check it worked, the service box on the canvas shows a small disk attached to it.
 
 ### 5. Get a web address
 **Settings** tab → **Networking** → **Generate Domain**. Open that link and log in with your `APP_PASSWORD`.
@@ -67,7 +76,8 @@ Without this, your shows and scratches are erased every time Railway redeploys.
 ## Using it for each trial
 1. In the sidebar, choose **➕ New show**. Fill in the name and dates (form ID and show ID carry over from your last show). Click **Save show**.
 2. Tick anyone who scratched, then click **Save scratches**.
-3. Read any warnings, then click **Download workbook**.
+3. If someone typed something odd (wrong state, misspelled name, etc.), fix it in **Fix typos** and click **Save corrections**. Fixes are kept with the show and re-applied after every JotForm refresh; tick **Undo** in the corrections list to remove one.
+4. Read any warnings, then click **Download workbook**.
 
 ---
 

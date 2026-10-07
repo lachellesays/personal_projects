@@ -60,6 +60,24 @@ DEFAULT_FIELD_NAMES = {
     'payment_data':        'myProducts',
 }
 
+# Fields that can be hand-corrected in the app
+HANDLER_FIELDS = ['first_name', 'last_name', 'email', 'addr_line1', 'addr_line2', 'city', 'state', 'postal']
+DOG_FIELDS = ['dog_name', 'dog_breed', 'jump_height', 'international_level', 'speedstakes_level']
+
+US_STATES = {
+    'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR', 'CALIFORNIA': 'CA',
+    'COLORADO': 'CO', 'CONNECTICUT': 'CT', 'DELAWARE': 'DE', 'DISTRICT OF COLUMBIA': 'DC',
+    'FLORIDA': 'FL', 'GEORGIA': 'GA', 'HAWAII': 'HI', 'IDAHO': 'ID', 'ILLINOIS': 'IL',
+    'INDIANA': 'IN', 'IOWA': 'IA', 'KANSAS': 'KS', 'KENTUCKY': 'KY', 'LOUISIANA': 'LA',
+    'MAINE': 'ME', 'MARYLAND': 'MD', 'MASSACHUSETTS': 'MA', 'MICHIGAN': 'MI', 'MINNESOTA': 'MN',
+    'MISSISSIPPI': 'MS', 'MISSOURI': 'MO', 'MONTANA': 'MT', 'NEBRASKA': 'NE', 'NEVADA': 'NV',
+    'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ', 'NEW MEXICO': 'NM', 'NEW YORK': 'NY',
+    'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', 'OHIO': 'OH', 'OKLAHOMA': 'OK', 'OREGON': 'OR',
+    'PENNSYLVANIA': 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC', 'SOUTH DAKOTA': 'SD',
+    'TENNESSEE': 'TN', 'TEXAS': 'TX', 'UTAH': 'UT', 'VERMONT': 'VT', 'VIRGINIA': 'VA',
+    'WASHINGTON': 'WA', 'WEST VIRGINIA': 'WV', 'WISCONSIN': 'WI', 'WYOMING': 'WY',
+}
+
 CONTACT_COLUMNS = [
     'Member ID', 'Last Name', 'First Name', 'Address 1', 'Address 2', 'Address 3',
     'Town', 'County', 'Postcode', 'EMail', 'Home', 'Work', 'Cell',
@@ -187,6 +205,9 @@ class Show:
     scratched_dogs: list = field(default_factory=list)
     exclude_addresses: list = field(default_factory=list)
     field_names: dict = field(default_factory=dict)
+    # Hand-made fixes for typos, keyed by handler/dog number: {'12349': {'state': 'VA'}}
+    handler_corrections: dict = field(default_factory=dict)
+    dog_corrections: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict) -> 'Show':
@@ -200,6 +221,8 @@ class Show:
             scratched_dogs=[str(x) for x in d.get('scratched_dogs') or []],
             exclude_addresses=[str(x) for x in d.get('exclude_addresses') or []],
             field_names=dict(d.get('field_names') or {}),
+            handler_corrections=_clean_corrections(d.get('handler_corrections'), HANDLER_FIELDS),
+            dog_corrections=_clean_corrections(d.get('dog_corrections'), DOG_FIELDS),
         )
 
     def to_dict(self) -> dict:
@@ -213,9 +236,75 @@ class Show:
             'scratched_dogs': [_to_number(x) for x in self.scratched_dogs],
             'exclude_addresses': list(self.exclude_addresses),
         }
+        if self.handler_corrections:
+            d['handler_corrections'] = {_to_number(k): dict(v) for k, v in self.handler_corrections.items()}
+        if self.dog_corrections:
+            d['dog_corrections'] = {_to_number(k): dict(v) for k, v in self.dog_corrections.items()}
         if self.field_names:
             d['field_names'] = dict(self.field_names)
         return d
+
+
+def _clean_corrections(raw, allowed: list) -> dict:
+    """Normalize a corrections mapping from YAML: string keys/values, known fields only."""
+    out = {}
+    for num, fields in (raw or {}).items():
+        fields = {k: _safe_str(v) for k, v in (fields or {}).items() if k in allowed}
+        if fields:
+            out[str(num)] = fields
+    return out
+
+
+def apply_corrections(entries: list, show: 'Show') -> list:
+    """Return copies of the entries with the show's hand-made corrections applied."""
+    if not show.handler_corrections and not show.dog_corrections:
+        return entries
+    fixed = []
+    for e in entries:
+        e = {**e,
+             **show.handler_corrections.get(e['handler_number'], {}),
+             **show.dog_corrections.get(e['dog_number'], {})}
+        fixed.append(e)
+    return fixed
+
+
+def handler_table(entries: list) -> pd.DataFrame:
+    """One row per handler with the editable contact fields (first submission wins)."""
+    rows, seen = [], set()
+    for e in entries:
+        if e['handler_number'] in seen:
+            continue
+        seen.add(e['handler_number'])
+        rows.append({'handler_number': e['handler_number'], **{f: e[f] for f in HANDLER_FIELDS}})
+    return pd.DataFrame(rows, columns=['handler_number'] + HANDLER_FIELDS)
+
+
+def dog_table(entries: list) -> pd.DataFrame:
+    """One row per dog with the editable dog fields."""
+    rows, seen = [], set()
+    for e in entries:
+        if e['dog_number'] in seen:
+            continue
+        seen.add(e['dog_number'])
+        rows.append({'dog_number': e['dog_number'],
+                     'handler': (e['first_name'] + ' ' + e['last_name']).strip(),
+                     **{f: e[f] for f in DOG_FIELDS}})
+    return pd.DataFrame(rows, columns=['dog_number', 'handler'] + DOG_FIELDS)
+
+
+def diff_corrections(original: pd.DataFrame, edited: pd.DataFrame, key: str, fields: list) -> dict:
+    """Corrections = every cell in `edited` that differs from the JotForm `original`."""
+    orig = original.set_index(key)
+    out = {}
+    for _, row in edited.iterrows():
+        num = row[key]
+        if num not in orig.index:
+            continue
+        changed = {f: _safe_str(row[f]) for f in fields
+                   if _safe_str(row[f]) != _safe_str(orig.at[num, f])}
+        if changed:
+            out[str(num)] = changed
+    return out
 
 
 # ── Step 1: Fetch from JotForm ───────────────────────────────────────────────
@@ -331,7 +420,7 @@ def build_runs(entries: list, show: Show) -> pd.DataFrame:
 
 def entrant_summary(entries: list, show: Show) -> pd.DataFrame:
     """One row per handler/dog for the scratch picker, with runs and money."""
-    runs = build_runs(entries, show)
+    runs = build_runs(apply_corrections(entries, show), show)
     rows = []
     for (hn, dn), grp in runs.groupby(['handler_number', 'dog_number'], sort=False):
         rows.append({
@@ -357,6 +446,7 @@ class Result:
 
 
 def transform(entries: list, show: Show) -> Result:
+    entries = apply_corrections(entries, show)
     warnings = []
     scratched_h = {str(x) for x in show.scratched_handlers}
     scratched_d = {str(x) for x in show.scratched_dogs}
@@ -415,7 +505,7 @@ def transform(entries: list, show: Show) -> Result:
             'Address 2':  addr2,
             'Address 3':  '',
             'Town':       e['city'].upper(),
-            'County':     'VA' if state == 'VIRGINIA' else state,
+            'County':     US_STATES.get(state, state),
             'Postcode':   _to_number(e['postal'][:5]),
             'EMail':      e['email'].upper(),
             'Home':       '',

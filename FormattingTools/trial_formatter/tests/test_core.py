@@ -124,3 +124,29 @@ def test_xlsx_layout_matches_template():
     assert isinstance(row['Member ID'].value, int)
     assert row['Class'].number_format == '@'
     assert row['SCT'].value is None
+
+
+def test_corrections_apply_to_every_tab():
+    from core import Show as S
+    show = S(**SHOW, handler_corrections={'100': {'last_name': 'Smyth', 'state': 'ALABAMA'}},
+             dog_corrections={'600': {'dog_name': 'Maxine', 'jump_height': '12 regular'}})
+    r = transform(parse_entries(SUBS), show)
+    c = r.contact.set_index('Member ID')
+    assert c.loc[100, 'Last Name'] == 'Smyth'
+    assert c.loc[100, 'County'] == 'AL'
+    assert r.balances.set_index('Member ID').loc[100, 'Last Name'] == 'Smyth'
+    assert set(r.raw_results.loc[r.raw_results['Member ID'] == 100, 'Member Name']) == {'ann Smyth'}
+    bob = r.raw_results[r.raw_results['Member ID'] == 200]
+    assert set(bob['Dog Name']) == {'Maxine'} and set(bob['Height']) == {'12 inch'}
+
+
+def test_diff_corrections_and_yaml_round_trip():
+    from core import handler_table, diff_corrections, HANDLER_FIELDS, Show as S
+    entries = parse_entries(SUBS)
+    orig = handler_table(entries)
+    edited = orig.copy()
+    edited.loc[edited['handler_number'] == '200', 'city'] = 'Norfolk'
+    fixes = diff_corrections(orig, edited, 'handler_number', HANDLER_FIELDS)
+    assert fixes == {'200': {'city': 'Norfolk'}}
+    show = S(**SHOW, handler_corrections=fixes)
+    assert S.from_dict(show.to_dict()).handler_corrections == fixes
