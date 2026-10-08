@@ -258,6 +258,11 @@ def _day_label(d: date) -> str:
     return d.strftime('%A %-m/%-d/%Y')
 
 
+def clock() -> str:
+    """Current time in the trial's time zone (Railway's servers run on UTC)."""
+    return datetime.now(TZ).strftime('%-I:%M:%S %p')
+
+
 def _day_short(d: date) -> str:
     return d.strftime('%a %-m/%-d')
 
@@ -469,7 +474,7 @@ def render_order():
                 st.markdown(f'<div class="ro-mine">{esc(mine["dog_name"])}: {esc(note)}</div>',
                             unsafe_allow_html=True)
         st.markdown(running_order_html(r_df, handler_num), unsafe_allow_html=True)
-        st.caption(f"Updates automatically • {time.strftime('%-I:%M:%S %p')}")
+        st.caption(f"Updates automatically • {clock()}")
 
     live_running_order_view(sel_c, st.session_state.active_handler)
 
@@ -655,7 +660,7 @@ def render_gate():
                     if b2.button("SCRATCH", key=f"scratch_{pk_val}", use_container_width=True):
                         act(db.set_status, pk_val, "Scratch")
 
-        st.caption(f"Gate live sync • {time.strftime('%-I:%M:%S %p')}")
+        st.caption(f"Gate live sync • {clock()}")
 
     gate_steward_view(g_cls)
 
