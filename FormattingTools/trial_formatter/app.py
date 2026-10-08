@@ -17,7 +17,7 @@ from core import (
     Show, fetch_submissions, parse_entries, entrant_summary, transform, to_xlsx_bytes,
     apply_corrections, handler_table, dog_table, diff_corrections, HANDLER_FIELDS, DOG_FIELDS,
 )
-from shows import list_shows, save_show, load_show, show_path, dump_show, storage_problem
+from shows import list_shows, save_show, get_show, dump_show, storage_problem, migrate_yaml_to_db
 from cli import load_dotenv
 
 load_dotenv()
@@ -45,6 +45,17 @@ def check_password() -> bool:
 
 if not check_password():
     st.stop()
+
+@st.cache_resource
+def _migration() -> dict:
+    """Copy any shows from the old volume folder into the database (runs once per app start)."""
+    return {'copied': migrate_yaml_to_db(), 'announced': False}
+
+
+_m = _migration()
+if _m['copied'] and not _m['announced']:
+    _m['announced'] = True  # tell the first person who opens the app, not everyone after
+    st.toast(f"Moved {_m['copied']} saved show(s) into the database.")
 
 if problem := storage_problem():
     st.error('⚠ ' + problem)
@@ -76,7 +87,7 @@ with st.sidebar:
         format_func=lambda s: labels.get(s, s),
     )
     is_new = slug == NEW
-    show = None if is_new else load_show(show_path(slug))
+    show = None if is_new else get_show(slug)
 
     # Prefill a new show from the most recent one (same form/show ID, next weekend)
     template = shows[0][1] if shows else None

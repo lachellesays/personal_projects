@@ -6,7 +6,10 @@ production and falls back to a local SQLite file for development and tests.
 No Streamlit code lives here.
 """
 
+import itertools
 import os
+import threading
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 
 import pandas as pd
@@ -77,6 +80,27 @@ RUN_FIELDS = ['day', 'ring', 'event', 'event_num', 'level', 'class_type', 'heigh
               'run_group', 'team_name']
 
 
+# Bumped after every successful write. The app's short-lived read cache includes it in its key,
+# so a change shows up immediately instead of waiting for the cache to expire.
+_version = itertools.count(1)
+_current_version = 0
+_version_lock = threading.Lock()
+
+
+def data_version() -> int:
+    return _current_version
+
+
+@contextmanager
+def _write(engine):
+    """engine.begin(), then mark cached reads as stale once the change is committed."""
+    global _current_version
+    with engine.begin() as c:
+        yield c
+    with _version_lock:
+        _current_version = next(_version)
+
+
 def _now():
     return datetime.now(timezone.utc)
 
@@ -127,13 +151,13 @@ def set_status(engine, run_ids, status: str):
     if status not in STATUSES:
         raise ValueError(f'Unknown status {status!r}')
     ids = [run_ids] if isinstance(run_ids, int) else list(run_ids)
-    with engine.begin() as c:
+    with _write(engine) as c:
         c.execute(update(runs).where(runs.c.id.in_(ids)).values(status=status, updated_at=_now()))
 
 
 def start_run(engine, run_id: int):
     """Put a dog In Ring, finishing whoever was In Ring in that class — in one transaction."""
-    with engine.begin() as c:
+    with _write(engine) as c:
         row = c.execute(select(runs.c.trial_date, runs.c.class_name).where(runs.c.id == run_id)).first()
         if row is None:
             return
@@ -146,7 +170,7 @@ def start_run(engine, run_id: int):
 
 def reset_statuses(engine, trial_date: date) -> int:
     """Every run on the day, scratches included, goes back to Not Checked In. Returns rows changed."""
-    with engine.begin() as c:
+    with _write(engine) as c:
         res = c.execute(update(runs)
                         .where(and_(runs.c.trial_date == trial_date,
                                     runs.c.status != NOT_CHECKED_IN))
@@ -186,7 +210,7 @@ def preview_import(engine, new_runs: pd.DataFrame) -> dict:
 def import_runs(engine, new_runs: pd.DataFrame) -> dict:
     """Replace all runs on the dates in new_runs, carrying statuses over by class + dog."""
     dates = sorted(set(new_runs['trial_date']))
-    with engine.begin() as c:
+    with _write(engine) as c:
         old = c.execute(select(runs.c.class_name, runs.c.dog_number, runs.c.status)
                         .where(runs.c.trial_date.in_(dates))).all()
         old_status = {_status_key(r.class_name, r.dog_number): r.status for r in old}
@@ -209,7 +233,7 @@ class ClassChangedError(Exception):
 
 def save_class_order(engine, trial_date: date, class_name: str, ordered_ids: list):
     """Renumber a class so runs appear in ordered_ids order (1, 2, 3, ...)."""
-    with engine.begin() as c:
+    with _write(engine) as c:
         current = {r[0] for r in c.execute(select(runs.c.id).where(
             and_(runs.c.trial_date == trial_date, runs.c.class_name == class_name)))}
         if current != set(ordered_ids):
@@ -221,7 +245,7 @@ def save_class_order(engine, trial_date: date, class_name: str, ordered_ids: lis
 
 def add_late_entry(engine, trial_date: date, class_name: str, fields: dict, insert_at: int) -> int:
     """Insert a run into a class at 1-based position insert_at (past the end = last). Returns new id."""
-    with engine.begin() as c:
+    with _write(engine) as c:
         existing = c.execute(select(runs).where(and_(runs.c.trial_date == trial_date,
                                                      runs.c.class_name == class_name))
                              .order_by(runs.c.position, runs.c.id)).mappings().all()
@@ -250,14 +274,14 @@ def add_late_entry(engine, trial_date: date, class_name: str, fields: dict, inse
 
 
 def delete_day(engine, trial_date: date):
-    with engine.begin() as c:
+    with _write(engine) as c:
         c.execute(delete(runs).where(runs.c.trial_date == trial_date))
 
 
 # ── Results & course maps ────────────────────────────────────────────────────
 
 def publish_results(engine, trial_date: date, class_name: str, data: list):
-    with engine.begin() as c:
+    with _write(engine) as c:
         c.execute(delete(results).where(and_(results.c.trial_date == trial_date,
                                              results.c.class_name == class_name)))
         c.execute(insert(results).values(trial_date=trial_date, class_name=class_name,
@@ -272,7 +296,7 @@ def results_for_day(engine, trial_date: date) -> dict:
 
 
 def save_course_map(engine, trial_date: date, class_name: str, filename: str, mime: str, image: bytes):
-    with engine.begin() as c:
+    with _write(engine) as c:
         c.execute(insert(course_maps).values(trial_date=trial_date, class_name=class_name, filename=filename,
                                              mime=mime, image=image, uploaded_at=_now()))
 

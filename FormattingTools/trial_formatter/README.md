@@ -46,27 +46,27 @@ Commit and push the `trial_formatter` folder. Do **not** commit the old `fetch_a
 1. In Railway: **New Project → Deploy from GitHub repo** → pick `personal_projects`.
 2. Click the new service → **Settings** tab → **Root Directory** → enter `FormattingTools/trial_formatter`.
 
-### 3. Add the secrets (this replaces the `.env` file)
+### 3. Add the variables (this replaces the `.env` file)
 Open the service → **Variables** tab → **New Variable**. Add these three:
 
 | Variable name | Value |
 |---|---|
 | `JOTFORM_API_KEY` | your JotForm API key |
 | `APP_PASSWORD` | the password you want |
-| `DATA_DIR` | `/data` |
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (type `${{` and pick your Postgres service from the suggestions) |
 
-### 4. Add storage for your saved shows
-A "volume" is a small permanent disk. Without one, your shows and scratches are erased every time Railway redeploys.
+Shows, scratches and corrections are saved in the same Postgres database as the check-in app,
+in their own table (`formatter_shows`), so they're included in that database's backups.
 
-Use whichever of these your Railway screen offers:
-- **Command palette:** on the project page (the canvas with your service box), press **Cmd + K**, type `volume`, and choose the option to add or attach a volume to this service.
-- **Right-click the service box** on the canvas → **Attach Volume**.
-- **Right-click an empty spot** on the canvas (not on the service box) → **Volume** → choose this service.
-- **Terminal** (if you have the Railway CLI): `railway link`, then `railway volume add --mount-path /data`.
+If the app shows a red warning about `DATABASE_URL`, this step isn't right yet.
 
-When it asks for a **mount path**, enter `/data`. Railway redeploys automatically afterward.
+### 4. Moving from the old volume (one time)
+Earlier versions saved shows on a volume. The first time the app starts with `DATABASE_URL` set,
+it copies every show from the volume into the database and shows a "Moved N saved show(s)" notice.
+Shows already in the database are never overwritten.
 
-To check it worked, the service box on the canvas shows a small disk attached to it.
+Once you've opened the app and see your shows, the volume and the `DATA_DIR` variable are no
+longer used. You can delete them, or keep the volume for a while as a spare copy.
 
 ### 5. Get a web address
 **Settings** tab → **Networking** → **Generate Domain**. Open that link and log in with your `APP_PASSWORD`.
@@ -83,6 +83,7 @@ To check it worked, the service box on the canvas shows a small disk attached to
 
 ## Extras
 - **Without the app:** `.venv/bin/python cli.py shows/<show-file>.yaml` writes the workbook directly. It reads the same `.env` file.
+  On your Mac, without `DATABASE_URL`, shows are saved as YAML files in `shows/`.
 - **If you rename questions on the JotForm**, the app will tell you which field it can't find. Add a line like this to that show's file in `shows/`:
   `field_names: {handler_number: newQuestionName}`
 - **Tests:** `.venv/bin/python -m pytest tests`

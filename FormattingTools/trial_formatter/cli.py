@@ -3,6 +3,7 @@ cli.py
 
 Build the trial workbook from a show config without the web app:
     python3 cli.py shows/2026-06-06-june-2026.yaml [-o TrialData.xlsx]
+    python3 cli.py 2026-06-06-june-2026            (a saved show's name, when DATABASE_URL is set)
 
 Reads JOTFORM_API_KEY from the environment (or a .env file next to this script).
 """
@@ -13,7 +14,7 @@ import argparse
 from pathlib import Path
 
 from core import fetch_submissions, parse_entries, transform, to_xlsx_bytes
-from shows import load_show
+from shows import get_show, load_show_file
 
 
 def load_dotenv():
@@ -28,7 +29,7 @@ def load_dotenv():
 def main():
     load_dotenv()
     parser = argparse.ArgumentParser(description='Build the 3-tab trial workbook from JotForm.')
-    parser.add_argument('show', help='Path to the show YAML file')
+    parser.add_argument('show', help='Path to a show YAML file, or a saved show name')
     parser.add_argument('-o', '--output', help='Output .xlsx path (default: TrialData_<show>.xlsx)')
     args = parser.parse_args()
 
@@ -36,7 +37,7 @@ def main():
     if not api_key:
         sys.exit('Set JOTFORM_API_KEY in the environment or in trial_formatter/.env')
 
-    show = load_show(args.show)
+    show = load_show_file(args.show) if Path(args.show).is_file() else get_show(args.show)
     print(f'Fetching submissions for {show.name} (form {show.form_id})...')
     submissions = fetch_submissions(show.form_id, api_key)
     print(f'  {len(submissions)} active submissions')

@@ -23,6 +23,7 @@ import streamlit as st
 from streamlit_sortables import sort_items
 
 import db
+from cached import engine, read
 from run_order import RunOrderError, parse_run_order_csv, summarize
 
 
@@ -114,12 +115,7 @@ st.markdown("""
 
 
 # --- 2. DATABASE ---
-@st.cache_resource
-def engine():
-    return db.get_engine()
-
-
-ENGINE = engine()
+ENGINE = engine()  # shared with cached.py, so the whole app uses one connection pool
 if os.environ.get('RAILWAY_ENVIRONMENT_NAME') and ENGINE.dialect.name == 'sqlite':
     if 'DATABASE_URL' in os.environ:
         st.error('DATABASE_URL exists but is empty, so this app is using a temporary file that is erased on '
@@ -247,7 +243,7 @@ def now_strip_html(class_df: pd.DataFrame) -> str:
 
 # --- 4. DAY SELECTION ---
 TZ = ZoneInfo(os.environ.get('TRIAL_TZ', 'America/New_York'))
-dates = db.trial_dates(ENGINE)
+dates = read('trial_dates')
 today = datetime.now(TZ).date()
 
 
@@ -276,8 +272,8 @@ if dates:
 else:
     day = None
 
-df = db.runs_for_day(ENGINE, day) if day else pd.DataFrame(columns=[c.name for c in db.runs.columns])
-sorted_classes = db.class_names(ENGINE, day) if day else []
+df = read('runs_for_day', day) if day else pd.DataFrame(columns=[c.name for c in db.runs.columns])
+sorted_classes = read('class_names', day) if day else []
 
 # Handler number survives refreshes and bookmarks via ?h=12345
 if 'active_handler' not in st.session_state:
@@ -455,14 +451,14 @@ def render_order():
         return
     sel_c = class_picker('ro_sel')
 
-    course_map = db.latest_course_map(ENGINE, day, sel_c)
+    course_map = read('latest_course_map', day, sel_c)
     if course_map:
         with st.expander("Course map"):
             st.image(course_map, use_container_width=True)
 
     @st.fragment(run_every=10)
     def live_running_order_view(target_class, handler_num):
-        r_df = db.runs_for_day(ENGINE, day, target_class)
+        r_df = read('runs_for_day', day, target_class)
         if r_df.empty:
             st.info("No data found for this class.")
             return
@@ -480,7 +476,7 @@ def render_order():
 
 # --- TAB: RESULTS ---
 def render_results():
-    res_class_map = db.results_for_day(ENGINE, day) if day else {}
+    res_class_map = read('results_for_day', day) if day else {}
     if not res_class_map:
         st.info("No results have been posted yet. Check back after the class runs!")
         return
@@ -579,7 +575,7 @@ def render_gate():
         # Speedstakes / Jumping classes don't run the A-Frame — skip the equipment-change banners
         has_aframe = not any(kw in target_class.lower() for kw in ('speedstakes', 'jumping'))
 
-        g_df = db.runs_for_day(ENGINE, day, target_class)
+        g_df = read('runs_for_day', day, target_class)
         if g_df.empty:
             st.info("No data found for this class.")
             return
@@ -819,7 +815,7 @@ def render_admin():
                 st.info("Upload a run order first.")
             else:
                 upload_class = st.selectbox("Assign Map to Class:", sorted_classes, key="map_up_sel")
-                current = db.latest_course_map(ENGINE, day, upload_class)
+                current = read('latest_course_map', day, upload_class)
                 if current:
                     st.caption("Current map:")
                     st.image(current, width=300)
@@ -831,7 +827,7 @@ def render_admin():
                     st.session_state.map_ver = map_ver + 1
                     st.session_state.admin_flash = f"Map uploaded for {upload_class}."
                     st.rerun()
-                have = db.classes_with_maps(ENGINE, day)
+                have = read('classes_with_maps', day)
                 st.caption("Maps uploaded: " + (', '.join(c for c in sorted_classes if c in have) or 'none yet'))
 
         # ── Publish results ──
