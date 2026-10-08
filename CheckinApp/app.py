@@ -871,7 +871,7 @@ def render_admin():
         # ── Reset ──
         elif section == "Reset statuses":
             if day:
-                st.caption(f"Sets every run on {_day_label(day)} back to Not Checked In, except scratches.")
+                st.caption(f"Sets every run on {_day_label(day)} back to Not Checked In, including scratches.")
                 confirm = st.checkbox("Yes, reset all statuses for this day", key="reset_confirm")
                 if st.button("Reset All Statuses", disabled=not confirm):
                     n = db.reset_statuses(ENGINE, day)

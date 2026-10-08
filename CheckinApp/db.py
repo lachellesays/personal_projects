@@ -145,10 +145,10 @@ def start_run(engine, run_id: int):
 
 
 def reset_statuses(engine, trial_date: date) -> int:
-    """Everything except scratches goes back to Not Checked In. Returns rows changed."""
+    """Every run on the day, scratches included, goes back to Not Checked In. Returns rows changed."""
     with engine.begin() as c:
         res = c.execute(update(runs)
-                        .where(and_(runs.c.trial_date == trial_date, runs.c.status != 'Scratch',
+                        .where(and_(runs.c.trial_date == trial_date,
                                     runs.c.status != NOT_CHECKED_IN))
                         .values(status=NOT_CHECKED_IN, updated_at=_now()))
         return res.rowcount

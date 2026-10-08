@@ -139,14 +139,13 @@ def test_late_entry_inserted_at_position(engine):
     assert db.class_names(engine, SAT_DATE) == ['Gamblers', 'Senior/Champ Agility']
 
 
-def test_reset_keeps_scratches(engine):
+def test_reset_clears_everything_including_scratches(engine):
     load(engine)
     ids = list(db.runs_for_day(engine, SAT_DATE)['id'])
     db.set_status(engine, ids[0], 'Scratch')
     db.set_status(engine, ids[1:3], 'Run Completed')
-    assert db.reset_statuses(engine, SAT_DATE) == 2
-    st = db.runs_for_day(engine, SAT_DATE).set_index('id')['status']
-    assert st[ids[0]] == 'Scratch' and st[ids[1]] == 'Not Checked In'
+    assert db.reset_statuses(engine, SAT_DATE) == 3
+    assert set(db.runs_for_day(engine, SAT_DATE)['status']) == {'Not Checked In'}
 
 
 def test_results_and_maps_are_per_day(engine):
