@@ -77,6 +77,7 @@ st.markdown("""
     .ro-dog { font-size: 17px; font-weight: 700; color: #0F172A; line-height: 1.2; }
     .ro-sub { font-size: 13px; color: #64748B; }
     .ro-row.mine { background: #E0F2FE; }
+    .you { font-size: 11px; font-weight: 800; color: #FFFFFF; background: #0284C7; border-radius: 4px; padding: 1px 5px; vertical-align: 2px; }
     .ro-row.inring { background: #FEF3C7; border-left: 5px solid #F59E0B; }
     .ro-row.done .ro-dog, .ro-row.done .ro-sub, .ro-row.done .ro-num { color: #94A3B8; font-style: italic; }
     .ro-row.scratch .ro-dog { text-decoration: line-through; color: #94A3B8; }
@@ -121,16 +122,16 @@ def engine():
 ENGINE = engine()
 if os.environ.get('RAILWAY_ENVIRONMENT_NAME') and ENGINE.dialect.name == 'sqlite':
     if 'DATABASE_URL' in os.environ:
-        st.error('⚠ DATABASE_URL exists but is empty, so this app is using a temporary file that is erased on '
+        st.error('DATABASE_URL exists but is empty, so this app is using a temporary file that is erased on '
                  'every deploy. The reference probably doesn\'t match your database\'s name: edit the variable, '
                  'type ${{ and pick your Postgres service from the suggestions, then click Deploy.')
     else:
-        st.error('⚠ DATABASE_URL is not set, so this app is using a temporary file that is erased on every deploy. '
+        st.error('DATABASE_URL is not set, so this app is using a temporary file that is erased on every deploy. '
                  'In Railway, add the variable DATABASE_URL = ${{Postgres.DATABASE_URL}} and click Deploy '
                  'on the "Apply changes" banner.')
 
 STAFF = 'staff' in st.query_params
-st.markdown(f'<p class="main-header">🏆 UKI Trial {"Staff Portal" if STAFF else "Center"}</p>', unsafe_allow_html=True)
+st.markdown(f'<p class="main-header">UKI Trial {"Staff Portal" if STAFF else "Center"}</p>', unsafe_allow_html=True)
 
 
 # --- 3. HELPERS ---
@@ -219,29 +220,29 @@ def dogs_ahead(class_df: pd.DataFrame, run_id: int) -> str:
     idx = next(i for i, r in enumerate(rows) if int(r['id']) == run_id)
     me = rows[idx]
     if me['status'] == 'In Ring':
-        return '🟡 In the ring now!'
+        return 'In the ring now'
     if me['status'] == 'Run Completed':
-        return '✅ Done'
+        return 'Done'
     if me['status'] == 'Scratch':
         return ''
     _, _, started, _ = class_progress(class_df)
     if not started:
         return f'#{idx + 1} of {len(rows)} · class not started'
     ahead = sum(1 for r in rows[:idx] if r['status'] not in FINISHED)
-    return "🔔 You're next!" if ahead == 0 else f'🏃 {ahead} dog{"s" if ahead != 1 else ""} ahead of you'
+    return "You're next" if ahead == 0 else f'{ahead} dog{"s" if ahead != 1 else ""} ahead of you'
 
 
 def now_strip_html(class_df: pd.DataFrame) -> str:
     in_ring, on_deck, started, complete = class_progress(class_df)
     if complete:
-        return '<div class="ro-strip">✅ <b>Class complete</b></div>'
+        return '<div class="ro-strip"><b>Class complete</b></div>'
     deck = ', '.join(esc(r['dog_name']) for r in on_deck) or '—'
     if in_ring:
-        return (f'<div class="ro-strip">🟡 <b>Now running:</b> {esc(in_ring["dog_name"])} '
+        return (f'<div class="ro-strip"><b>Now running:</b> {esc(in_ring["dog_name"])} '
                 f'<span class="ro-sub">({esc(in_ring["handler_name"])})</span><br>'
-                f'⏭️ <b>On deck:</b> {deck}</div>')
+                f'<b>On deck:</b> {deck}</div>')
     label = 'Up next' if started else 'Not started yet · First up'
-    return f'<div class="ro-strip">⏭️ <b>{label}:</b> {deck}</div>'
+    return f'<div class="ro-strip"><b>{label}:</b> {deck}</div>'
 
 
 # --- 4. DAY SELECTION ---
@@ -328,7 +329,7 @@ def render_formatted_results(data):
         for height_num in sorted(ct_df['height_num'].unique()):
             height_rows = ct_df[ct_df['height_num'] == height_num]
             height_label = height_rows.iloc[0]['height']
-            st.markdown(f'<div class="height-header">📏 {height_label}" Height</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="height-header">{height_label}" Height</div>', unsafe_allow_html=True)
 
             rows = sorted(height_rows.to_dict('records'), key=_results_sort_key)
             display_rows = []
@@ -345,7 +346,7 @@ def render_formatted_results(data):
                     "YPS": _clean_val(r.get('yps')),
                     "Time Faults": _clean_val(r.get('timefaults')),
                     "Pts": _clean_val(r.get('level_points')),
-                    "Q": "✅ Q" if qualify_val == 'Y' else "",
+                    "Q": "Q" if qualify_val == 'Y' else "",
                 })
 
             disp_df = pd.DataFrame(display_rows)
@@ -391,7 +392,7 @@ def render_checkin():
         return
 
     top_l, top_r = st.columns([2.6, 1], vertical_alignment="center")
-    top_l.subheader(f"Hi, {user_data.iloc[0]['first_name'] or user_data.iloc[0]['handler_name']}! 👋")
+    top_l.subheader(f"Hi, {user_data.iloc[0]['first_name'] or user_data.iloc[0]['handler_name']}")
     top_r.button("Not me", on_click=set_handler, args=('',), use_container_width=True)
     st.caption("Tap **Checked in** for each run (tap again to undo). Bookmark this page to come straight back.")
 
@@ -399,7 +400,7 @@ def render_checkin():
     for dog in user_data['dog_name'].unique():
         dog_rows = user_data[user_data['dog_name'] == dog]  # already in running order
         with st.container(border=True):
-            st.markdown(f"### 🐶 {esc(dog)}")
+            st.markdown(f"### {esc(dog)}")
             open_ids = [int(i) for i in dog_rows.loc[dog_rows['status'] == 'Not Checked In', 'id']]
             if len(open_ids) > 1:
                 st.button(f"Check in all {len(open_ids)} remaining runs", key=f"btn_all_{day}_{dog}",
@@ -415,7 +416,7 @@ def render_checkin():
                     continue
                 b1, b2, b3 = st.columns([1, 1, 0.45])
                 checked = status == 'Checked In'
-                b1.button("✅ Checked in", key=f"ci_{run_id}", type="primary" if checked else "secondary",
+                b1.button("Checked in", key=f"ci_{run_id}", type="primary" if checked else "secondary",
                           on_click=db.set_status, args=(ENGINE, run_id, 'Not Checked In' if checked else 'Checked In'),
                           use_container_width=True)
                 scratched = status == 'Scratch'
@@ -439,7 +440,7 @@ def running_order_html(class_df: pd.DataFrame, handler: str) -> str:
         cls = ' '.join(c for c, on in (('mine', mine), ('inring', r['status'] == 'In Ring'),
                                         ('done', r['status'] == 'Run Completed'),
                                         ('scratch', r['status'] == 'Scratch')) if on)
-        star = '⭐ ' if mine else ''
+        star = '<span class="you">You</span> ' if mine else ''
         parts.append(
             f'<div class="ro-row {cls}"><span class="ro-num">{i}</span>'
             f'<div><div class="ro-dog">{star}{esc(r["dog_name"])}</div>'
@@ -456,7 +457,7 @@ def render_order():
 
     course_map = db.latest_course_map(ENGINE, day, sel_c)
     if course_map:
-        with st.expander("🗺️ Course map"):
+        with st.expander("Course map"):
             st.image(course_map, use_container_width=True)
 
     @st.fragment(run_every=10)
@@ -469,7 +470,7 @@ def render_order():
         for _, mine in r_df[r_df['handler_number'] == handler_num].iterrows() if handler_num else []:
             note = dogs_ahead(r_df, int(mine['id']))
             if note:
-                st.markdown(f'<div class="ro-mine">🐶 {esc(mine["dog_name"])} — {esc(note)}</div>',
+                st.markdown(f'<div class="ro-mine">{esc(mine["dog_name"])}: {esc(note)}</div>',
                             unsafe_allow_html=True)
         st.markdown(running_order_html(r_df, handler_num), unsafe_allow_html=True)
         st.caption(f"Updates automatically • {time.strftime('%-I:%M:%S %p')}")
@@ -492,7 +493,7 @@ def render_results():
 
 # --- TAB: DASHBOARD ---
 def render_dash():
-    if st.button("🔄 Refresh", key="dash_refresh"):
+    if st.button("Refresh", key="dash_refresh"):
         st.rerun()
     if df.empty:
         st.info("No running order loaded for this day.")
@@ -524,14 +525,14 @@ CARD_KIND = {'In Ring': 'ring', 'Checked In': 'in', 'NFC': 'in', 'Conflict': 'in
 
 
 def render_gate():
-    st.header("🚧 Gate Steward")
+    st.header("Gate Steward")
     if not (st.session_state.get('unlocked_admin') or pin_unlocked('gate', 'GATE_PIN', 'Gate PIN')):
         return
     if df.empty:
         st.info("No running order loaded for this day.")
         return
 
-    with st.expander("⏱️ Conflict Timer (optional)", expanded=False):
+    with st.expander("Conflict timer (optional)", expanded=False):
         if 'gate_timer_minutes' not in st.session_state:
             st.session_state.gate_timer_minutes = 6
         if 'gate_timer_end' not in st.session_state:
@@ -541,11 +542,11 @@ def render_gate():
         with t_cols[0]:
             st.number_input("Minutes:", min_value=1, max_value=60, step=1, key='gate_timer_minutes')
         with t_cols[1]:
-            if st.button("▶️ Start", use_container_width=True, key="gate_timer_start"):
+            if st.button("Start", use_container_width=True, key="gate_timer_start"):
                 st.session_state.gate_timer_end = time.time() + st.session_state.gate_timer_minutes * 60
                 st.rerun()
         with t_cols[2]:
-            if st.button("⏹️ Reset", use_container_width=True, key="gate_timer_reset"):
+            if st.button("Reset", use_container_width=True, key="gate_timer_reset"):
                 st.session_state.gate_timer_end = None
                 st.rerun()
 
@@ -558,7 +559,7 @@ def render_gate():
                 remaining = end_time - time.time()
                 if remaining <= 0:
                     st.markdown(
-                        '<div style="font-size: 32px; font-weight: bold; color: #dc3545; text-align: center;">⏰ TIME\'S UP</div>',
+                        '<div style="font-size: 32px; font-weight: bold; color: #dc3545; text-align: center;">TIME\'S UP</div>',
                         unsafe_allow_html=True
                     )
                 else:
@@ -625,7 +626,7 @@ def render_gate():
                     a_color = "#DC2626" if aframe == "A-Frame: Down" else "#198754"
                     a_bg = "#FEE2E2" if aframe == "A-Frame: Down" else "#D1FAE5"
                     st.markdown(f'<div class="gate-banner" style="background:{a_bg}; border:2px dashed {a_color}; '
-                                f'color:{a_color};">🔺 SET {aframe.upper()}</div>', unsafe_allow_html=True)
+                                f'color:{a_color};">SET {aframe.upper()}</div>', unsafe_allow_html=True)
                 prev_aframe = aframe
 
             kind = CARD_KIND.get(status, 'notin')
@@ -637,7 +638,7 @@ def render_gate():
                     unsafe_allow_html=True)
 
                 if is_in_ring:
-                    if st.button("FINISH ✅", key=f"finish_{pk_val}", type="primary", use_container_width=True):
+                    if st.button("FINISH", key=f"finish_{pk_val}", type="primary", use_container_width=True):
                         act(db.set_status, pk_val, "Run Completed")
                 elif is_done:
                     if st.button("UNDO FINISH", key=f"undo_{pk_val}", use_container_width=True):
@@ -665,17 +666,17 @@ def render_gate():
 
 # --- TAB: ADMIN ---
 def render_admin():
-    st.header("🔒 Secretary Admin")
+    st.header("Secretary Admin")
     if pin_unlocked('admin', 'ADMIN_PIN', 'Admin PIN'):
         section = st.radio(
-            "Section", ["📤 Upload run order", "↕️ Reorder", "➕ Late entry", "🗺️ Course maps",
-                        "🏆 Publish results", "♻️ Reset"],
+            "Section", ["Upload run order", "Reorder", "Late entry", "Course maps",
+                        "Publish results", "Reset statuses"],
             horizontal=True, label_visibility="collapsed", key="admin_section",
         )
         st.divider()
 
         # ── Upload run order ──
-        if section == "📤 Upload run order":
+        if section == "Upload run order":
             st.caption("Upload the CSV exported from the run order app. It replaces the runs for the day(s) in the "
                        "file only. Anyone already checked in, scratched, or finished keeps that status "
                        "(matched by class + dog number).")
@@ -700,7 +701,7 @@ def render_admin():
                     if pv['statuses_lost']:
                         st.warning("These runs have a status but are **not in the new file**, so they'll be removed:\n\n"
                                    + "\n".join(f"- {x}" for x in pv['statuses_lost']))
-                    if st.button(f"✅ Load this run order for {days_txt}", type="primary"):
+                    if st.button(f"Load this run order for {days_txt}", type="primary"):
                         db.import_runs(ENGINE, new_runs)
                         st.session_state.upload_ver = up_ver + 1
                         st.session_state.pending_day = pv['dates'][0]
@@ -717,7 +718,7 @@ def render_admin():
                         st.rerun()
 
         # ── Reorder ──
-        elif section == "↕️ Reorder":
+        elif section == "Reorder":
             if df.empty:
                 st.info("Upload a run order first.")
             else:
@@ -752,7 +753,7 @@ def render_admin():
                         new_labels.insert(int(mv_pos) - 1, mv_dog)
                         changed = save_now = True
 
-                if st.button("💾 Save order", type="primary" if changed else "secondary", disabled=not changed) \
+                if st.button("Save order", type="primary" if changed else "secondary", disabled=not changed) \
                         or save_now:
                     try:
                         db.save_class_order(ENGINE, day, re_cls, [label_to_id[x] for x in new_labels])
@@ -763,14 +764,14 @@ def render_admin():
                         st.error(str(e))
 
         # ── Late entry ──
-        elif section == "➕ Late entry":
+        elif section == "Late entry":
             if df.empty:
                 st.info("Upload a run order first.")
             else:
                 le_cls = st.selectbox("Class", sorted_classes, key="le_cls")
                 dogs = (df.drop_duplicates('dog_number')
                         .sort_values(['handler_name', 'dog_name'], key=lambda s: s.str.lower()))
-                dog_opts = ['➕ New dog (type the details)'] + [f"{r.dog_name} — {r.handler_name} (#{r.dog_number})"
+                dog_opts = ['New dog (type the details)'] + [f"{r.dog_name} — {r.handler_name} (#{r.dog_number})"
                                                                for r in dogs.itertuples()]
                 pick = st.selectbox("Dog", dog_opts, key="le_dog",
                                     help="Pick a dog that's already running today to fill in their details.")
@@ -813,7 +814,7 @@ def render_admin():
                             st.rerun()
 
         # ── Course maps ──
-        elif section == "🗺️ Course maps":
+        elif section == "Course maps":
             if df.empty:
                 st.info("Upload a run order first.")
             else:
@@ -824,7 +825,7 @@ def render_admin():
                     st.image(current, width=300)
                 map_ver = st.session_state.get('map_ver', 0)
                 uploaded_file = st.file_uploader("Choose Image", type=['jpg', 'png', 'jpeg'], key=f"map_file_{map_ver}")
-                if uploaded_file and st.button("🚀 Upload Map", type="primary"):
+                if uploaded_file and st.button("Upload map", type="primary"):
                     db.save_course_map(ENGINE, day, upload_class, uploaded_file.name,
                                        uploaded_file.type or 'image/png', uploaded_file.getvalue())
                     st.session_state.map_ver = map_ver + 1
@@ -834,7 +835,7 @@ def render_admin():
                 st.caption("Maps uploaded: " + (', '.join(c for c in sorted_classes if c in have) or 'none yet'))
 
         # ── Publish results ──
-        elif section == "🏆 Publish results":
+        elif section == "Publish results":
             if not sorted_classes:
                 st.info("Upload a run order first.")
             else:
@@ -845,7 +846,7 @@ def render_admin():
                     placeholder='[ { "class_type": "Regular", "height": "8", "uki_number": "...", "uki_dog_number": "...", ... } ]'
                 )
 
-                if st.button("👀 Preview Formatted Results", use_container_width=True):
+                if st.button("Preview results", use_container_width=True):
                     try:
                         parsed = json.loads(json_text)
                         if not isinstance(parsed, list):
@@ -861,14 +862,14 @@ def render_admin():
                     st.subheader(f"Preview — {sel_input_class}")
                     render_formatted_results(st.session_state.res_parsed_preview)
 
-                    if st.button("✅ Publish These Results", type="primary", use_container_width=True):
+                    if st.button("Publish results", type="primary", use_container_width=True):
                         db.publish_results(ENGINE, day, sel_input_class, st.session_state.res_parsed_preview)
                         del st.session_state['res_parsed_preview']
                         st.session_state.admin_flash = f"Results for '{sel_input_class}' are now live on the Results tab!"
                         st.rerun()
 
         # ── Reset ──
-        elif section == "♻️ Reset":
+        elif section == "Reset statuses":
             if day:
                 st.caption(f"Sets every run on {_day_label(day)} back to Not Checked In, except scratches.")
                 confirm = st.checkbox("Yes, reset all statuses for this day", key="reset_confirm")
@@ -882,10 +883,10 @@ def render_admin():
 
 
 # --- 5. TABS ---
-TABS = [("📲 Check-in", render_checkin, 'checkin'), ("🏃 Order", render_order, 'order'),
-        ("🏆 Results", render_results, 'results')]
+TABS = [("Check-in", render_checkin, 'checkin'), ("Running order", render_order, 'order'),
+        ("Results", render_results, 'results')]
 if STAFF:
-    TABS += [("🚧 Gate", render_gate, 'gate'), ("📊 Dash", render_dash, 'dash'), ("🔒 Admin", render_admin, 'admin')]
+    TABS += [("Gate", render_gate, 'gate'), ("Dashboard", render_dash, 'dash'), ("Admin", render_admin, 'admin')]
 
 for tab, (_, render, key) in zip(st.tabs([t[0] for t in TABS]), TABS):
     with tab:
