@@ -3,11 +3,14 @@
 Check-in, running order, gate steward, admin and results for UKI trials.
 All data lives in a Railway **Postgres** database, so it doesn't use Supabase.
 
-| Who | What they can do | PIN |
-|---|---|---|
-| Exhibitors | Check in, see the running order and results | none |
-| Gate stewards | Gate tab: check in, start/finish runs, scratch | `GATE_PIN` |
-| You (secretary) | Everything above, plus Admin: upload run order, reorder, late entries, course maps, publish results | `ADMIN_PIN` |
+| Who | Link | What they can do | PIN |
+|---|---|---|---|
+| Exhibitors | your app's address | Check in, see the running order and results | none |
+| Gate stewards | address + `?staff` | Also the Gate tab: check in, start/finish runs, scratch | `GATE_PIN` |
+| You (secretary) | address + `?staff` | Also Dash and Admin: upload run order, reorder, late entries, course maps, publish results | `ADMIN_PIN` |
+
+Example: if the app is at `https://luds-checkin.up.railway.app`, staff use `https://luds-checkin.up.railway.app/?staff`.
+Exhibitors who enter their handler number get a link ending in `?h=12345`. Bookmarking it takes them straight to their dogs.
 
 ---
 

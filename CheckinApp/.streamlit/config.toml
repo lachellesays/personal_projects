@@ -1,0 +1,13 @@
+# Locked to a light theme: easier to read outdoors, and consistent on every phone.
+[theme]
+base = "light"
+primaryColor = "#1E3A8A"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F1F5F9"
+textColor = "#0F172A"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false

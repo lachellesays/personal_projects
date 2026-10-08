@@ -1,11 +1,15 @@
 """
 app.py — UKI trial check-in, running order, gate steward, admin and results.
 
+Exhibitors use the plain link (Check-in, Order, Results).
+Staff add ?staff to the link to also get Gate, Dash and Admin (each still PIN-protected).
+
 Run locally:   streamlit run app.py
 Environment:   DATABASE_URL (Railway Postgres; SQLite file if unset), GATE_PIN, ADMIN_PIN, TRIAL_TZ (optional)
 """
 
 import hmac
+import html
 import json
 import os
 import re
@@ -34,41 +38,78 @@ def load_dotenv():
 
 load_dotenv()
 
-# --- 1. PAGE CONFIG & UI STYLING ---
+# --- 1. PAGE CONFIG & STYLING ---
 st.set_page_config(page_title="Agility Trial Center", page_icon="🐾", layout="wide")
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 5rem; padding-bottom: 2rem; }
-    .main-header { font-size: 2.2rem; font-weight: 800; color: #1E3A8A; }
+    .block-container { padding-top: 2.5rem; padding-bottom: 3rem; max-width: 900px; }
+    .main-header { font-size: clamp(1.4rem, 5vw, 2rem); font-weight: 800; color: #1E3A8A; margin: 0 0 .25rem 0; }
 
-    /* Global Button Styling */
-    .stButton > button {
-        width: 100% !important;
-        height: 60px !important;
-        font-size: 18px !important;
-        font-weight: bold !important;
-        border-radius: 12px !important;
+    /* Keep button rows side by side on phones instead of stacking */
+    .st-key-checkin [data-testid="stHorizontalBlock"], .st-key-gate [data-testid="stHorizontalBlock"],
+    .st-key-dash [data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important; gap: .5rem !important;
     }
+    .st-key-checkin [data-testid="stColumn"], .st-key-gate [data-testid="stColumn"],
+    .st-key-dash [data-testid="stColumn"] { min-width: 0 !important; }
 
-    /* Column layout for mobile */
-    [data-testid="column"] {
-        min-width: 30% !important;
-        flex: 1 1 30% !important;
-    }
+    /* Big touch targets only where they matter */
+    .st-key-checkin .stButton button { min-height: 48px; font-weight: 700; }
+    .st-key-gate .stButton button { min-height: 56px; font-size: 17px; font-weight: 800; }
 
-    .height-header {
-        background-color: rgba(30, 58, 138, 0.1);
-        padding: 10px;
-        border-radius: 8px;
-        border-left: 5px solid #1E3A8A;
-        margin-top: 20px;
-        font-weight: bold;
+    /* Class chips: one row that scrolls sideways instead of wrapping onto many lines */
+    .st-key-ro_sel [data-testid="stButtonGroup"] > div, .st-key-g_cls [data-testid="stButtonGroup"] > div,
+    .st-key-res_view_class_sel [data-testid="stButtonGroup"] > div {
+        flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: thin; padding-bottom: 6px;
     }
+    [data-testid="stButtonGroup"] button { flex-shrink: 0; }
+    .st-key-checkin [data-testid="stPopover"] button { min-height: 48px; }
+
+    /* Running order list */
+    .ro-strip { background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 10px; padding: 10px 12px; margin: 6px 0 10px; }
+    .ro-strip b { color: #1E3A8A; }
+    .ro-mine { background: #E0F2FE; border-left: 5px solid #0284C7; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-weight: 600; }
+    .ro-ht { font-size: 13px; font-weight: 800; color: #475569; letter-spacing: .03em; margin: 12px 0 4px; text-transform: uppercase; }
+    .ro-row { display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; gap: 8px;
+              padding: 9px 10px; border-bottom: 1px solid #E2E8F0; }
+    .ro-num { color: #64748B; font-weight: 700; text-align: right; }
+    .ro-dog { font-size: 17px; font-weight: 700; color: #0F172A; line-height: 1.2; }
+    .ro-sub { font-size: 13px; color: #64748B; }
+    .ro-row.mine { background: #E0F2FE; }
+    .ro-row.inring { background: #FEF3C7; border-left: 5px solid #F59E0B; }
+    .ro-row.done .ro-dog, .ro-row.done .ro-sub, .ro-row.done .ro-num { color: #94A3B8; font-style: italic; }
+    .ro-row.scratch .ro-dog { text-decoration: line-through; color: #94A3B8; }
+
+    .pill { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+    .pill-notin { background: #F1F5F9; color: #475569; }
+    .pill-in    { background: #DCFCE7; color: #166534; }
+    .pill-ring  { background: #F59E0B; color: #FFFFFF; }
+    .pill-done  { background: #E2E8F0; color: #64748B; }
+    .pill-scr   { background: #FEE2E2; color: #B91C1C; }
+    .pill-other { background: #FEF3C7; color: #92400E; }
+
+    /* Gate cards: colored left border by status */
+    [class*="st-key-card-"] { background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 10px solid #94A3B8;
+                              border-radius: 10px; padding: 10px 12px; gap: .6rem; box-sizing: border-box; }
+    [class*="st-key-card-"] > *, [class*="st-key-card-"] .stButton { max-width: 100% !important; }
+    [class*="st-key-card-"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
+    [class*="st-key-card-ring-"]  { border-left-color: #F59E0B; background: #FFFBEB; }
+    [class*="st-key-card-in-"]    { border-left-color: #16A34A; }
+    [class*="st-key-card-scr-"]   { border-left-color: #DC2626; }
+    [class*="st-key-card-done-"]  { opacity: .6; }
+    .card-title { font-size: 19px; font-weight: 800; color: #0F172A; }
+    .card-sub { font-size: 14px; color: #475569; }
+    /* "Now running" strip stays pinned while the steward scrolls the class */
+    [data-testid="stVerticalBlockBorderWrapper"]:has(> div > .st-key-gate-strip) {
+        position: sticky; top: 3rem; z-index: 50; background: #FFFFFF; padding-top: 4px;
+    }
+    .gate-banner { text-align: center; margin: 10px 0; padding: 8px; border-radius: 8px; font-weight: 800; font-size: 15px; }
+
+    .height-header { background-color: rgba(30, 58, 138, 0.08); padding: 8px 10px; border-radius: 8px;
+                     border-left: 5px solid #1E3A8A; margin-top: 16px; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
-
-st.markdown('<p class="main-header">🏆 UKI Trial Secretary Portal</p>', unsafe_allow_html=True)
 
 
 # --- 2. DATABASE ---
@@ -79,11 +120,20 @@ def engine():
 
 ENGINE = engine()
 if os.environ.get('RAILWAY_ENVIRONMENT_NAME') and ENGINE.dialect.name == 'sqlite':
-    st.error('⚠ DATABASE_URL is not set, so this app is using a temporary file that is erased on every deploy. '
-             'In Railway, add the variable DATABASE_URL = ${{Postgres.DATABASE_URL}}.')
+    if 'DATABASE_URL' in os.environ:
+        st.error('⚠ DATABASE_URL exists but is empty, so this app is using a temporary file that is erased on '
+                 'every deploy. The reference probably doesn\'t match your database\'s name: edit the variable, '
+                 'type ${{ and pick your Postgres service from the suggestions, then click Deploy.')
+    else:
+        st.error('⚠ DATABASE_URL is not set, so this app is using a temporary file that is erased on every deploy. '
+                 'In Railway, add the variable DATABASE_URL = ${{Postgres.DATABASE_URL}} and click Deploy '
+                 'on the "Apply changes" banner.')
+
+STAFF = 'staff' in st.query_params
+st.markdown(f'<p class="main-header">🏆 UKI Trial {"Staff Portal" if STAFF else "Center"}</p>', unsafe_allow_html=True)
 
 
-# --- 3. PINS ---
+# --- 3. HELPERS ---
 def pin_unlocked(kind: str, env_var: str, label: str) -> bool:
     """Show a PIN form until the right PIN is entered; remember it for this browser session."""
     if st.session_state.get(f'unlocked_{kind}'):
@@ -100,6 +150,98 @@ def pin_unlocked(kind: str, env_var: str, label: str) -> bool:
                 st.rerun()
             st.error('Incorrect PIN.')
     return False
+
+
+def sticky_choice(key: str, options: list, default=None):
+    """Keep a pills/segmented selection valid; clicking the selected chip again won't clear it."""
+    if not options:
+        st.session_state[key] = None
+        return
+    if st.session_state.get(key) not in options:
+        last = st.session_state.get(f'{key}__last')
+        st.session_state[key] = last if last in options else (default if default in options else options[0])
+    st.session_state[f'{key}__last'] = st.session_state[key]
+
+
+def current_class():
+    """The class running now (someone In Ring), else the first one not finished."""
+    if df.empty:
+        return None
+    for status_test in (lambda s: (s == 'In Ring').any(), lambda s: (~s.isin(FINISHED)).any()):
+        for cls, g in df.groupby('class_name', sort=False):
+            if status_test(g['status']):
+                return cls
+    return sorted_classes[0] if sorted_classes else None
+
+
+def class_picker(state_key: str, label: str = "Class"):
+    """Compact row of class chips, starting on the class that's running now. Returns the selection."""
+    sticky_choice(state_key, sorted_classes, current_class())
+    st.pills(label, sorted_classes, key=state_key, label_visibility="collapsed")
+    return st.session_state[state_key]
+
+
+def run_label(r) -> str:
+    return f'{r["height"]}" {r["class_type"]} · {r["dog_name"]} — {r["handler_name"]}'
+
+
+def esc(v) -> str:
+    return html.escape(str(v if v is not None else ''))
+
+
+PILL = {'Not Checked In': ('pill-notin', 'Not checked in'), 'Checked In': ('pill-in', 'Checked in'),
+        'In Ring': ('pill-ring', 'In ring'), 'Run Completed': ('pill-done', 'Done'),
+        'Scratch': ('pill-scr', 'Scratched'), 'Conflict': ('pill-other', 'Conflict'), 'NFC': ('pill-other', 'NFC')}
+
+
+def pill(status: str) -> str:
+    cls, text = PILL.get(status, ('pill-other', status))
+    return f'<span class="pill {cls}">{esc(text)}</span>'
+
+
+FINISHED = ('Run Completed', 'Scratch')
+
+
+def class_progress(class_df: pd.DataFrame):
+    """(in_ring_row, on_deck_rows, started, complete) for one class, in running order."""
+    rows = class_df.to_dict('records')
+    ring_idx = next((i for i, r in enumerate(rows) if r['status'] == 'In Ring'), None)
+    started = ring_idx is not None or any(r['status'] == 'Run Completed' for r in rows)
+    start = ring_idx + 1 if ring_idx is not None else 0
+    on_deck = [r for r in rows[start:] if r['status'] not in FINISHED + ('In Ring',)][:2]
+    complete = bool(rows) and all(r['status'] in FINISHED for r in rows)
+    return (rows[ring_idx] if ring_idx is not None else None), on_deck, started, complete
+
+
+def dogs_ahead(class_df: pd.DataFrame, run_id: int) -> str:
+    """Short 'where am I' note for one run."""
+    rows = class_df.to_dict('records')
+    idx = next(i for i, r in enumerate(rows) if int(r['id']) == run_id)
+    me = rows[idx]
+    if me['status'] == 'In Ring':
+        return '🟡 In the ring now!'
+    if me['status'] == 'Run Completed':
+        return '✅ Done'
+    if me['status'] == 'Scratch':
+        return ''
+    _, _, started, _ = class_progress(class_df)
+    if not started:
+        return f'#{idx + 1} of {len(rows)} · class not started'
+    ahead = sum(1 for r in rows[:idx] if r['status'] not in FINISHED)
+    return "🔔 You're next!" if ahead == 0 else f'🏃 {ahead} dog{"s" if ahead != 1 else ""} ahead of you'
+
+
+def now_strip_html(class_df: pd.DataFrame) -> str:
+    in_ring, on_deck, started, complete = class_progress(class_df)
+    if complete:
+        return '<div class="ro-strip">✅ <b>Class complete</b></div>'
+    deck = ', '.join(esc(r['dog_name']) for r in on_deck) or '—'
+    if in_ring:
+        return (f'<div class="ro-strip">🟡 <b>Now running:</b> {esc(in_ring["dog_name"])} '
+                f'<span class="ro-sub">({esc(in_ring["handler_name"])})</span><br>'
+                f'⏭️ <b>On deck:</b> {deck}</div>')
+    label = 'Up next' if started else 'Not started yet · First up'
+    return f'<div class="ro-strip">⏭️ <b>{label}:</b> {deck}</div>'
 
 
 # --- 4. DAY SELECTION ---
@@ -119,13 +261,16 @@ def _day_label(d: date) -> str:
     return d.strftime('%A %-m/%-d/%Y')
 
 
+def _day_short(d: date) -> str:
+    return d.strftime('%a %-m/%-d')
+
+
 if dates:
     if 'pending_day' in st.session_state:  # set by the upload page; applied before the widget exists
         st.session_state.day = st.session_state.pop('pending_day')
-    if st.session_state.get('day') not in dates:
-        st.session_state.day = _default_day(dates)
+    sticky_choice('day', dates, _default_day(dates))
     if len(dates) > 1:
-        st.radio('Trial day', dates, format_func=_day_label, key='day', horizontal=True)
+        st.segmented_control('Trial day', dates, format_func=_day_short, key='day', label_visibility='collapsed')
     day = st.session_state.day
 else:
     day = None
@@ -133,28 +278,9 @@ else:
 df = db.runs_for_day(ENGINE, day) if day else pd.DataFrame(columns=[c.name for c in db.runs.columns])
 sorted_classes = db.class_names(ENGINE, day) if day else []
 
+# Handler number survives refreshes and bookmarks via ?h=12345
 if 'active_handler' not in st.session_state:
-    st.session_state.active_handler = ""
-
-
-def class_picker(state_key: str, prefix: str):
-    """Two-column grid of class buttons (no keyboard needed on mobile). Returns the selected class."""
-    if st.session_state.get(state_key) not in sorted_classes:
-        st.session_state[state_key] = sorted_classes[0] if sorted_classes else None
-    st.markdown("**Select Class:**")
-    cols = st.columns(2)
-    half = (len(sorted_classes) + 1) // 2
-    for i, cls in enumerate(sorted_classes):
-        with cols[0 if i < half else 1]:
-            if st.button(cls, key=f"{prefix}_btn_{i}", use_container_width=True,
-                         type="primary" if st.session_state[state_key] == cls else "secondary"):
-                st.session_state[state_key] = cls
-                st.rerun()
-    return st.session_state[state_key]
-
-
-def run_label(r) -> str:
-    return f'{r["height"]}" {r["class_type"]} · {r["dog_name"]} — {r["handler_name"]}'
+    st.session_state.active_handler = st.query_params.get('h', '')
 
 
 # --- RESULTS HELPERS ---
@@ -233,296 +359,312 @@ def render_formatted_results(data):
             st.dataframe(disp_df.style.apply(_style_results_row, axis=1), use_container_width=True, hide_index=True)
 
 
-# --- 5. TABS ---
-tab1, tab2, tab3, tab5, tab6, tab7 = st.tabs([
-    "📲 Check-in", "📊 Dash", "🏃 Order", "🚧 Gate", "🔒 Admin", "🏆 Results"
-])
+# --- TAB: CHECK-IN ---
+def set_handler(num: str):
+    num = re.sub(r'^[Hh]', '', (num or '').strip())
+    st.session_state.active_handler = num
+    if num:
+        st.query_params['h'] = num
+    else:
+        st.query_params.pop('h', None)
 
-# --- TAB 1: INDIVIDUAL CHECK-IN ---
-with tab1:
+
+def render_checkin():
     if df.empty:
         st.info("The running order hasn't been posted yet. Check back soon!")
-    with st.form("checkin_form"):
-        handler_input_raw = st.text_input("Enter UKI Handler Number:", placeholder="e.g. 12345", key="search_box_input")
-        submitted = st.form_submit_button("Submit", use_container_width=True, type="primary")
+        return
 
-    if submitted:
-        st.session_state.active_handler = re.sub(r'^[Hh]', '', handler_input_raw.strip())
+    handler = st.session_state.active_handler
+    if not handler:
+        with st.form("checkin_form"):
+            num = st.text_input("Enter your UKI handler number:", placeholder="e.g. 12345", key="search_box_input")
+            if st.form_submit_button("Find my dogs", use_container_width=True, type="primary"):
+                set_handler(num)
+                st.rerun()
+        return
 
-    handler_input = st.session_state.get('active_handler', '')
-    if handler_input and not df.empty:
-        user_data = df[df['handler_number'] == handler_input]
+    user_data = df[df['handler_number'] == handler]
+    if user_data.empty:
+        st.warning(f"No runs found for handler **{esc(handler)}** on {_day_label(day)}. If you're entered for this "
+                   "date and think this is a mistake, please reach out to the trial secretary!")
+        st.button("Try a different number", on_click=set_handler, args=('',))
+        return
 
-        if not user_data.empty:
-            st.subheader(f"Welcome, {user_data.iloc[0]['handler_name']}")
+    top_l, top_r = st.columns([2.6, 1], vertical_alignment="center")
+    top_l.subheader(f"Hi, {user_data.iloc[0]['first_name'] or user_data.iloc[0]['handler_name']}! 👋")
+    top_r.button("Not me", on_click=set_handler, args=('',), use_container_width=True)
+    st.caption("Tap **Checked in** for each run (tap again to undo). Bookmark this page to come straight back.")
 
-            for dog in user_data['dog_name'].unique():
-                # This dog's runs, in the trial's running order (df is already sorted that way)
-                dog_rows = user_data[user_data['dog_name'] == dog]
+    by_class = {c: g for c, g in df.groupby('class_name', sort=False)}
+    for dog in user_data['dog_name'].unique():
+        dog_rows = user_data[user_data['dog_name'] == dog]  # already in running order
+        with st.container(border=True):
+            st.markdown(f"### 🐶 {esc(dog)}")
+            open_ids = [int(i) for i in dog_rows.loc[dog_rows['status'] == 'Not Checked In', 'id']]
+            if len(open_ids) > 1:
+                st.button(f"Check in all {len(open_ids)} remaining runs", key=f"btn_all_{day}_{dog}",
+                          on_click=db.set_status, args=(ENGINE, open_ids, "Checked In"), use_container_width=True)
 
-                with st.container(border=True):
-                    st.markdown(f"### 🐶 {dog}")
+            for _, row in dog_rows.iterrows():
+                run_id, status = int(row['id']), row['status']
+                note = dogs_ahead(by_class[row['class_name']], run_id)
+                st.markdown(f"**{esc(row['class_name'])}** &nbsp;{pill(status)}"
+                            + (f"<br><span class='ro-sub'>{esc(note)}</span>" if note else ''),
+                            unsafe_allow_html=True)
+                if status in ('In Ring', 'Run Completed'):
+                    continue
+                b1, b2, b3 = st.columns([1, 1, 0.45])
+                checked = status == 'Checked In'
+                b1.button("✅ Checked in", key=f"ci_{run_id}", type="primary" if checked else "secondary",
+                          on_click=db.set_status, args=(ENGINE, run_id, 'Not Checked In' if checked else 'Checked In'),
+                          use_container_width=True)
+                scratched = status == 'Scratch'
+                b2.button("Scratch", key=f"sc_{run_id}", type="primary" if scratched else "secondary",
+                          on_click=db.set_status, args=(ENGINE, run_id, 'Not Checked In' if scratched else 'Scratch'),
+                          use_container_width=True)
+                with b3.popover("⋯", use_container_width=True):
+                    for s in ('Conflict', 'NFC', 'Not Checked In'):
+                        st.button(s, key=f"more_{run_id}_{s}", on_click=db.set_status, args=(ENGINE, run_id, s),
+                                  type="primary" if status == s else "secondary", use_container_width=True)
 
-                    open_ids = [int(i) for i in dog_rows.loc[dog_rows['status'].isin(['Not Checked In']), 'id']]
-                    if st.button(f"Check in all runs for {dog}", key=f"btn_all_{day}_{dog}", disabled=not open_ids):
-                        db.set_status(ENGINE, open_ids, "Checked In")
-                        st.rerun()
 
-                    for _, row in dog_rows.iterrows():
-                        run_id, status = int(row['id']), row['status']
-                        c_class, c_status = st.columns([1.5, 1])
-                        with c_class:
-                            st.markdown(f"**{row['class_name']}**")
-                        with c_status:
-                            if status in db.SELF_SERVE_STATUSES:
-                                # Key includes the status so the box resets if the gate changes it
-                                key_name = f"select_{run_id}_{status}"
-                                st.selectbox(
-                                    "Status", options=db.SELF_SERVE_STATUSES,
-                                    index=db.SELF_SERVE_STATUSES.index(status), key=key_name,
-                                    on_change=lambda rid=run_id, k=key_name: db.set_status(ENGINE, rid, st.session_state[k]),
-                                    label_visibility="collapsed",
-                                )
-                            else:
-                                st.markdown(f"**{'🟡 In Ring' if status == 'In Ring' else '✅ Run Completed'}**")
-        else:
-            loaded_for = f" Data loaded for **{_day_label(day)}**." if day else ""
-            st.warning(f"Handler not found.{loaded_for} If you're entered for this date and feel like this is a mistake, please reach out to the trial secretary!")
+# --- TAB: RUNNING ORDER ---
+def running_order_html(class_df: pd.DataFrame, handler: str) -> str:
+    parts, prev_h = [], None
+    for i, r in enumerate(class_df.to_dict('records'), start=1):
+        if r['height'] != prev_h:
+            parts.append(f'<div class="ro-ht">{esc(r["height"])}"</div>')
+            prev_h = r['height']
+        mine = handler and r['handler_number'] == handler
+        cls = ' '.join(c for c, on in (('mine', mine), ('inring', r['status'] == 'In Ring'),
+                                        ('done', r['status'] == 'Run Completed'),
+                                        ('scratch', r['status'] == 'Scratch')) if on)
+        star = '⭐ ' if mine else ''
+        parts.append(
+            f'<div class="ro-row {cls}"><span class="ro-num">{i}</span>'
+            f'<div><div class="ro-dog">{star}{esc(r["dog_name"])}</div>'
+            f'<div class="ro-sub">{esc(r["handler_name"])} · {esc(r["breed"])} · {esc(r["class_type"])}</div></div>'
+            f'{pill(r["status"])}</div>')
+    return ''.join(parts)
 
-# --- TAB 2: DASHBOARD ---
-with tab2:
-    if st.button("🔄 Refresh", key="dash_refresh"):
-        st.rerun()
 
-    if not df.empty:
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Entries", len(df))
-        c2.metric("Checked In", len(df[df['status'].isin(['Checked In', 'Conflict'])]))
-        c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
-        c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
+def render_order():
+    if df.empty:
+        st.info("The running order hasn't been posted yet.")
+        return
+    sel_c = class_picker('ro_sel')
 
-        per_class = (df.assign(
-            checked_in=df['status'].isin(['Checked In', 'Conflict', 'NFC', 'In Ring', 'Run Completed']),
-            scratched=df['status'] == 'Scratch',
-            done=df['status'] == 'Run Completed',
-        ).groupby('class_name', sort=False)
-            .agg(Runs=('id', 'size'), **{'Checked in': ('checked_in', 'sum'),
-                                         'Scratched': ('scratched', 'sum'), 'Completed': ('done', 'sum')})
-            .reset_index().rename(columns={'class_name': 'Class'}))
-        st.dataframe(per_class, use_container_width=True, hide_index=True)
-
-# --- TAB 3: RUNNING ORDER (LIVE DISPLAY via Fragment) ---
-with tab3:
-    if not df.empty:
-        sel_c = class_picker('ro_sel', 'ro')
-
-        course_map = db.latest_course_map(ENGINE, day, sel_c)
-        if course_map:
+    course_map = db.latest_course_map(ENGINE, day, sel_c)
+    if course_map:
+        with st.expander("🗺️ Course map"):
             st.image(course_map, use_container_width=True)
 
-        @st.fragment(run_every=10)
-        def live_running_order_view(target_class, handler_num):
-            st.caption(f"Live Sync Active • Last Update: {time.strftime('%H:%M:%S')}")
-            r_df = db.runs_for_day(ENGINE, day, target_class)
+    @st.fragment(run_every=10)
+    def live_running_order_view(target_class, handler_num):
+        r_df = db.runs_for_day(ENGINE, day, target_class)
+        if r_df.empty:
+            st.info("No data found for this class.")
+            return
+        st.markdown(now_strip_html(r_df), unsafe_allow_html=True)
+        for _, mine in r_df[r_df['handler_number'] == handler_num].iterrows() if handler_num else []:
+            note = dogs_ahead(r_df, int(mine['id']))
+            if note:
+                st.markdown(f'<div class="ro-mine">🐶 {esc(mine["dog_name"])} — {esc(note)}</div>',
+                            unsafe_allow_html=True)
+        st.markdown(running_order_html(r_df, handler_num), unsafe_allow_html=True)
+        st.caption(f"Updates automatically • {time.strftime('%-I:%M:%S %p')}")
 
-            if not r_df.empty:
-                subset = r_df.copy()
-                subset['#'] = range(1, len(subset) + 1)
-                is_mine_col = (subset['handler_number'] == str(handler_num).strip()) & (handler_num != "")
-                subset['dog_name'] = [f"⭐ {n}" if m else n for n, m in zip(subset['dog_name'], is_mine_col)]
+    live_running_order_view(sel_c, st.session_state.active_handler)
 
-                def highlight_row(s):
-                    styles = [''] * len(s)
-                    is_mine = str(s['handler_number']).strip() == str(handler_num).strip() and handler_num != ""
-                    is_in_ring = s['status'] == 'In Ring'
-                    is_done = s['status'] == 'Run Completed'
-                    is_scratch = s['status'] == 'Scratch'
 
-                    for i in range(len(s)):
-                        if is_in_ring:
-                            styles[i] = 'background-color: #FFF59D; color: #000000; border: 2px solid #FFD600;'
-                        elif is_done:
-                            styles[i] = 'color: #A0A0A0; font-style: italic;'
-                        elif is_mine:
-                            styles[i] = 'background-color: #E3F2FD; color: #000000;'
+# --- TAB: RESULTS ---
+def render_results():
+    res_class_map = db.results_for_day(ENGINE, day) if day else {}
+    if not res_class_map:
+        st.info("No results have been posted yet. Check back after the class runs!")
+        return
+    ordered = [c for c in sorted_classes if c in res_class_map]
+    ordered += sorted(c for c in res_class_map if c not in sorted_classes)
+    sticky_choice('res_view_class_sel', ordered)
+    st.pills("Class", ordered, key="res_view_class_sel", label_visibility="collapsed")
+    render_formatted_results(res_class_map[st.session_state.res_view_class_sel])
 
-                    # Highlight ONLY the status cell's "Scratch" text in red
-                    if is_scratch:
-                        styles[list(s.index).index('status')] = 'color: #DC2626; font-weight: bold;'
-                    return styles
 
-                styled_table = subset[['#', 'height', 'handler_name', 'dog_name', 'breed', 'status', 'handler_number']].style \
-                    .apply(highlight_row, axis=1) \
-                    .set_properties(**{'font-size': '22px', 'font-weight': 'bold'})
-
-                st.dataframe(
-                    styled_table,
-                    column_order=('#', 'height', 'handler_name', 'dog_name', 'breed', 'status'),
-                    column_config={'height': 'Height', 'handler_name': 'Handler', 'dog_name': 'Dog',
-                                   'breed': 'Breed', 'status': 'Status'},
-                    use_container_width=True,
-                    hide_index=True,
-                    key=f"ro_table_{target_class}"
-                )
-            else:
-                st.info("No data found for this class.")
-
-        live_running_order_view(sel_c, st.session_state.get('active_handler', ""))
-    else:
-        st.info("The running order hasn't been posted yet.")
-
-# --- TAB 5: GATE STEWARD (LIVE DISPLAY via Fragment) ---
-with tab5:
-    st.header("🚧 Gate Steward")
-    gate_ok = st.session_state.get('unlocked_admin') or pin_unlocked('gate', 'GATE_PIN', 'Gate PIN')
-
-    if gate_ok and df.empty:
+# --- TAB: DASHBOARD ---
+def render_dash():
+    if st.button("🔄 Refresh", key="dash_refresh"):
+        st.rerun()
+    if df.empty:
         st.info("No running order loaded for this day.")
-    elif gate_ok:
-        with st.expander("⏱️ Conflict Timer (optional)", expanded=False):
-            if 'gate_timer_minutes' not in st.session_state:
-                st.session_state.gate_timer_minutes = 6
-            if 'gate_timer_end' not in st.session_state:
+        return
+    c1, c2 = st.columns(2)
+    c3, c4 = st.columns(2)
+    c1.metric("Total Entries", len(df))
+    c2.metric("Checked In", len(df[df['status'].isin(['Checked In', 'Conflict'])]))
+    c3.metric("Scratched", len(df[df['status'] == 'Scratch']))
+    c4.metric("Completed", len(df[df['status'] == 'Run Completed']))
+
+    per_class = (df.assign(
+        checked_in=df['status'].isin(['Checked In', 'Conflict', 'NFC', 'In Ring', 'Run Completed']),
+        scratched=df['status'] == 'Scratch',
+        done=df['status'] == 'Run Completed',
+    ).groupby('class_name', sort=False)
+        .agg(Runs=('id', 'size'), **{'Checked in': ('checked_in', 'sum'),
+                                     'Scratched': ('scratched', 'sum'), 'Completed': ('done', 'sum')})
+        .reset_index().rename(columns={'class_name': 'Class'}))
+    per_class['Progress'] = (per_class['Completed'] + per_class['Scratched']) / per_class['Runs']
+    st.dataframe(per_class, use_container_width=True, hide_index=True,
+                 column_config={'Progress': st.column_config.ProgressColumn('Progress', min_value=0, max_value=1,
+                                                                            format=' ')})
+
+
+# --- TAB: GATE ---
+CARD_KIND = {'In Ring': 'ring', 'Checked In': 'in', 'NFC': 'in', 'Conflict': 'in',
+             'Scratch': 'scr', 'Run Completed': 'done'}
+
+
+def render_gate():
+    st.header("🚧 Gate Steward")
+    if not (st.session_state.get('unlocked_admin') or pin_unlocked('gate', 'GATE_PIN', 'Gate PIN')):
+        return
+    if df.empty:
+        st.info("No running order loaded for this day.")
+        return
+
+    with st.expander("⏱️ Conflict Timer (optional)", expanded=False):
+        if 'gate_timer_minutes' not in st.session_state:
+            st.session_state.gate_timer_minutes = 6
+        if 'gate_timer_end' not in st.session_state:
+            st.session_state.gate_timer_end = None
+
+        t_cols = st.columns([2, 1, 1])
+        with t_cols[0]:
+            st.number_input("Minutes:", min_value=1, max_value=60, step=1, key='gate_timer_minutes')
+        with t_cols[1]:
+            if st.button("▶️ Start", use_container_width=True, key="gate_timer_start"):
+                st.session_state.gate_timer_end = time.time() + st.session_state.gate_timer_minutes * 60
+                st.rerun()
+        with t_cols[2]:
+            if st.button("⏹️ Reset", use_container_width=True, key="gate_timer_reset"):
                 st.session_state.gate_timer_end = None
+                st.rerun()
 
-            t_cols = st.columns([2, 1, 1])
-            with t_cols[0]:
-                st.number_input("Minutes:", min_value=1, max_value=60, step=1, key='gate_timer_minutes')
-            with t_cols[1]:
-                if st.button("▶️ Start", use_container_width=True, key="gate_timer_start"):
-                    st.session_state.gate_timer_end = time.time() + st.session_state.gate_timer_minutes * 60
-                    st.rerun()
-            with t_cols[2]:
-                if st.button("⏹️ Reset", use_container_width=True, key="gate_timer_reset"):
-                    st.session_state.gate_timer_end = None
-                    st.rerun()
-
-            @st.fragment(run_every=1)
-            def conflict_timer_display():
-                end_time = st.session_state.get('gate_timer_end')
-                if end_time is None:
-                    st.caption("Timer not running — set the minutes above and hit Start.")
+        @st.fragment(run_every=1)
+        def conflict_timer_display():
+            end_time = st.session_state.get('gate_timer_end')
+            if end_time is None:
+                st.caption("Timer not running — set the minutes above and hit Start.")
+            else:
+                remaining = end_time - time.time()
+                if remaining <= 0:
+                    st.markdown(
+                        '<div style="font-size: 32px; font-weight: bold; color: #dc3545; text-align: center;">⏰ TIME\'S UP</div>',
+                        unsafe_allow_html=True
+                    )
                 else:
-                    remaining = end_time - time.time()
-                    if remaining <= 0:
-                        st.markdown(
-                            '<div style="font-size: 32px; font-weight: bold; color: #dc3545; text-align: center;">⏰ TIME\'S UP</div>',
-                            unsafe_allow_html=True
-                        )
-                    else:
-                        mins, secs = divmod(int(remaining) + 1, 60)
-                        color = "#dc3545" if remaining <= 30 else "#1E3A8A"
-                        st.markdown(
-                            f'<div style="font-size: 32px; font-weight: bold; color: {color}; text-align: center;">{mins:02d}:{secs:02d}</div>',
-                            unsafe_allow_html=True
-                        )
+                    mins, secs = divmod(int(remaining) + 1, 60)
+                    color = "#dc3545" if remaining <= 30 else "#1E3A8A"
+                    st.markdown(
+                        f'<div style="font-size: 32px; font-weight: bold; color: {color}; text-align: center;">{mins:02d}:{secs:02d}</div>',
+                        unsafe_allow_html=True
+                    )
 
-            conflict_timer_display()
+        conflict_timer_display()
 
-        g_cls = class_picker('g_cls', 'g')
+    g_cls = class_picker('g_cls')
 
-        @st.fragment(run_every=5)
-        def gate_steward_view(target_class):
-            st.caption(f"Gate Live Sync • Last Update: {time.strftime('%H:%M:%S')}")
+    @st.fragment(run_every=5)
+    def gate_steward_view(target_class):
+        # Speedstakes / Jumping classes don't run the A-Frame — skip the equipment-change banners
+        has_aframe = not any(kw in target_class.lower() for kw in ('speedstakes', 'jumping'))
 
-            # Speedstakes / Jumping classes don't run the A-Frame — skip the equipment-change banners
-            class_name_lower = target_class.lower()
-            has_aframe = not any(kw in class_name_lower for kw in ('speedstakes', 'jumping'))
+        g_df = db.runs_for_day(ENGINE, day, target_class)
+        if g_df.empty:
+            st.info("No data found for this class.")
+            return
 
-            g_df = db.runs_for_day(ENGINE, day, target_class)
-            if g_df.empty:
-                st.info("No data found for this class.")
-                return
+        with st.container(key="gate-strip"):
+            st.markdown(now_strip_html(g_df), unsafe_allow_html=True)
 
-            def act(fn, *args):
-                fn(ENGINE, *args)
-                try:
-                    st.rerun(scope="fragment")  # just redraw the gate list
-                except st.errors.StreamlitAPIException:
-                    st.rerun()  # the click arrived during a full-page run
+        def act(fn, *args):
+            fn(ENGINE, *args)
+            try:
+                st.rerun(scope="fragment")  # just redraw the gate list
+            except st.errors.StreamlitAPIException:
+                st.rerun()  # the click arrived during a full-page run
 
-            prev_aframe = None
-            prev_height = None
-            for _, r in g_df.iterrows():
-                is_in_ring = r['status'] == "In Ring"
-                is_done = r['status'] == "Run Completed"
-                is_scratch = r['status'] == "Scratch"
-                # NFC runs still need to go through the ring — treat them like Checked In
-                is_checked_in = r['status'] in ("Checked In", "NFC", "Conflict")
-                pk_val = int(r['id'])
+        prev_aframe = None
+        prev_height = None
+        for _, r in g_df.iterrows():
+            status = r['status']
+            is_in_ring = status == "In Ring"
+            is_done = status == "Run Completed"
+            is_scratch = status == "Scratch"
+            # NFC runs still need to go through the ring — treat them like Checked In
+            is_checked_in = status in ("Checked In", "NFC", "Conflict")
+            pk_val = int(r['id'])
 
-                border_color = "#ffc107" if is_in_ring else "#28a745" if is_checked_in else "#dc3545" if is_scratch else "#adb5bd"
+            height_label = r["height"]
+            try:
+                height_val = float(re.sub(r'[^0-9.]', '', str(height_label)))
+            except (ValueError, TypeError):
+                height_val = 999
+            is_select = str(r.get('class_type', '')).strip().lower() == 'select'
+            aframe = "A-Frame: Down" if (height_val <= 12 or is_select) else "A-Frame: Up"
 
-                height_label = r["height"]
-                try:
-                    height_val = float(re.sub(r'[^0-9.]', '', str(height_label)))
-                except (ValueError, TypeError):
-                    height_val = 999
-                is_select = str(r.get('class_type', '')).strip().lower() == 'select'
-                aframe = "A-Frame: Down" if (height_val <= 12 or is_select) else "A-Frame: Up"
+            # --- HEIGHT CHANGE DIVIDER ---
+            if prev_height is not None and height_label != prev_height:
+                st.markdown(f'<div class="gate-banner" style="background:#FEE2E2; border:2px dashed #DC2626; '
+                            f'color:#991B1B;">JUMP HEIGHT CHANGE → {esc(height_label)}"</div>', unsafe_allow_html=True)
+            prev_height = height_label
 
-                # --- HEIGHT CHANGE DIVIDER ---
-                if prev_height is not None and height_label != prev_height:
-                    st.markdown(f'''
-                        <div style="text-align: center; margin: 16px 0; padding: 10px; background-color: #FEE2E2; border: 2px dashed #DC2626; border-radius: 8px;">
-                            <span style="font-size: 16px; font-weight: bold; color: #991B1B;">JUMP HEIGHT CHANGE → {height_label}"</span>
-                        </div>
-                    ''', unsafe_allow_html=True)
-                prev_height = height_label
+            # --- A-FRAME CHANGE DIVIDER (flagged BEFORE the run it applies to) ---
+            # Scratched dogs aren't running, so they're ignored entirely for A-Frame tracking
+            if not is_scratch:
+                if has_aframe and aframe != prev_aframe:
+                    a_color = "#DC2626" if aframe == "A-Frame: Down" else "#198754"
+                    a_bg = "#FEE2E2" if aframe == "A-Frame: Down" else "#D1FAE5"
+                    st.markdown(f'<div class="gate-banner" style="background:{a_bg}; border:2px dashed {a_color}; '
+                                f'color:{a_color};">🔺 SET {aframe.upper()}</div>', unsafe_allow_html=True)
+                prev_aframe = aframe
 
-                # --- A-FRAME CHANGE DIVIDER (flagged BEFORE the run it applies to) ---
-                # Scratched dogs aren't running, so they're ignored entirely for A-Frame tracking
-                if not is_scratch:
-                    if has_aframe and aframe != prev_aframe:
-                        a_color = "#DC2626" if aframe == "A-Frame: Down" else "#198754"
-                        a_bg = "#FEE2E2" if aframe == "A-Frame: Down" else "#D1FAE5"
-                        st.markdown(f'''
-                            <div style="text-align: center; margin: 8px 0 16px 0; padding: 10px; background-color: {a_bg}; border: 2px dashed {a_color}; border-radius: 8px;">
-                                <span style="font-size: 16px; font-weight: bold; color: {a_color};">🔺 SET {aframe.upper()}</span>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    prev_aframe = aframe
+            kind = CARD_KIND.get(status, 'notin')
+            with st.container(key=f"card-{kind}-{pk_val}"):
+                st.markdown(
+                    f'<div class="card-title">{esc(r["height"])}" &nbsp;{esc(r["dog_name"])} '
+                    f'<span style="font-weight:400; font-size:15px;">({esc(r["breed"])})</span></div>'
+                    f'<div class="card-sub">{esc(r["handler_name"])} • {esc(r["class_type"])} &nbsp;{pill(status)}</div>',
+                    unsafe_allow_html=True)
 
-                c_main, c_btn = st.columns([3, 2])
-                with c_main:
-                    st.markdown(f'''
-                        <div style="padding: 10px; border-left: 10px solid {border_color}; border-radius: 8px; background-color: #f8f9fa; margin-bottom: 10px;">
-                            <div style="font-size: 20px; font-weight: bold; color: #333;">{r["height"]} | {r["dog_name"]} <span style="font-weight: normal;">({r["breed"]})</span></div>
-                            <div style="font-size: 14px; color: #666;">{r["handler_name"]} • {r["class_type"]} • {r["status"]}</div>
-                        </div>
-                    ''', unsafe_allow_html=True)
+                if is_in_ring:
+                    if st.button("FINISH ✅", key=f"finish_{pk_val}", type="primary", use_container_width=True):
+                        act(db.set_status, pk_val, "Run Completed")
+                elif is_done:
+                    if st.button("UNDO FINISH", key=f"undo_{pk_val}", use_container_width=True):
+                        act(db.set_status, pk_val, "Checked In")
+                elif is_scratch:
+                    if st.button("UN-SCRATCH", key=f"unscratch_{pk_val}", use_container_width=True):
+                        act(db.set_status, pk_val, "Not Checked In")
+                elif is_checked_in:
+                    cb1, cb2 = st.columns(2)
+                    if cb1.button("START RUN", key=f"start_{pk_val}", type="primary", use_container_width=True):
+                        act(db.start_run, pk_val)
+                    if cb2.button("SCRATCH", key=f"scratch_checkedin_{pk_val}", use_container_width=True):
+                        act(db.set_status, pk_val, "Scratch")
+                else:
+                    b1, b2 = st.columns(2)
+                    if b1.button("CHECK IN", key=f"checkin_{pk_val}", use_container_width=True):
+                        act(db.set_status, pk_val, "Checked In")
+                    if b2.button("SCRATCH", key=f"scratch_{pk_val}", use_container_width=True):
+                        act(db.set_status, pk_val, "Scratch")
 
-                with c_btn:
-                    if is_in_ring:
-                        if st.button("FINISH ✅", key=f"finish_{pk_val}", use_container_width=True, type="primary"):
-                            act(db.set_status, pk_val, "Run Completed")
-                    elif is_done:
-                        if st.button("UNDO FINISH", key=f"undo_{pk_val}", use_container_width=True):
-                            act(db.set_status, pk_val, "Checked In")
-                    elif is_scratch:
-                        if st.button("UN-SCRATCH", key=f"unscratch_{pk_val}", use_container_width=True):
-                            act(db.set_status, pk_val, "Not Checked In")
-                    elif is_checked_in:
-                        cb1, cb2 = st.columns(2)
-                        with cb1:
-                            if st.button("START RUN", key=f"start_{pk_val}", use_container_width=True):
-                                act(db.start_run, pk_val)
-                        with cb2:
-                            if st.button("SCRATCH", key=f"scratch_checkedin_{pk_val}", use_container_width=True):
-                                act(db.set_status, pk_val, "Scratch")
-                    else:
-                        b1, b2 = st.columns(2)
-                        with b1:
-                            if st.button("CHECK IN", key=f"checkin_{pk_val}", use_container_width=True):
-                                act(db.set_status, pk_val, "Checked In")
-                        with b2:
-                            if st.button("SCRATCH", key=f"scratch_{pk_val}", use_container_width=True):
-                                act(db.set_status, pk_val, "Scratch")
+        st.caption(f"Gate live sync • {time.strftime('%-I:%M:%S %p')}")
 
-        gate_steward_view(g_cls)
+    gate_steward_view(g_cls)
 
-# --- TAB 6: ADMIN ---
-with tab6:
+
+# --- TAB: ADMIN ---
+def render_admin():
     st.header("🔒 Secretary Admin")
     if pin_unlocked('admin', 'ADMIN_PIN', 'Admin PIN'):
         section = st.radio(
@@ -738,14 +880,14 @@ with tab6:
         if 'admin_flash' in st.session_state:
             st.success(st.session_state.pop('admin_flash'))
 
-# --- TAB 7: RESULTS (view only; publishing is on the Admin tab) ---
-with tab7:
-    st.header("🏆 Results")
-    res_class_map = db.results_for_day(ENGINE, day) if day else {}
-    if not res_class_map:
-        st.info("No results have been posted yet. Check back after the class runs!")
-    else:
-        ordered_res_classes = [c for c in sorted_classes if c in res_class_map]
-        ordered_res_classes += sorted(c for c in res_class_map if c not in sorted_classes)
-        sel_res_class = st.selectbox("Select Class:", ordered_res_classes, key="res_view_class_sel")
-        render_formatted_results(res_class_map[sel_res_class])
+
+# --- 5. TABS ---
+TABS = [("📲 Check-in", render_checkin, 'checkin'), ("🏃 Order", render_order, 'order'),
+        ("🏆 Results", render_results, 'results')]
+if STAFF:
+    TABS += [("🚧 Gate", render_gate, 'gate'), ("📊 Dash", render_dash, 'dash'), ("🔒 Admin", render_admin, 'admin')]
+
+for tab, (_, render, key) in zip(st.tabs([t[0] for t in TABS]), TABS):
+    with tab:
+        with st.container(key=key):
+            render()
