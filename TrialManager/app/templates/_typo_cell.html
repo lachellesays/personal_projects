@@ -1,0 +1,17 @@
+{% set k = k if k is defined else kind %}
+{% if not num %}<td>{{ cell.value }}</td>
+{% elif edit %}
+<td class="editing"><form hx-post="/shows/{{ slug }}/typos/cell" hx-target="closest td" hx-swap="outerHTML">
+  <input type="hidden" name="kind" value="{{ k }}"><input type="hidden" name="num" value="{{ num }}"><input type="hidden" name="field" value="{{ cell.field }}">
+  <input name="value" value="{{ cell.value }}" autofocus onfocus="this.select()"
+         onkeydown="if (event.key === 'Escape') { htmx.ajax('GET', '/shows/{{ slug }}/typos/cell?kind={{ k }}&num={{ num }}&field={{ cell.field }}', {target: this.closest('td'), swap: 'outerHTML'}); }"
+         onblur="if (!this.form._sent) { this.form._sent = true; htmx.trigger(this.form, 'submit'); }">
+</form></td>
+{% else %}
+<td class="ed {{ 'fixed' if cell.fixed }}" hx-get="/shows/{{ slug }}/typos/cell?kind={{ k }}&num={{ num }}&field={{ cell.field }}&edit=1"
+    hx-trigger="click" hx-swap="outerHTML" title="{{ 'JotForm had: ' ~ cell.orig if cell.fixed else 'Click to fix' }}">{{ cell.value }}{% if cell.fixed %}<span class="was">{{ cell.orig or '(blank)' }}</span>{% endif %}</td>
+{% endif %}
+{% if oob_log is defined %}
+  {% set log = oob_log %}{% set oob = True %}{% include "_fix_log.html" %}
+  <span class="n" id="side-fixes" hx-swap-oob="true">{{ fix_count }}</span>
+{% endif %}

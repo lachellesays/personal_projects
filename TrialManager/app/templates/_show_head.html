@@ -1,0 +1,23 @@
+<div class="titlebar">
+  <div><h1>{{ d.show.name }}</h1>
+    <div class="sub">Show ID {{ d.show.show_id }} · {{ d.show.saturday_date|day }} – {{ d.show.sunday_date|day }} · JotForm {{ d.show.form_id }} ·
+      <a href="/shows/{{ slug }}/edit">Edit details</a></div></div>
+  <form method="post" action="/shows/{{ slug }}/refresh"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="back" value="{{ request.url.path }}"><button class="btn">Refresh from JotForm</button></form>
+</div>
+<div class="banner">
+  <span>{% if d.last_download %}
+      {% if d.new_ids %}<b>{{ d.new_ids|length }} new entr{{ 'y' if d.new_ids|length == 1 else 'ies' }}</b> since your last download
+      {% else %}No new entries since your last download{% endif %}
+      ({{ d.last_download.at|local }}, by {{ d.last_download.user_name }})
+    {% else %}<b>Not downloaded yet.</b> {{ d.stats.submissions }} entries so far{% endif %}
+    · Synced {{ d.fetched_at|ago }}</span>
+  {% if d.new_ids %}<a class="btn small" href="/shows/{{ slug }}/entries?f=new">Show them</a>{% endif %}
+</div>
+{% include "_stats.html" %}
+<nav class="tabs">
+  <a class="{{ 'on' if tab == 'entries' }}" href="/shows/{{ slug }}/entries">Entries</a>
+  <a class="{{ 'on' if tab == 'typos' }}" href="/shows/{{ slug }}/typos">Fix typos</a>
+  <a class="{{ 'on' if tab == 'warnings' }}" href="/shows/{{ slug }}/warnings">Warnings{% if open_warnings %}<span class="cnt">{{ open_warnings }}</span>{% endif %}</a>
+  <a class="{{ 'on' if tab == 'download' }}" href="/shows/{{ slug }}/download">Download</a>
+</nav>

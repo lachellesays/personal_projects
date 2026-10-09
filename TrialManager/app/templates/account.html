@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Account · Trial Manager{% endblock %}
+{% block main %}
+<div class="titlebar"><div><h1>Your account</h1><div class="sub">{{ user.name }} · {{ user.email }}</div></div></div>
+<div class="panel" style="max-width:420px;margin-top:16px">
+  <h3>Change password</h3>
+  <div class="muted">Changing your password signs you out on your other devices.</div>
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  {% if done %}<div class="flash ok">Password changed.</div>{% endif %}
+  <form method="post" action="/account">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="l" for="current">Current password</label><input class="f" id="current" name="current" type="password" autocomplete="current-password" required>
+    <label class="l" for="password">New password</label><input class="f" id="password" name="password" type="password" autocomplete="new-password" required minlength="10">
+    <label class="l" for="confirm">New password again</label><input class="f" id="confirm" name="confirm" type="password" autocomplete="new-password" required>
+    <button class="btn primary" style="margin-top:14px">Change password</button>
+  </form>
+</div>
+{% endblock %}

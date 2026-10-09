@@ -1,0 +1,28 @@
+<div id="entry-table" class="tscroll">
+<table class="t">
+  <thead><tr><th>Handler</th><th>Dog</th><th class="hide-sm">Height · Level</th><th class="num">Sat</th><th class="num">Sun</th>
+    <th class="num hide-sm">Fees</th><th class="num hide-sm">Paid</th><th class="num">Balance</th><th>Scratch</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr class="{{ 'scr' if r.scratched }}">
+      <td>{% if r.first_of_handler %}<span class="hname">{{ r.handler_name }}</span>{% if r.new %}<span class="tag new">NEW</span>{% endif %}<div class="muted">#{{ r.handler_number }}</div>{% endif %}</td>
+      <td><span class="dname">{{ r.dog_name }}</span>{% if r.fixed %}<span class="tag fix">FIXED</span>{% endif %}
+        <div class="muted">{{ r.breed }}{% if r.dog_number %} · #{{ r.dog_number }}{% endif %}</div></td>
+      <td class="hide-sm">{{ r.height }}<div class="muted">{{ r.level }}</div></td>
+      <td class="num">{{ r.sat }}</td><td class="num">{{ r.sun }}</td>
+      <td class="num hide-sm">{{ r.fee|money }}</td>
+      <td class="num hide-sm">{% if r.first_of_handler %}{{ r.paid|money }}{% endif %}</td>
+      <td class="num">{% if r.first_of_handler %}{% if r.balance > 0.005 %}<span class="owes">{{ r.balance|money }}</span>{% elif r.balance < -0.005 %}<span class="credit">{{ r.balance|money }}</span>{% else %}$0.00{% endif %}{% endif %}</td>
+      <td class="keep">{% if r.dog_number %}
+        <label class="sw" title="Scratch {{ r.dog_name }}"><input type="checkbox" aria-label="Scratch {{ r.dog_name }}" {{ 'checked' if r.scratched }}
+          hx-post="/shows/{{ slug }}/scratch/{{ r.dog_number }}" hx-trigger="change" hx-target="#entry-table" hx-swap="outerHTML"
+          hx-include="#entry-filters"><span></span></label>{% if r.scratched %}<span class="swl">Scratched</span>{% endif %}
+        {% else %}<span class="muted" title="No dog number on this entry">—</span>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted" style="text-align:center;padding:24px">No entries match.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if oob %}{% include "_stats.html" %}{% endif %}

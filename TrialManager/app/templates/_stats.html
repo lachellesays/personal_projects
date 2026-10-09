@@ -1,0 +1,7 @@
+<div class="stats" id="stats" {% if oob %}hx-swap-oob="true"{% endif %}>
+  <div class="stat"><div class="k">Handlers</div><div class="v">{{ d.stats.handlers }}</div></div>
+  <div class="stat"><div class="k">Dogs</div><div class="v">{{ d.stats.dogs }}</div></div>
+  <div class="stat"><div class="k">Runs</div><div class="v">{{ d.stats.runs }}</div></div>
+  <div class="stat"><div class="k">Scratched</div><div class="v">{{ d.stats.scratched }}</div></div>
+  <div class="stat"><div class="k">Balance outstanding</div><div class="v">{{ d.stats.balance|money }}</div></div>
+</div>

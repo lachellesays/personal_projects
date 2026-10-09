@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"useTemplateFragments": true}'>
+  <title>{% block title %}Trial Manager{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
+{% if user %}
+  <div class="mobilebar"><a href="/shows">Trial Manager</a><span><a href="/people">People</a></span></div>
+  <div class="layout">
+    <aside class="side">
+      <a class="brand" href="/shows">Trial Manager</a>
+      <a class="nav {{ 'on' if not slug and request.url.path.startswith('/shows') }}" href="/shows">All shows</a>
+      {% if slug and d %}
+        <div class="lbl">{{ d.show.name }}</div>
+        <a class="nav {{ 'on' if tab == 'entries' }}" href="/shows/{{ slug }}/entries">Entries <span class="n" title="Entries received from JotForm">{{ d.stats.submissions }}</span></a>
+        <a class="nav {{ 'on' if tab == 'typos' }}" href="/shows/{{ slug }}/typos">Fix typos <span class="n" id="side-fixes">{{ fix_count }}</span></a>
+        <a class="nav {{ 'on' if tab == 'warnings' }}" href="/shows/{{ slug }}/warnings">Warnings <span class="n">{{ open_warnings }}</span></a>
+        <a class="nav {{ 'on' if tab == 'download' }}" href="/shows/{{ slug }}/download">Download</a>
+      {% endif %}
+      <div class="lbl">Admin</div>
+      <a class="nav {{ 'on' if request.url.path.startswith('/people') }}" href="/people">People</a>
+      <div class="me"><b>{{ user.name }}</b>
+        <a href="/account">Account</a> ·
+        <form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Sign out</button></form>
+      </div>
+    </aside>
+    <main class="main">{% block main %}{% endblock %}</main>
+  </div>
+{% else %}
+  <div class="authwrap"><div class="authcard">{% block auth %}{% endblock %}</div></div>
+{% endif %}
+</body>
+</html>

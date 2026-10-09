@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Download · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+<div class="dl-grid">
+  <div class="panel">
+    <h3>Workbook</h3>
+    <div class="sheet"><span><b>Contact</b><br><span class="muted">one row per handler</span></span><b>{{ counts.contact }} handlers</b></div>
+    <div class="sheet"><span><b>Balances</b><br><span class="muted">fees minus payments</span></span><b>{{ counts.balances }} handlers</b></div>
+    <div class="sheet" style="border-bottom:0"><span><b>Raw Results</b><br><span class="muted">one row per run, ready for scoring</span></span><b>{{ counts.runs }} runs</b></div>
+    {% if open_warnings %}<div class="flash error">{{ open_warnings }} warning{{ 's' if open_warnings != 1 }} not resolved yet. <a href="/shows/{{ slug }}/warnings">Review</a></div>
+    {% else %}<div class="flash ok">All warnings resolved.</div>{% endif %}
+    <form method="post" action="/shows/{{ slug }}/download" onsubmit="setTimeout(function () { location.reload(); }, 2500)">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn primary big">Download TrialData_{{ slug }}.xlsx</button>
+    </form>
+  </div>
+  <div class="panel hist"><h3>Download history</h3>
+    {% for h in history %}<div class="it"><span><b>{{ h.user_name }}</b><br><span class="muted">{{ h.at|local }}</span></span><span>{{ h.runs }} runs</span></div>
+    {% else %}<div class="muted">Not downloaded yet.</div>{% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit show' if slug else 'New show' }} · Trial Manager{% endblock %}
+{% block main %}
+<div class="titlebar"><div><h1>{{ 'Edit show details' if slug else 'New show' }}</h1>
+  <div class="sub">{{ 'Changes apply to the next download.' if slug else 'Show ID and form carry over from your last show.' }}</div></div></div>
+<div class="panel" style="max-width:520px;margin-top:16px">
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ '/shows/' ~ slug ~ '/edit' if slug else '/shows/new' }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="l" for="name">Show name</label><input class="f" id="name" name="name" value="{{ form.name }}" placeholder="Level Up Dog Sports · December 2026" required>
+    <div class="row2">
+      <div><label class="l" for="sat">Saturday</label><input class="f" id="sat" name="saturday_date" type="date" value="{{ form.saturday_date }}" required></div>
+      <div><label class="l" for="sun">Sunday</label><input class="f" id="sun" name="sunday_date" type="date" value="{{ form.sunday_date }}" required></div>
+    </div>
+    <div class="row2">
+      <div><label class="l" for="sid">Show ID</label><input class="f" id="sid" name="show_id" inputmode="numeric" value="{{ form.show_id }}" required></div>
+      <div><label class="l" for="fid">JotForm form ID</label><input class="f" id="fid" name="form_id" inputmode="numeric" value="{{ form.form_id }}" required>
+        <div class="hint">The long number in the form's web address.</div></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <a class="btn" href="{{ '/shows/' ~ slug ~ '/entries' if slug else '/shows' }}">Cancel</a>
+      <button class="btn primary">Save show</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

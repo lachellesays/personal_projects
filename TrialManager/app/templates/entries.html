@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Entries · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+<form class="toolbar" id="entry-filters" action="/shows/{{ slug }}/entries" method="get" onsubmit="return false">
+  <input class="search" type="search" name="q" value="{{ q }}" placeholder="Search handler, dog, or number"
+         hx-get="/shows/{{ slug }}/entries" hx-target="#entry-table" hx-swap="outerHTML" hx-include="#entry-filters"
+         hx-trigger="input changed delay:250ms, search">
+  <input type="hidden" name="f" value="{{ f }}">
+  {% for key, label in [('all','All'), ('new','New'), ('scr','Scratched'), ('owes','Owes money')] %}
+    <a class="fchip {{ 'on' if f == key }}" href="/shows/{{ slug }}/entries?f={{ key }}{% if q %}&q={{ q|urlencode }}{% endif %}">{{ label }}</a>
+  {% endfor %}
+</form>
+{% include "_entry_rows.html" %}
+<p class="muted" style="margin-top:8px">Scratches save the moment you toggle them. A handler with every dog scratched is left off all three tabs of the workbook.</p>
+{% endblock %}

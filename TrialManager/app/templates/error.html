@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block main %}
+<h1 style="font-size:20px">Something needs attention</h1>
+<div class="flash error">{{ message }}</div>
+<a class="btn" href="javascript:history.back()">Go back</a>
+{% endblock %}
+{% block auth %}<div class="flash error">{{ message }}</div><a href="/login">Sign in</a>{% endblock %}

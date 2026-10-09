@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Warnings · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+<p class="muted" style="margin:14px 0 10px">Things worth a look before you download. Resolve or dismiss each one; the count on the tab goes down.</p>
+{% for w in warnings %}
+<div class="warn {{ w.kind }} {{ 'dismissed' if w.dismissed }}">
+  <span class="ic">{{ {'money': '$', 'addr': '?', 'data': '!'}[w.kind] }}</span>
+  <div><div class="t1">{{ w.title }}</div>
+    <div class="muted">{% if w.dismissed %}{{ w.decision.note }}{% if w.decision.at %} · {{ w.decision.at|local }}{% endif %}{% else %}{{ w.detail }}{% endif %}</div>
+    {% if w.choices and not w.dismissed %}
+      <form method="post" action="/shows/{{ slug }}/warnings" class="choice">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="key" value="{{ w.key }}"><input type="hidden" name="action" value="address">
+        {% for c in w.choices %}<button class="btn small" name="choice" value="{{ c }}">Use {{ c }}</button>{% endfor %}
+      </form>
+    {% endif %}
+  </div>
+  <div class="acts">
+    {% if w.dismissed %}
+      <form method="post" action="/shows/{{ slug }}/warnings"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="key" value="{{ w.key }}"><button class="btn small" name="action" value="reopen">Reopen</button></form>
+    {% else %}
+      <form method="post" action="/shows/{{ slug }}/warnings" style="display:flex;gap:6px"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="key" value="{{ w.key }}">
+        {% for a in w.actions %}
+          {% if a == 'show' %}<button class="btn small" name="action" value="show">Show entry</button>
+          {% elif a.startswith('fixstate:') %}<button class="btn small primary" name="action" value="{{ a }}">Fix: set to {{ a.split(':')[1] }}</button>{% endif %}
+        {% endfor %}
+        <button class="btn small" name="action" value="dismiss">Dismiss</button></form>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="flash ok">No warnings. Everything looks good.</div>
+{% endfor %}
+{% endblock %}

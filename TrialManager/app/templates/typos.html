@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Fix typos · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+<form class="toolbar" method="get" action="/shows/{{ slug }}/typos">
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <input class="search" type="search" name="q" value="{{ q }}" placeholder="Search handler, dog, or number">
+  <a class="fchip {{ 'on' if kind == 'handlers' }}" href="/shows/{{ slug }}/typos?kind=handlers">Handlers</a>
+  <a class="fchip {{ 'on' if kind == 'dogs' }}" href="/shows/{{ slug }}/typos?kind=dogs">Dogs</a>
+</form>
+<div class="typo-grid">
+  <div>
+    <div class="tscroll"><table class="t">
+      <thead><tr><th>#</th>{% if kind == 'dogs' %}<th>Handler</th>{% endif %}{% for f in fields %}<th>{{ labels[f] }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr><td class="muted">{{ r.num }}</td>{% if kind == 'dogs' %}<td class="muted">{{ r.label }}</td>{% endif %}
+          {% for cell in r.cells %}{% set num = r.num %}{% set k = 'h' if kind == 'handlers' else 'd' %}{% set edit = False %}{% include "_typo_cell.html" %}{% endfor %}</tr>
+      {% else %}<tr><td colspan="10" class="muted" style="text-align:center;padding:20px">Nothing matches.</td></tr>{% endfor %}
+      </tbody></table></div>
+    <p class="muted" style="margin-top:8px">Click a cell, type, and press Enter (Esc cancels). Fixed cells turn yellow and show what JotForm had.
+      Type the original value back to remove a fix.</p>
+  </div>
+  {% include "_fix_log.html" %}
+</div>
+{% endblock %}

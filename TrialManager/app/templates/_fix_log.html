@@ -1,0 +1,13 @@
+<div class="panel" id="fixlog" {% if oob %}hx-swap-oob="true"{% endif %}>
+  <h3>Corrections ({{ log|length }})</h3>
+  <div class="log">
+  {% for it in log %}
+    <div class="it"><div class="row1"><span>{{ it.kind }} #{{ it.num }} · {{ it.field }}</span>
+      <form method="post" action="/shows/{{ slug }}/typos/undo"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="key" value="{{ it.key }}"><input type="hidden" name="kind" value="{{ 'handlers' if it.kind == 'Handler' else 'dogs' }}">
+        <button class="linkbtn">Undo</button></form></div>
+      <div><span class="from">{{ it.from or '(blank)' }}</span> → <span class="to">{{ it.to or '(blank)' }}</span></div>
+      <div class="muted">{% if it.by %}{{ it.by }} · {{ it.at|local }}{% else %}Made in the old formatter{% endif %}</div></div>
+  {% else %}<div class="muted">No corrections yet. Click any cell on the left to fix a typo.</div>{% endfor %}
+  </div>
+</div>

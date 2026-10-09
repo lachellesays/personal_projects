@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Set up · Trial Manager{% endblock %}
+{% block auth %}
+<h1>Create the first admin</h1>
+<div class="muted">This page only works once, for the email set in Railway's <code>BOOTSTRAP_ADMIN_EMAIL</code> variable.
+  After this, new people join by invite.</div>
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+<form method="post" action="/setup">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label class="l" for="name">Your name</label><input class="f" id="name" name="name" value="{{ form.name or '' }}" required>
+  <label class="l" for="email">Email</label><input class="f" id="email" name="email" type="email" autocomplete="username" value="{{ form.email or '' }}" required>
+  <label class="l" for="password">Password</label><input class="f" id="password" name="password" type="password" autocomplete="new-password" required minlength="10">
+  <div class="hint">At least 10 characters.</div>
+  <label class="l" for="confirm">Password again</label><input class="f" id="confirm" name="confirm" type="password" autocomplete="new-password" required>
+  <button class="btn primary">Create account</button>
+</form>
+{% endblock %}

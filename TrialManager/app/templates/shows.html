@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Shows · Trial Manager{% endblock %}
+{% block main %}
+<div class="titlebar"><div><h1>Shows</h1><div class="sub">Each trial keeps its own scratches, fixes and download history.</div></div>
+  <a class="btn primary" href="/shows/new">+ New show</a></div>
+<div class="shows">
+  {% for c in cards %}
+  <a class="showcard" href="/shows/{{ c.slug }}/entries">
+    <span class="status {{ 'past' if c.past else 'open' }}">{{ 'DONE' if c.past else 'UPCOMING' }}</span>
+    <h4>{{ c.show.name }}</h4>
+    <div class="meta">{{ c.show.saturday_date|day }} – {{ c.show.sunday_date|day }} · Show ID {{ c.show.show_id }}</div>
+    <div class="nums">
+      <div><b>{{ c.submissions if c.submissions is not none else '—' }}</b>entries</div>
+      <div><b>{{ c.last_download.at|local('%b %-d') if c.last_download else '—' }}</b>last download</div>
+    </div>
+  </a>
+  {% endfor %}
+  <a class="showcard newcard" href="/shows/new">+ New show</a>
+</div>
+{% endblock %}
