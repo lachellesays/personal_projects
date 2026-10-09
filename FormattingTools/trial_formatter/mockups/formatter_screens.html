@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entry Formatter Preview</title>
+<style>
+  :root {
+    --navy: #1E3A8A; --ink: #0F172A; --muted: #64748B; --line: #E2E8F0; --bg: #F1F5F9; --card: #FFFFFF;
+    --green: #16A34A; --green-bg: #DCFCE7; --green-ink: #166534;
+    --amber-bg: #FEF3C7; --amber-ink: #92400E; --red: #DC2626; --red-bg: #FEE2E2; --red-ink: #B91C1C;
+    --violet-bg: #EDE9FE; --violet-ink: #5B21B6; --blue-bg: #E0F2FE; --blue-ink: #075985;
+    --fix-bg: #FEF9C3;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #E5E9F0; color: var(--ink);
+         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  header.page { max-width: 1240px; margin: 0 auto; padding: 28px 16px 6px; }
+  header.page h1 { margin: 0 0 6px; font-size: 26px; color: var(--navy); }
+  header.page p { margin: 0; color: #334155; max-width: 820px; }
+  .try { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 16px; }
+
+  /* Browser frame */
+  .browser { background: var(--card); border-radius: 12px; box-shadow: 0 14px 34px rgba(15,23,42,.22); overflow: hidden;
+             border: 1px solid #CBD5E1; }
+  .chrome { background: #E2E8F0; padding: 9px 12px; display: flex; align-items: center; gap: 10px; }
+  .dots span { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 5px; background: #CBD5E1; }
+  .dots span:nth-child(1) { background: #F87171; } .dots span:nth-child(2) { background: #FBBF24; } .dots span:nth-child(3) { background: #34D399; }
+  .url { flex: 1; background: #fff; border-radius: 7px; padding: 5px 10px; font-size: 12.5px; color: var(--muted); }
+  .app { display: grid; grid-template-columns: 220px 1fr; min-height: 720px; background: var(--bg); }
+
+  /* Sidebar */
+  .side { background: #0F1E4A; color: #CBD5E1; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .brand { color: #fff; font-weight: 800; font-size: 15px; padding: 2px 8px 12px; }
+  .side .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #94A3B8; padding: 12px 8px 4px; }
+  .side a { color: #CBD5E1; text-decoration: none; padding: 8px 10px; border-radius: 8px; display: flex; justify-content: space-between;
+            align-items: center; cursor: pointer; font-size: 13.5px; }
+  .side a:hover { background: rgba(255,255,255,.06); }
+  .side a.on { background: rgba(255,255,255,.12); color: #fff; font-weight: 700; }
+  .side a .n { font-size: 11px; background: rgba(255,255,255,.15); border-radius: 999px; padding: 1px 7px; }
+  .side .me { margin-top: auto; border-top: 1px solid rgba(255,255,255,.1); padding: 12px 8px 0; font-size: 12.5px; }
+  .side .me b { color: #fff; display: block; }
+
+  /* Main */
+  .main { padding: 20px 24px 28px; min-width: 0; }
+  .titlebar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .titlebar h2 { margin: 0; font-size: 22px; }
+  .titlebar .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .btn { border: 1px solid #CBD5E1; background: #fff; color: var(--ink); border-radius: 9px; padding: 8px 14px; font: inherit;
+         font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn.primary { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .btn.small { padding: 5px 10px; font-size: 12.5px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  .banner { display: flex; align-items: center; gap: 12px; background: var(--blue-bg); border: 1px solid #BAE6FD; color: var(--blue-ink);
+            border-radius: 10px; padding: 10px 14px; margin-top: 14px; font-size: 13.5px; }
+  .banner b { color: #0C4A6E; }
+  .banner .btn { margin-left: auto; }
+
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 14px; }
+  .stat { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat .v { font-size: 22px; font-weight: 800; }
+
+  .tabs { display: flex; gap: 4px; margin-top: 18px; border-bottom: 1px solid #CBD5E1; }
+  .tabs a { padding: 9px 14px; font-weight: 700; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px;
+            text-decoration: none; }
+  .tabs a.on { color: var(--navy); border-bottom-color: var(--navy); }
+  .tabs .n { font-size: 11px; background: var(--red-bg); color: var(--red-ink); border-radius: 999px; padding: 1px 7px; margin-left: 4px; }
+
+  .toolbar { display: flex; gap: 10px; align-items: center; margin: 14px 0 10px; flex-wrap: wrap; }
+  .search { flex: 0 1 300px; border: 1px solid #CBD5E1; border-radius: 9px; padding: 8px 11px; font: inherit; background: #fff; }
+  .fchips { display: flex; gap: 6px; }
+  .fchip { border: 1px solid #CBD5E1; background: #fff; border-radius: 999px; padding: 5px 11px; font: inherit; font-size: 12.5px;
+           font-weight: 700; cursor: pointer; color: #475569; }
+  .fchip.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .saved { margin-left: auto; font-size: 12.5px; color: var(--green-ink); opacity: 0; transition: opacity .3s; }
+  .saved.show { opacity: 1; }
+
+  table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border: 1px solid var(--line); border-radius: 10px;
+          overflow: hidden; font-size: 13.5px; }
+  th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 700; background: #F8FAFC; padding: 9px 10px;
+       border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .hname { font-weight: 700; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  .tag { font-size: 11px; font-weight: 800; border-radius: 4px; padding: 1px 6px; margin-left: 5px; white-space: nowrap; }
+  .tag.new { background: var(--blue-bg); color: var(--blue-ink); }
+  .tag.fix { background: var(--fix-bg); color: #854D0E; }
+  .owes { color: var(--red-ink); font-weight: 700; }
+  .credit { color: var(--violet-ink); font-weight: 700; }
+  tr.scr td:not(.keep) { color: #94A3B8; }
+  tr.scr .hname, tr.scr .dname { text-decoration: line-through; }
+
+  /* Toggle switch */
+  .sw { position: relative; width: 40px; height: 23px; display: inline-block; vertical-align: middle; }
+  .sw input { display: none; }
+  .sw span { position: absolute; inset: 0; background: #CBD5E1; border-radius: 999px; cursor: pointer; transition: .15s; }
+  .sw span::after { content: ""; position: absolute; width: 17px; height: 17px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s; }
+  .sw input:checked + span { background: var(--red); }
+  .sw input:checked + span::after { transform: translateX(17px); }
+  .swl { font-size: 12px; font-weight: 700; color: var(--red-ink); margin-left: 6px; }
+
+  /* Typos table */
+  td.ed { cursor: text; position: relative; }
+  td.ed:hover { background: #F8FAFC; box-shadow: inset 0 0 0 1px #CBD5E1; }
+  td.ed.fixed { background: var(--fix-bg); padding-bottom: 18px; }
+  td.ed.fixed::after { content: attr(data-orig); position: absolute; left: 10px; bottom: 1px; font-size: 10.5px; color: #A16207;
+                       text-decoration: line-through; white-space: nowrap; }
+  td.ed input { width: 100%; font: inherit; border: 2px solid var(--navy); border-radius: 6px; padding: 3px 5px; }
+  .typo-grid { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 16px; align-items: start; }
+  .tscroll { overflow-x: auto; border-radius: 10px; }
+  .panel { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .panel h3 { margin: 0 0 8px; font-size: 14px; }
+  .log { display: flex; flex-direction: column; gap: 8px; }
+  .log .it { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
+  .log .it .row1 { display: flex; justify-content: space-between; gap: 8px; }
+  .log .it .from { color: #A16207; text-decoration: line-through; }
+  .log .it .to { font-weight: 700; }
+  .log .it .meta { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .log .undo { border: 0; background: none; color: var(--navy); font-weight: 700; cursor: pointer; font: inherit; font-size: 12px; padding: 0; }
+
+  /* Warnings */
+  .warn { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: start; background: #fff; border: 1px solid var(--line);
+          border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+  .warn .ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+  .warn.money .ic { background: var(--violet-bg); color: var(--violet-ink); }
+  .warn.addr .ic { background: var(--amber-bg); color: var(--amber-ink); }
+  .warn.data .ic { background: var(--red-bg); color: var(--red-ink); }
+  .warn .t { font-weight: 700; }
+  .warn .acts { display: flex; gap: 6px; }
+  .warn.dismissed { opacity: .45; }
+  .choice { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .choice label { border: 1px solid #CBD5E1; border-radius: 7px; padding: 4px 9px; font-size: 12.5px; cursor: pointer; background: #fff; }
+  .choice input { margin-right: 5px; }
+
+  /* Download */
+  .dl-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; margin-top: 16px; }
+  .sheet { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .sheet:last-child { border-bottom: 0; }
+  .sheet b { font-size: 15px; }
+  .hist .it { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .hist .it:last-child { border-bottom: 0; }
+  .bigdl { width: 100%; padding: 14px; font-size: 16px; margin-top: 12px; }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; padding: 4px 0; }
+  .check .ok { color: var(--green); font-weight: 800; } .check .no { color: var(--red); font-weight: 800; }
+
+  /* Shows list */
+  .shows { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 16px; }
+  .showcard { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; cursor: pointer; }
+  .showcard:hover { border-color: var(--navy); }
+  .showcard h4 { margin: 0; font-size: 16px; }
+  .showcard .meta { color: var(--muted); font-size: 12.5px; margin: 2px 0 10px; }
+  .showcard .nums { display: flex; gap: 14px; font-size: 12.5px; color: #475569; }
+  .showcard .nums b { display: block; font-size: 18px; color: var(--ink); }
+  .showcard.newcard { border-style: dashed; display: grid; place-items: center; color: var(--navy); font-weight: 800; min-height: 140px; }
+  .status { font-size: 11px; font-weight: 800; border-radius: 4px; padding: 2px 7px; float: right; }
+  .status.open { background: var(--green-bg); color: var(--green-ink); }
+  .status.past { background: #E2E8F0; color: var(--muted); }
+
+  /* Modal */
+  .modal-bg { position: absolute; inset: 0; background: rgba(15,23,42,.45); display: none; place-items: center; z-index: 20; }
+  .modal-bg.show { display: grid; }
+  .modal { background: #fff; border-radius: 14px; width: 460px; max-width: 92%; padding: 18px 20px; box-shadow: 0 20px 40px rgba(0,0,0,.25); }
+  .modal h3 { margin: 0 0 4px; }
+  .field { margin-top: 10px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 700; color: #475569; margin-bottom: 3px; }
+  .field input { width: 100%; border: 1px solid #CBD5E1; border-radius: 8px; padding: 8px 10px; font: inherit; }
+  .field .hint { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  /* Phone */
+  .below { display: grid; grid-template-columns: 360px 1fr; gap: 28px; margin-top: 30px; align-items: start; }
+  .phone { width: 360px; height: 700px; background: #fff; border-radius: 32px; border: 10px solid #0F172A; overflow: hidden;
+           box-shadow: 0 12px 30px rgba(15,23,42,.25); display: flex; flex-direction: column; }
+  .phone .bar { background: #0F1E4A; color: #fff; padding: 12px 14px; }
+  .phone .bar b { font-size: 16px; } .phone .bar div { font-size: 12px; opacity: .8; }
+  .phone .body { flex: 1; overflow-y: auto; background: var(--bg); padding: 12px; }
+  .pcard { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
+           display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+  .pcard .h { font-weight: 800; } .pcard .d { font-size: 13px; color: #475569; }
+  .notes { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+  .notes h3 { margin: 0 0 6px; color: var(--navy); }
+  .notes ul { margin: 6px 0 14px; padding-left: 18px; }
+  .notes li { margin-bottom: 4px; }
+  .q { background: #F8FAFC; border-left: 4px solid var(--navy); padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px;
+           border-radius: 10px; font-size: 13.5px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; }
+  .toast.show { opacity: 1; }
+  .hide { display: none !important; }
+  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } .side { display: none; } .stats { grid-template-columns: repeat(2, 1fr); }
+                              .typo-grid, .dl-grid, .below { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <h1>Entry formatter rebuild: preview</h1>
+  <p>Clickable mockup of the formatter rebuilt as a regular web app. Same job as today (JotForm entries → the 3-tab trial
+     workbook), with instant saving, separate logins, and a clearer path from entries to download. Names and dogs are made up.</p>
+  <div class="try">Try: switch tabs, toggle a scratch, click any cell on <b>Fix typos</b> and change it, undo a fix, resolve a warning,
+     and click <b>All shows</b> → <b>New show</b>.</div>
+</header>
+
+<div class="wrap">
+  <div class="browser">
+    <div class="chrome"><div class="dots"><span></span><span></span><span></span></div><div class="url">trial-manager.up.railway.app/shows/2026-11-luds</div></div>
+    <div class="app" style="position:relative">
+      <aside class="side">
+        <div class="brand">Trial Manager</div>
+        <a data-view="shows">All shows</a>
+        <div class="lbl">November 2026</div>
+        <a data-view="entries" class="on">Entries <span class="n" id="side-entries">0</span></a>
+        <a data-view="typos">Fix typos <span class="n" id="side-fixes">0</span></a>
+        <a data-view="warnings">Warnings <span class="n" id="side-warn">0</span></a>
+        <a data-view="download">Download</a>
+        <div class="lbl">Coming later</div>
+        <a style="opacity:.55;cursor:default">Check-in &amp; gate</a>
+        <div class="me"><b>Lachelle</b>Signed in · <u>Sign out</u></div>
+      </aside>
+
+      <main class="main">
+        <!-- Shows list -->
+        <section id="v-shows" class="hide">
+          <div class="titlebar"><div><h2>Shows</h2><div class="sub">Each trial keeps its own scratches, fixes and download history.</div></div>
+            <button class="btn primary" onclick="openNew()">+ New show</button></div>
+          <div class="shows">
+            <div class="showcard" onclick="go('entries')"><span class="status open">ENTRIES OPEN</span>
+              <h4>Level Up Dog Sports · November 2026</h4><div class="meta">Sat 11/7 – Sun 11/8 · Show ID 7104</div>
+              <div class="nums"><div><b id="sc-dogs">0</b>dogs</div><div><b id="sc-runs">0</b>runs</div><div><b id="sc-new">3</b>new</div></div></div>
+            <div class="showcard"><span class="status past">DONE</span>
+              <h4>Level Up Dog Sports · June 2026</h4><div class="meta">Sat 6/6 – Sun 6/7 · Show ID 6892</div>
+              <div class="nums"><div><b>50</b>dogs</div><div><b>211</b>runs</div><div><b>Jun 5</b>last download</div></div></div>
+            <div class="showcard newcard" onclick="openNew()">+ New show</div>
+          </div>
+        </section>
+
+        <!-- Shared show header -->
+        <section id="show-head">
+          <div class="titlebar">
+            <div><h2>Level Up Dog Sports · November 2026</h2>
+              <div class="sub">Show ID 7104 · Sat 11/7 – Sun 11/8 · JotForm 261266312429152 · <u style="cursor:pointer" onclick="openNew(true)">Edit details</u></div></div>
+            <button class="btn" onclick="sync()">Refresh from JotForm</button>
+          </div>
+          <div class="banner" id="newbanner"><span><b>3 new entries</b> since your last download (Oct 30, by Lachelle) · Synced <span id="synced">2 min ago</span></span>
+            <button class="btn small" onclick="filterNew()">Show them</button></div>
+          <div class="stats">
+            <div class="stat"><div class="k">Handlers</div><div class="v" id="st-h">0</div></div>
+            <div class="stat"><div class="k">Dogs</div><div class="v" id="st-d">0</div></div>
+            <div class="stat"><div class="k">Runs</div><div class="v" id="st-r">0</div></div>
+            <div class="stat"><div class="k">Scratched</div><div class="v" id="st-s">0</div></div>
+            <div class="stat"><div class="k">Balance outstanding</div><div class="v" id="st-b">$0</div></div>
+          </div>
+          <nav class="tabs">
+            <a data-view="entries" class="on">Entries</a><a data-view="typos">Fix typos</a>
+            <a data-view="warnings">Warnings<span class="n" id="tab-warn">0</span></a><a data-view="download">Download</a>
+          </nav>
+        </section>
+
+        <!-- Entries -->
+        <section id="v-entries">
+          <div class="toolbar">
+            <input class="search" id="q" placeholder="Search handler, dog, or number">
+            <div class="fchips" id="efilters">
+              <button class="fchip on" data-f="all">All</button><button class="fchip" data-f="new">New</button>
+              <button class="fchip" data-f="scr">Scratched</button><button class="fchip" data-f="owes">Owes money</button>
+            </div>
+            <span class="saved" id="saved-e">Saved</span>
+          </div>
+          <table><thead><tr><th>Handler</th><th>Dog</th><th>Height · Level</th><th class="num">Sat</th><th class="num">Sun</th>
+            <th class="num">Fees</th><th class="num">Paid</th><th class="num">Balance</th><th>Scratch</th></tr></thead>
+            <tbody id="etbody"></tbody></table>
+          <p class="muted" style="margin-top:8px">Scratches save the moment you toggle them. Scratching every dog for a handler removes them from all three tabs.</p>
+        </section>
+
+        <!-- Fix typos -->
+        <section id="v-typos" class="hide">
+          <div class="toolbar"><input class="search" id="q2" placeholder="Search handler, dog, or number">
+            <div class="fchips" id="tfilters"><button class="fchip on" data-t="handlers">Handlers</button><button class="fchip" data-t="dogs">Dogs</button></div>
+            <span class="saved" id="saved-t">Saved</span></div>
+          <div class="typo-grid">
+            <div>
+              <div class="tscroll"><table id="ttable"></table></div>
+              <p class="muted" style="margin-top:8px">Click a cell, type, press Enter. Fixed cells turn yellow and show what JotForm had underneath.
+                 Type the original value back to remove a fix.</p>
+            </div>
+            <div class="panel"><h3>Corrections (<span id="fixcount">0</span>)</h3><div class="log" id="log"></div></div>
+          </div>
+        </section>
+
+        <!-- Warnings -->
+        <section id="v-warnings" class="hide">
+          <p class="muted" style="margin:14px 0 10px">Things worth a look before you download. Resolve or dismiss each one; the count on the tab goes down.</p>
+          <div id="wlist"></div>
+        </section>
+
+        <!-- Download -->
+        <section id="v-download" class="hide">
+          <div class="dl-grid">
+            <div class="panel">
+              <h3>Workbook</h3>
+              <div class="sheet"><span><b>Contact</b><br><span class="muted">one row per handler</span></span><b id="dl-c">0</b></div>
+              <div class="sheet"><span><b>Balances</b><br><span class="muted">fees minus payments</span></span><b id="dl-b">0</b></div>
+              <div class="sheet"><span><b>Raw Results</b><br><span class="muted">one row per run, ready for scoring</span></span><b id="dl-r">0</b></div>
+              <div style="margin-top:12px">
+                <div class="check" id="chk-warn"></div>
+                <div class="check"><span class="ok">✓</span> Matches the trial system's template (sheet names, columns, date and number formats)</div>
+              </div>
+              <button class="btn primary bigdl" onclick="download()">Download TrialData_2026-11-luds.xlsx</button>
+            </div>
+            <div class="panel hist"><h3>Download history</h3><div id="hist"></div></div>
+          </div>
+        </section>
+
+        <!-- New show modal -->
+        <div class="modal-bg" id="modal"><div class="modal">
+          <h3 id="m-title">New show</h3><div class="muted" id="m-sub">Show ID and form carry over from your last show.</div>
+          <div class="field"><label>Show name</label><input value="Level Up Dog Sports · December 2026" id="m-name"></div>
+          <div class="row2"><div class="field"><label>Saturday</label><input type="date" value="2026-12-05"></div>
+                            <div class="field"><label>Sunday</label><input type="date" value="2026-12-06"></div></div>
+          <div class="row2"><div class="field"><label>Show ID</label><input value="7104"></div>
+                            <div class="field"><label>JotForm form ID</label><input value="261266312429152"><div class="hint">Checked when you save</div></div></div>
+          <div class="foot"><button class="btn" onclick="closeNew()">Cancel</button><button class="btn primary" onclick="closeNew(true)">Save show</button></div>
+        </div></div>
+      </main>
+    </div>
+  </div>
+
+  <div class="below">
+    <div>
+      <div class="phone"><div class="bar"><b>Entries</b><div>November 2026 · on your phone</div></div>
+        <div class="body" id="pbody"></div></div>
+    </div>
+    <div class="notes">
+      <h3>What's different from today</h3>
+      <ul>
+        <li><b>Nothing to save.</b> Scratches and typo fixes save the moment you make them. No "unsaved changes" warnings, and searching never loses an edit.</li>
+        <li><b>Separate logins</b> for you and your co-admin. Every scratch and fix records who did it and when.</li>
+        <li><b>"3 new entries since your last download"</b> tells you when the workbook is out of date, and one click shows which ones.</li>
+        <li><b>Balances on the entries table</b>, so you can spot who owes money while you work.</li>
+        <li><b>Warnings you can act on</b>: pick the right address variant, jump to the entry, or dismiss it. Today they're just a list.</li>
+        <li><b>Download history</b> per show, with who downloaded and how many runs it had.</li>
+        <li><b>Fast to open.</b> Entries are kept in the database and refreshed from JotForm on demand, instead of waiting on JotForm every page load.</li>
+        <li><b>Works on a phone</b> for quick checks (left), though it's designed for a laptop.</li>
+      </ul>
+      <h3>Questions for you</h3>
+      <div class="q">Should scratching work per <b>dog</b> (shown here), per <b>handler</b>, or both?</div>
+      <div class="q">Is the <b>Balance</b> column useful here, or only in the workbook?</div>
+      <div class="q">Do you want <b>separate logins</b> for the two of you, or is one shared password fine?</div>
+      <div class="q">Anything from today's formatter that's missing here?</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── Made-up data ─────────────────────────────────────────────────────────
+  const FEE = 15, MASTERS = 17.5;
+  const entries = [
+    { hid: '20417', first: 'Dana', last: 'Moore', email: 'dana.moore@example.com', addr: '14 Oak Hill Rd', city: 'Richmond', state: 'VA', zip: '23220',
+      dogs: [{ did: '41102', dog: 'Pepper', breed: 'Border Collie', ht: '16 regular', lvl: 'Champion', sat: 5, sun: 4, masters: 1 },
+             { did: '41388', dog: 'Ruby', breed: 'Australian Shepherd', ht: '16 regular', lvl: 'Senior', sat: 4, sun: 4, masters: 0 }], paid: 270 },
+    { hid: '18364', first: 'Sam', last: 'Ortiz', email: 'sam.ortiz@example.com', addr: '9 Birch Ln', city: 'Glen Allen', state: 'VA', zip: '23059',
+      dogs: [{ did: '30773', dog: 'Theo', breed: 'Crossbreed', ht: '8 select', lvl: 'Champion', sat: 5, sun: 5, masters: 1 }], paid: 170 },
+    { hid: '23464', first: 'Lee', last: 'Park', email: 'lee.park@example.com', addr: '220 River St', city: 'Norfolk', state: 'VA', zip: '23510',
+      dogs: [{ did: '40285', dog: 'Mishka', breed: 'Australian Shepherd', ht: '12 select', lvl: 'Beginner', sat: 3, sun: 3, masters: 0 }], paid: 90 },
+    { hid: '17838', first: 'Pat', last: 'Rivera', email: 'pat.rivera@example.com', addr: '5 Lake Dr', city: 'Midlothian', state: 'VA', zip: '23113',
+      dogs: [{ did: '29787', dog: 'Clue', breed: 'Australian Kelpie', ht: '16 select', lvl: 'Champion', sat: 4, sun: 5, masters: 1 }], paid: 135 },
+    { hid: '20981', first: 'Jo', last: 'Kim', email: 'jo.kim@example.com', addr: '77 Pine Ct', city: 'Chesapeake', state: 'ALABAMA', zip: '23320',
+      dogs: [{ did: '38114', dog: 'Biscuit', breed: 'Shetland Sheepdog', ht: '16 select', lvl: 'Senior', sat: 4, sun: 3, masters: 0 }], paid: 105 },
+    { hid: '7180', first: 'Alex', last: 'Ward', email: 'alex.ward@example.com', addr: '1744 Big Island Hwy', city: 'Bedford', state: 'VA', zip: '24523',
+      dogs: [{ did: '31275', dog: 'Juno', breed: 'Border collie', ht: '16 regular', lvl: 'Senior', sat: 4, sun: 4, masters: 0 },
+             { did: '17657', dog: 'Mirage', breed: 'Working Kelpie', ht: '20 select', lvl: 'Champion', sat: 5, sun: 5, masters: 1 }], paid: 300, isNew: true },
+    { hid: '14340', first: 'riley', last: 'chen', email: 'RILEY.CHEN@EXAMPLE.COM', addr: '3 Elm St', city: 'Ashland', state: 'VA', zip: '23005',
+      dogs: [{ did: '38280', dog: 'Moss', breed: 'English Cocker Spaniel', ht: '16 regular', lvl: 'Novice', sat: 3, sun: 2, masters: 0 }], paid: 60, isNew: true },
+    { hid: '23154', first: 'Casey', last: 'Fox', email: 'casey.fox@example.com', addr: '410 Hill Rd', city: 'Raleigh', state: 'NC', zip: '27601',
+      dogs: [{ did: '39687', dog: 'Kona', breed: 'Labrador Retriever', ht: '20 regular', lvl: 'Novice', sat: 3, sun: 3, masters: 0 }], paid: 90 },
+    { hid: '12052', first: 'Drew', last: 'Patel', email: 'drew.patel@example.com', addr: '699 Centerville Rd', city: 'Shacklefords', state: 'VA', zip: '23156',
+      dogs: [{ did: '41907', dog: 'Blaze', breed: 'Belgian Malinois', ht: '20 regular', lvl: 'Senior', sat: 2, sun: 0, masters: 0 }], paid: 60, isNew: true },
+  ];
+  const scratched = new Set();                 // dog ids
+  const fixes = {};                            // key "h:20981:state" or "d:31275:breed" -> { from, to, by, at }
+  let warnings = [
+    { id: 'w1', kind: 'money', t: 'Drew Patel (12052) has a credit of $30.00', d: 'Paid $60 for 2 classes ($30). Check whether they dropped a class after paying.', acts: ['Show entry', 'Dismiss'] },
+    { id: 'w2', kind: 'addr', t: 'Alex Ward (7180) typed their address 2 ways', d: 'Which one goes on the Contact tab?',
+      choices: ['1744 BIG ISLAND HWY', '1744 BIG ISLANE HWY'], acts: [] },
+    { id: 'w3', kind: 'data', t: 'Jo Kim (20981): state is "ALABAMA" but the zip code is in Virginia', d: 'Probably a typo in the form.', acts: ['Fix: set to VA', 'Dismiss'] },
+    { id: 'w4', kind: 'data', t: 'Riley Chen (14340): name and email are in the wrong case', d: 'The workbook capitalizes names automatically, so this is just a heads-up.', acts: ['Dismiss'] },
+  ];
+  const history = [{ who: 'Lachelle', at: 'Oct 30, 8:14 PM', runs: 120 }, { who: 'Co-admin', at: 'Oct 22, 7:02 PM', runs: 88 }];
+  let view = 'entries', efilter = 'all', tmode = 'handlers';
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const money = n => (n < 0 ? '-' : '') + '$' + Math.abs(n).toFixed(2);
+  const runs = d => d.sat + d.sun + d.masters;              // Masters Series counts as 2 classes
+  const fee = d => (d.sat + d.sun - d.masters) * FEE + d.masters * 2 * MASTERS;
+  function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
+  function flashSaved(id) { const s = $(id); s.textContent = 'Saved · ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); s.classList.add('show'); clearTimeout(s._h); s._h = setTimeout(() => s.classList.remove('show'), 1800); }
+  const val = (kind, id, f, orig) => (fixes[`${kind}:${id}:${f}`] || {}).to ?? orig;
+
+  function totals() {
+    let h = 0, d = 0, r = 0, s = 0, bal = 0;
+    entries.forEach(e => {
+      const live = e.dogs.filter(x => !scratched.has(x.did));
+      if (live.length) { h++; const f = live.reduce((a, x) => a + fee(x), 0); bal += Math.max(0, f - e.paid); }
+      d += live.length; r += live.reduce((a, x) => a + runs(x), 0); s += e.dogs.length - live.length;
+    });
+    return { h, d, r, s, bal };
+  }
+  function refreshStats() {
+    const t = totals();
+    $('st-h').textContent = t.h; $('st-d').textContent = t.d; $('st-r').textContent = t.r; $('st-s').textContent = t.s; $('st-b').textContent = money(t.bal);
+    $('side-entries').textContent = t.d; $('sc-dogs').textContent = t.d; $('sc-runs').textContent = t.r;
+    $('dl-c').textContent = t.h + ' handlers'; $('dl-b').textContent = t.h + ' handlers'; $('dl-r').textContent = t.r + ' runs';
+    const open = warnings.filter(w => !w.done).length;
+    $('side-warn').textContent = open; $('tab-warn').textContent = open; $('tab-warn').classList.toggle('hide', !open);
+    $('chk-warn').innerHTML = open ? `<span class="no">!</span> ${open} warning${open > 1 ? 's' : ''} not resolved yet <u style="cursor:pointer" onclick="go('warnings')">review</u>`
+                                   : `<span class="ok">✓</span> All warnings resolved`;
+    const nf = Object.keys(fixes).length; $('side-fixes').textContent = nf; $('fixcount').textContent = nf;
+  }
+
+  // ── Entries table ────────────────────────────────────────────────────────
+  function renderEntries() {
+    const q = $('q').value.trim().toLowerCase();
+    let html = '';
+    entries.forEach(e => {
+      const name = `${val('h', e.hid, 'first', e.first)} ${val('h', e.hid, 'last', e.last)}`;
+      const fees = e.dogs.filter(x => !scratched.has(x.did)).reduce((a, x) => a + fee(x), 0);
+      const balance = fees - e.paid;
+      e.dogs.forEach((d, k) => {
+        const scr = scratched.has(d.did);
+        const hay = `${name} ${e.hid} ${d.dog} ${d.did}`.toLowerCase();
+        if (q && !hay.includes(q)) return;
+        if (efilter === 'new' && !e.isNew) return;
+        if (efilter === 'scr' && !scr) return;
+        if (efilter === 'owes' && balance <= 0) return;
+        const hasFix = Object.keys(fixes).some(key => key.startsWith(`h:${e.hid}:`) || key.startsWith(`d:${d.did}:`));
+        html += `<tr class="${scr ? 'scr' : ''}">
+          <td>${k === 0 || q || efilter !== 'all' ? `<span class="hname">${name}</span>${e.isNew ? '<span class="tag new">NEW</span>' : ''}<div class="muted">#${e.hid}</div>` : ''}</td>
+          <td><span class="dname" style="font-weight:600">${val('d', d.did, 'dog', d.dog)}</span>${hasFix ? '<span class="tag fix">FIXED</span>' : ''}<div class="muted">${val('d', d.did, 'breed', d.breed)} · #${d.did}</div></td>
+          <td>${val('d', d.did, 'ht', d.ht)}<div class="muted">${val('d', d.did, 'lvl', d.lvl)}</div></td>
+          <td class="num">${d.sat}</td><td class="num">${d.sun}</td><td class="num">${money(fee(d))}</td>
+          <td class="num">${k === 0 || q || efilter !== 'all' ? money(e.paid) : ''}</td>
+          <td class="num">${k === 0 || q || efilter !== 'all' ? (balance > 0 ? `<span class="owes">${money(balance)}</span>` : balance < 0 ? `<span class="credit">${money(balance)}</span>` : '$0.00') : ''}</td>
+          <td class="keep"><label class="sw"><input type="checkbox" data-scr="${d.did}" ${scr ? 'checked' : ''}><span></span></label>${scr ? '<span class="swl">Scratched</span>' : ''}</td></tr>`;
+      });
+    });
+    $('etbody').innerHTML = html || `<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">No entries match.</td></tr>`;
+    renderPhone();
+  }
+  $('etbody').addEventListener('change', e => {
+    const id = e.target.dataset.scr; if (!id) return;
+    e.target.checked ? scratched.add(id) : scratched.delete(id);
+    flashSaved('saved-e'); refreshStats(); renderEntries();
+  });
+  $('q').addEventListener('input', renderEntries);
+  $('efilters').addEventListener('click', e => {
+    const b = e.target.closest('[data-f]'); if (!b) return; efilter = b.dataset.f;
+    $('efilters').querySelectorAll('.fchip').forEach(x => x.classList.toggle('on', x === b)); renderEntries();
+  });
+  function filterNew() { go('entries'); $('efilters').querySelector('[data-f="new"]').click(); }
+
+  // ── Fix typos ────────────────────────────────────────────────────────────
+  const HCOLS = [['first', 'First'], ['last', 'Last'], ['email', 'Email'], ['addr', 'Address'], ['city', 'Town'], ['state', 'State'], ['zip', 'Zip']];
+  const DCOLS = [['dog', 'Dog'], ['breed', 'Breed'], ['ht', 'Jump height'], ['lvl', 'Level']];
+  function renderTypos() {
+    const q = $('q2').value.trim().toLowerCase();
+    const cols = tmode === 'handlers' ? HCOLS : DCOLS;
+    let html = `<thead><tr><th>#</th>${tmode === 'dogs' ? '<th>Handler</th>' : ''}${cols.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>`;
+    const rows = tmode === 'handlers' ? entries.map(e => ({ kind: 'h', id: e.hid, src: e, label: '' }))
+                                      : entries.flatMap(e => e.dogs.map(d => ({ kind: 'd', id: d.did, src: d, label: `${e.first} ${e.last}` })));
+    rows.forEach(r => {
+      const hay = (r.id + ' ' + r.label + ' ' + cols.map(c => val(r.kind, r.id, c[0], r.src[c[0]])).join(' ')).toLowerCase();
+      if (q && !hay.includes(q)) return;
+      html += `<tr><td class="muted">${r.id}</td>${tmode === 'dogs' ? `<td class="muted">${r.label}</td>` : ''}` + cols.map(([f]) => {
+        const key = `${r.kind}:${r.id}:${f}`, fx = fixes[key];
+        return `<td class="ed ${fx ? 'fixed' : ''}" data-key="${key}" data-orig="${r.src[f]}">${fx ? fx.to : r.src[f]}</td>`;
+      }).join('') + '</tr>';
+    });
+    $('ttable').innerHTML = html + '</tbody>';
+    renderLog();
+  }
+  $('ttable').addEventListener('click', e => {
+    const td = e.target.closest('td.ed'); if (!td || td.querySelector('input')) return;
+    const cur = td.textContent; td.innerHTML = `<input value="${cur.replace(/"/g, '&quot;')}">`;
+    const inp = td.querySelector('input'); inp.focus(); inp.select();
+    const finish = save => {
+      if (save) {
+        const v = inp.value.trim(), orig = td.dataset.orig, key = td.dataset.key;
+        if (v === orig) { if (fixes[key]) { delete fixes[key]; toast('Fix removed, back to the JotForm value'); } }
+        else if (v !== cur) { fixes[key] = { from: orig, to: v, by: 'Lachelle', at: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) }; flashSaved('saved-t'); }
+      }
+      renderTypos(); refreshStats(); renderEntries();
+    };
+    inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') finish(true); if (ev.key === 'Escape') finish(false); });
+    inp.addEventListener('blur', () => finish(true), { once: true });
+  });
+  function renderLog() {
+    const items = Object.entries(fixes);
+    $('log').innerHTML = items.length ? items.reverse().map(([key, f]) => {
+      const [kind, id, field] = key.split(':');
+      const fname = [...HCOLS, ...DCOLS].find(c => c[0] === field)[1];
+      return `<div class="it"><div class="row1"><span>${kind === 'h' ? 'Handler' : 'Dog'} #${id} · ${fname}</span><button class="undo" data-undo="${key}">Undo</button></div>
+              <div><span class="from">${f.from}</span> → <span class="to">${f.to}</span></div><div class="meta">${f.by} · ${f.at}</div></div>`;
+    }).join('') : '<div class="muted">No corrections yet. Click any cell on the left to fix a typo.</div>';
+  }
+  $('log').addEventListener('click', e => {
+    const k = e.target.dataset.undo; if (!k) return; delete fixes[k]; toast('Fix undone'); renderTypos(); refreshStats(); renderEntries();
+  });
+  $('q2').addEventListener('input', renderTypos);
+  $('tfilters').addEventListener('click', e => {
+    const b = e.target.closest('[data-t]'); if (!b) return; tmode = b.dataset.t;
+    $('tfilters').querySelectorAll('.fchip').forEach(x => x.classList.toggle('on', x === b)); renderTypos();
+  });
+
+  // ── Warnings ─────────────────────────────────────────────────────────────
+  function renderWarnings() {
+    const ic = { money: '$', addr: '?', data: '!' };
+    $('wlist').innerHTML = warnings.map(w => `<div class="warn ${w.kind} ${w.done ? 'dismissed' : ''}"><span class="ic">${ic[w.kind]}</span>
+      <div><div class="t">${w.t}</div><div class="muted">${w.done ? w.done : w.d}</div>
+        ${w.choices && !w.done ? `<div class="choice">${w.choices.map((c, i) => `<label><input type="radio" name="${w.id}" data-w="${w.id}" data-c="${i}">${c}</label>`).join('')}</div>` : ''}</div>
+      <div class="acts">${w.done ? `<button class="btn small" data-w="${w.id}" data-a="reopen">Reopen</button>` : w.acts.map(a => `<button class="btn small" data-w="${w.id}" data-a="${a}">${a}</button>`).join('')}</div></div>`).join('');
+  }
+  $('wlist').addEventListener('click', e => {
+    const b = e.target.closest('[data-w]'); if (!b) return;
+    const w = warnings.find(x => x.id === b.dataset.w);
+    if (b.dataset.c !== undefined) { w.done = `Using "${w.choices[b.dataset.c]}" on the Contact tab.`; toast('Address choice saved'); }
+    else if (b.dataset.a === 'reopen') w.done = null;
+    else if (b.dataset.a === 'Dismiss') w.done = 'Dismissed by Lachelle.';
+    else if (b.dataset.a === 'Show entry') { $('q').value = '12052'; go('entries'); return; }
+    else if (b.dataset.a.startsWith('Fix')) { fixes['h:20981:state'] = { from: 'ALABAMA', to: 'VA', by: 'Lachelle', at: 'just now' }; w.done = 'Fixed: state set to VA (see Fix typos).'; toast('Fixed. State set to VA'); renderTypos(); renderEntries(); }
+    renderWarnings(); refreshStats();
+  });
+
+  // ── Download ─────────────────────────────────────────────────────────────
+  function renderHistory() {
+    $('hist').innerHTML = history.map(h => `<div class="it"><span><b>${h.who}</b><br><span class="muted">${h.at}</span></span><span>${h.runs} runs</span></div>`).join('');
+  }
+  function download() {
+    history.unshift({ who: 'Lachelle', at: 'Just now', runs: totals().r });
+    $('newbanner').classList.add('hide'); entries.forEach(e => delete e.isNew); $('sc-new').textContent = '0';
+    renderHistory(); renderEntries(); toast('Downloaded TrialData_2026-11-luds.xlsx');
+  }
+  function sync() { $('synced').textContent = 'just now'; toast('Refreshed from JotForm: no new entries'); }
+
+  // ── Navigation & modal ───────────────────────────────────────────────────
+  function go(v) {
+    view = v;
+    ['shows', 'entries', 'typos', 'warnings', 'download'].forEach(x => $('v-' + x).classList.toggle('hide', x !== v));
+    $('show-head').classList.toggle('hide', v === 'shows');
+    document.querySelectorAll('[data-view]').forEach(a => a.classList.toggle('on', a.dataset.view === v));
+    if (v === 'entries') renderEntries(); if (v === 'typos') renderTypos(); if (v === 'warnings') renderWarnings();
+  }
+  document.querySelectorAll('[data-view]').forEach(a => a.addEventListener('click', () => go(a.dataset.view)));
+  function openNew(edit) {
+    $('m-title').textContent = edit ? 'Edit show details' : 'New show';
+    $('m-sub').textContent = edit ? 'Changes apply to the next download.' : 'Show ID and form carry over from your last show.';
+    $('m-name').value = edit ? 'Level Up Dog Sports · November 2026' : 'Level Up Dog Sports · December 2026';
+    $('modal').classList.add('show');
+  }
+  function closeNew(saved) { $('modal').classList.remove('show'); if (saved) toast('Show saved'); }
+
+  // ── Phone view ───────────────────────────────────────────────────────────
+  function renderPhone() {
+    $('pbody').innerHTML = `<input class="search" style="width:100%;margin-bottom:10px" placeholder="Search">` + entries.flatMap(e => e.dogs.map(d => {
+      const scr = scratched.has(d.did);
+      return `<div class="pcard" style="${scr ? 'opacity:.55' : ''}"><div><div class="h" style="${scr ? 'text-decoration:line-through' : ''}">${val('d', d.did, 'dog', d.dog)}</div>
+        <div class="d">${val('h', e.hid, 'first', e.first)} ${val('h', e.hid, 'last', e.last)} · ${runs(d)} runs</div></div>
+        <label class="sw"><input type="checkbox" data-scr="${d.did}" ${scr ? 'checked' : ''}><span></span></label></div>`;
+    })).join('');
+  }
+  $('pbody').addEventListener('change', e => {
+    const id = e.target.dataset.scr; if (!id) return;
+    e.target.checked ? scratched.add(id) : scratched.delete(id); refreshStats(); renderEntries();
+  });
+
+  renderHistory(); refreshStats(); go('entries');
+</script>
+</body>
+</html>

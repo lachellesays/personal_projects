@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<style>
+  :root {
+    --navy: #1E3A8A; --navy-2: #2B4DB3; --ink: #0F172A; --muted: #64748B; --line: #E2E8F0;
+    --bg: #F1F5F9; --card: #FFFFFF; --soft: #F8FAFC;
+    --green: #16A34A; --green-bg: #DCFCE7; --green-ink: #166534;
+    --amber: #F59E0B; --amber-bg: #FEF3C7; --amber-ink: #92400E;
+    --red: #DC2626; --red-bg: #FEE2E2; --red-ink: #B91C1C;
+    --blue-bg: #E0F2FE; --blue: #0284C7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #E5E9F0; color: var(--ink);
+         font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  header.page { max-width: 1240px; margin: 0 auto; padding: 32px 16px 8px; }
+  header.page h1 { margin: 0 0 6px; font-size: 26px; color: var(--navy); }
+  header.page p { margin: 0; color: #334155; max-width: 760px; }
+  .legend { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
+  .grid { max-width: 1240px; margin: 0 auto; padding: 16px; display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 28px 20px; }
+  figure { margin: 0; display: flex; flex-direction: column; align-items: center; }
+  figcaption { width: 360px; max-width: 100%; margin-top: 10px; font-size: 13.5px; color: #334155; }
+  figcaption b { display: block; font-size: 15px; color: var(--ink); margin-bottom: 2px; }
+  figcaption ul { margin: 4px 0 0; padding-left: 18px; }
+  .who { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+         padding: 2px 7px; border-radius: 4px; margin-bottom: 6px; }
+  .who.public { background: var(--blue-bg); color: #075985; }
+  .who.staff { background: #EDE9FE; color: #5B21B6; }
+
+  /* Phone frame */
+  .phone { width: 360px; max-width: 100%; height: 740px; background: var(--card); border-radius: 34px;
+           border: 10px solid #0F172A; box-shadow: 0 12px 30px rgba(15,23,42,.25); overflow: hidden;
+           display: flex; flex-direction: column; position: relative; }
+  .screen { flex: 1; overflow-y: auto; background: var(--bg); position: relative; }
+  .appbar { background: var(--navy); color: #fff; padding: 14px 16px 12px; }
+  .appbar .t { font-weight: 800; font-size: 17px; }
+  .appbar .s { font-size: 12.5px; opacity: .85; margin-top: 1px; }
+  .daytabs { display: flex; gap: 6px; margin-top: 10px; }
+  .daytabs button { flex: 1; border: 0; border-radius: 8px; padding: 7px 0; font: inherit; font-size: 13px; font-weight: 700;
+                    background: rgba(255,255,255,.15); color: #fff; cursor: pointer; }
+  .daytabs button.on { background: #fff; color: var(--navy); }
+  .tabbar { display: flex; border-top: 1px solid var(--line); background: #fff; }
+  .tabbar a { flex: 1; text-align: center; padding: 9px 0 11px; font-size: 12px; font-weight: 600; color: var(--muted);
+              text-decoration: none; border-top: 3px solid transparent; }
+  .tabbar a.on { color: var(--navy); border-top-color: var(--navy); }
+  .tabbar .ico { display: block; width: 22px; height: 22px; margin: 0 auto 2px; }
+  .pad { padding: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .card + .card { margin-top: 12px; }
+  h2.sec { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 2px 8px; }
+  .muted { color: var(--muted); font-size: 13px; }
+
+  .btn { display: block; width: 100%; border: 0; border-radius: 10px; padding: 14px; font: inherit; font-weight: 700;
+         font-size: 16px; cursor: pointer; text-align: center; }
+  .btn.primary { background: var(--navy); color: #fff; }
+  .btn.ghost { background: #fff; color: var(--ink); border: 1px solid #CBD5E1; }
+  input.big { width: 100%; font: inherit; font-size: 22px; padding: 14px; border-radius: 10px; border: 1px solid #CBD5E1;
+              letter-spacing: .05em; margin: 8px 0 12px; }
+
+  .pill { font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+  .p-not { background: #F1F5F9; color: #475569; }
+  .p-in { background: var(--green-bg); color: var(--green-ink); }
+  .p-ring { background: var(--amber); color: #fff; }
+  .p-done { background: #E2E8F0; color: var(--muted); }
+  .p-scr { background: var(--red-bg); color: var(--red-ink); }
+  .you { font-size: 10.5px; font-weight: 800; color: #fff; background: var(--blue); border-radius: 4px; padding: 1px 5px;
+         vertical-align: 2px; margin-right: 4px; }
+
+  /* Live strip */
+  .strip { background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 12px; padding: 11px 13px; }
+  .strip .row { display: flex; justify-content: space-between; gap: 8px; }
+  .strip b { color: var(--navy); }
+  .strip .live { font-size: 11px; font-weight: 700; color: var(--green); display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  /* Next-run hero */
+  .hero { background: var(--navy); color: #fff; border-radius: 14px; padding: 16px; }
+  .hero .k { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; opacity: .8; }
+  .hero .big { font-size: 24px; font-weight: 800; margin: 4px 0 2px; }
+  .hero .eta { display: flex; gap: 18px; margin-top: 10px; }
+  .hero .eta div { font-size: 12px; opacity: .85; }
+  .hero .eta b { display: block; font-size: 20px; opacity: 1; }
+
+  /* Run row with segmented control */
+  .dog h3 { margin: 0 0 2px; font-size: 19px; }
+  .run { border-top: 1px solid var(--line); padding: 12px 0 2px; margin-top: 10px; }
+  .run .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .run .cls { font-weight: 700; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr 44px; gap: 8px; margin-top: 9px; }
+  .seg button { border: 1px solid #CBD5E1; background: #fff; border-radius: 10px; padding: 11px 0; font: inherit;
+                font-weight: 700; cursor: pointer; color: var(--ink); }
+  .seg button.on-in { background: var(--green); border-color: var(--green); color: #fff; }
+  .seg button.on-scr { background: var(--red); border-color: var(--red); color: #fff; }
+  .seg button.more { font-size: 18px; line-height: 1; }
+
+  /* Chips */
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 12px 14px 4px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: 0 0 auto; border: 1px solid #CBD5E1; background: #fff; border-radius: 999px; padding: 7px 13px;
+          font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; color: var(--ink); }
+  .chip.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .chip .n { opacity: .7; font-weight: 500; margin-left: 4px; }
+  .chip.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+                       background: var(--amber); margin-right: 6px; vertical-align: 1px; }
+
+  /* Running order list */
+  .ht { font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: .05em; margin: 14px 4px 6px; }
+  .list { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .ro { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px;
+        border-top: 1px solid var(--line); }
+  .ro:first-child { border-top: 0; }
+  .ro .n { color: var(--muted); font-weight: 700; text-align: right; }
+  .ro .d { font-weight: 700; font-size: 16px; }
+  .ro .h { font-size: 12.5px; color: var(--muted); }
+  .ro.ring { background: var(--amber-bg); box-shadow: inset 4px 0 0 var(--amber); }
+  .ro.mine { background: var(--blue-bg); }
+  .ro.done .d, .ro.done .h, .ro.done .n { color: #94A3B8; }
+  .ro.scr .d { text-decoration: line-through; color: #94A3B8; }
+
+  /* Results */
+  .res { display: grid; grid-template-columns: 38px 1fr auto; gap: 10px; align-items: center; padding: 11px 12px;
+         border-top: 1px solid var(--line); }
+  .res:first-child { border-top: 0; }
+  .place { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px;
+           background: #F1F5F9; color: #475569; }
+  .place.p1 { background: #FDE68A; color: #78350F; } .place.p2 { background: #E5E7EB; color: #374151; }
+  .place.p3 { background: #FED7AA; color: #7C2D12; }
+  .res .stats { text-align: right; font-size: 12.5px; color: var(--muted); }
+  .res .stats b { display: block; font-size: 15px; color: var(--ink); }
+  .q { font-size: 10.5px; font-weight: 800; color: var(--green-ink); background: var(--green-bg); padding: 1px 6px; border-radius: 4px; }
+  .res.elim .d, .res.elim .stats b { color: #94A3B8; font-style: italic; }
+  .toggle { display: flex; background: #E2E8F0; border-radius: 10px; padding: 3px; margin: 10px 14px 0; }
+  .toggle button { flex: 1; border: 0; background: transparent; padding: 8px; border-radius: 8px; font: inherit;
+                   font-size: 13.5px; font-weight: 700; color: #475569; cursor: pointer; }
+  .toggle button.on { background: #fff; color: var(--navy); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+
+  /* Gate (simplified) */
+  .g-head { background: var(--navy); color: #fff; padding: 12px 14px 10px; }
+  .g-head .t { font-weight: 800; font-size: 17px; }
+  .g-head .s { font-size: 12.5px; opacity: .85; }
+  .g-sticky { position: sticky; top: 0; z-index: 5; background: var(--bg); }
+  .g-sticky .chips { padding-top: 10px; }
+  .holds { padding: 0 12px; }
+  .hold { display: flex; align-items: center; gap: 10px; background: #1E293B; color: #fff; border-radius: 12px;
+          padding: 10px 12px; margin-top: 8px; }
+  .hold .clock { font: 800 24px/1 ui-monospace, SFMono-Regular, Menlo, monospace; min-width: 70px; }
+  .hold .hw { flex: 1; font-size: 13px; line-height: 1.3; }
+  .hold .hw b { font-size: 15px; }
+  .hold button { border: 0; background: rgba(255,255,255,.15); color: #fff; border-radius: 8px; padding: 8px 10px;
+                 font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .hold.over { background: var(--red); animation: flash 1s infinite; }
+  @keyframes flash { 50% { background: #991B1B; } }
+  .g-list { padding: 8px 12px 16px; }
+  .band { display: flex; align-items: center; gap: 8px; margin: 14px 2px 6px; font-weight: 800; font-size: 13px; letter-spacing: .04em; }
+  .band .h { background: var(--ink); color: #fff; border-radius: 6px; padding: 3px 9px; font-size: 14px; }
+  .band .a { border-radius: 6px; padding: 3px 9px; }
+  .band .a.up { background: #D1FAE5; color: #065F46; }
+  .band .a.down { background: var(--red-bg); color: #991B1B; }
+  .band .change { font-size: 11px; color: var(--red-ink); }
+  .grow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; background: #fff;
+          border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 10px 14px; margin-bottom: 7px;
+          cursor: pointer; user-select: none; }
+  .grow .dog { font-size: 20px; font-weight: 800; line-height: 1.15; }
+  .grow .breed { font-size: 14px; color: #475569; }
+  .grow .tags { margin-top: 3px; display: flex; gap: 5px; flex-wrap: wrap; }
+  .tag { font-size: 11px; font-weight: 800; border-radius: 4px; padding: 1px 6px; }
+  .tag.notin { background: #FEF3C7; color: #92400E; }
+  .tag.conf { background: #EDE9FE; color: #5B21B6; }
+  .tag.held { background: #1E293B; color: #fff; }
+  .grow .acts { display: flex; gap: 6px; }
+  .grow .acts button { border: 1px solid #CBD5E1; background: #fff; border-radius: 9px; padding: 10px 9px; font: inherit;
+                       font-size: 12.5px; font-weight: 800; cursor: pointer; color: var(--ink); }
+  .grow .acts .ci { border-color: var(--green); color: var(--green-ink); }
+  .grow.next { border: 2px solid var(--navy); box-shadow: 0 2px 8px rgba(30,58,138,.15); }
+  .grow .nextlbl { font-size: 10.5px; font-weight: 800; color: #fff; background: var(--navy); border-radius: 4px; padding: 1px 6px;
+                   margin-right: 6px; vertical-align: 3px; }
+  .grow.done { background: transparent; border-style: dashed; }
+  .grow.done .dog, .grow.done .breed { color: #94A3B8; text-decoration: line-through; }
+  .grow.scr { background: transparent; }
+  .grow.scr .dog { color: #94A3B8; text-decoration: line-through; }
+  .grow.scr .breed { color: #94A3B8; }
+  .undo { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .demo { width: 360px; max-width: 100%; margin-top: 8px; font-size: 12.5px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .demo label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+
+  /* Admin reorder */
+  .adm-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 12px 14px 0; scrollbar-width: none; }
+  .adm-tabs span { flex: 0 0 auto; font-size: 13px; font-weight: 700; padding: 7px 11px; border-radius: 8px; background: #fff;
+                   border: 1px solid var(--line); color: #475569; }
+  .adm-tabs span.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .drag { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .drow { display: grid; grid-template-columns: 26px 28px 1fr auto; gap: 8px; align-items: center; padding: 11px 10px;
+          border-top: 1px solid var(--line); background: #fff; touch-action: none; }
+  .drow:first-child { border-top: 0; }
+  .grip { color: #94A3B8; cursor: grab; display: grid; place-items: center; }
+  .drow .pos { color: var(--muted); font-weight: 700; text-align: right; }
+  .drow.scr .d { text-decoration: line-through; color: #94A3B8; }
+  .drow.ghost { background: #EEF2FF; opacity: .6; }
+  .savebar { position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 10px 14px;
+             display: flex; gap: 10px; align-items: center; }
+  .savebar .muted { flex: 1; }
+  .savebar .btn { width: auto; padding: 11px 18px; }
+  .savebar .btn[disabled] { background: #CBD5E1; cursor: default; }
+  .toast { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); background: var(--ink); color: #fff;
+           padding: 9px 14px; border-radius: 9px; font-size: 13.5px; opacity: 0; transition: opacity .2s; pointer-events: none;
+           white-space: nowrap; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 420px) { .phone { height: 680px; border-width: 6px; border-radius: 24px; } }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <h1>New trial check-in app: preview</h1>
+  <p>A preview of a new trial check-in app for UKI trials: what exhibitors see on their phones, the gate steward's screen, and the secretary's tools. Everything is clickable, nothing is saved, and the names and dogs are made up. I'd love your feedback on what's confusing, missing, or unnecessary.</p>
+  <div class="legend">Things you can try: switch days and classes, tap Checked in / Scratch, tap START RUN / FINISH on the gate,
+     and drag dogs by the handle on the reorder screen.</div>
+</header>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 11l3 3 8-8M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4zM17 5h3v2a3 3 0 01-3 3M7 5H4v2a3 3 0 003 3"/></symbol>
+    <symbol id="i-gate" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 21V5M20 21V5M4 9h16M4 15h16"/></symbol>
+    <symbol id="i-grip" viewBox="0 0 24 24"><path fill="currentColor" d="M9 5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm6 0a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM9 10.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm6 0a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM9 16a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm6 0a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"/></symbol>
+  </defs>
+</svg>
+
+<main class="grid">
+
+  <!-- 1. Find my dogs -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="appbar">
+        <div class="t">LUDS UKI Trial</div><div class="s">Level Up Dog Sports · November 2026</div>
+        <div class="daytabs"><button class="on">Sat 11/7</button><button>Sun 11/8</button></div>
+      </div>
+      <div class="pad">
+        <div class="strip">
+          <div class="row"><span><b>Ring 1:</b> Senior/Champ Agility</span><span class="live"><span class="dot"></span>LIVE</span></div>
+          <div class="muted" style="margin-top:3px">12 dogs to go · Next up: Biscuit, Juno</div>
+        </div>
+        <div class="card" style="margin-top:14px">
+          <div style="font-weight:800;font-size:18px">Check in for today</div>
+          <div class="muted">Enter your UKI handler number to see your dogs and runs.</div>
+          <input class="big" inputmode="numeric" placeholder="e.g. 12345" value="">
+          <button class="btn primary">Find my dogs</button>
+        </div>
+        <p class="muted" style="text-align:center;margin-top:14px">After this, bookmark the page or tap <b>Add to Home Screen</b>
+          so it opens straight to your dogs.</p>
+      </div>
+    </div>
+    <nav class="tabbar"><a class="on" href="#"><svg class="ico"><use href="#i-check"/></svg>Check-in</a><a href="#"><svg class="ico"><use href="#i-list"/></svg>Order</a><a href="#"><svg class="ico"><use href="#i-trophy"/></svg>Results</a></nav>
+    </div>
+    <figcaption><span class="who public">Exhibitors</span><b>1. Start screen</b>
+      <ul><li>Day switch and live ring status on the very first screen.</li>
+          <li>Bottom tab bar like a normal phone app; installable to the home screen.</li></ul></figcaption>
+  </figure>
+
+  <!-- 2. My runs -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="appbar"><div class="t">Hi, Dana</div><div class="s">Handler #20417 · Saturday 11/7 · <u>Not me</u></div></div>
+      <div class="pad">
+        <div class="hero">
+          <div class="k">Your next run</div>
+          <div class="big">Pepper · S/C Agility</div>
+          <div style="opacity:.9">#9 of 18 · Ring 1</div>
+          <div class="eta"><div><b>4</b>dogs ahead</div><div><b>~6 min</b>estimated</div><div><b>16"</b>jump height</div></div>
+        </div>
+
+        <div class="card dog" style="margin-top:14px">
+          <h3>Pepper</h3><div class="muted">Border Collie · 16" Regular · Champ</div>
+          <button class="btn ghost" style="margin-top:10px;padding:11px" onclick="checkAll(this)">Check in all remaining runs</button>
+          <div class="run" data-run>
+            <div class="top"><span class="cls">Senior/Champ Agility</span><span class="pill p-in">Checked in</span></div>
+            <div class="muted">4 dogs ahead · ~6 min</div>
+            <div class="seg"><button class="on-in">Checked in</button><button>Scratch</button><button class="more">⋯</button></div>
+          </div>
+          <div class="run" data-run>
+            <div class="top"><span class="cls">Senior/Champ Jumping</span><span class="pill p-not">Not checked in</span></div>
+            <div class="muted">#3 of 15 · class not started</div>
+            <div class="seg"><button>Checked in</button><button>Scratch</button><button class="more">⋯</button></div>
+          </div>
+          <div class="run" data-run>
+            <div class="top"><span class="cls">Gamblers</span><span class="pill p-done">Done</span></div>
+            <div class="muted">Finished at 8:52 AM</div>
+          </div>
+        </div>
+
+        <div class="card dog">
+          <h3>Rocket</h3><div class="muted">Mixed Breed · 12" Select · Novice</div>
+          <div class="run" data-run>
+            <div class="top"><span class="cls">Beginner/Novice Agility</span><span class="pill p-not">Not checked in</span></div>
+            <div class="muted">#5 of 9 · class not started</div>
+            <div class="seg"><button>Checked in</button><button>Scratch</button><button class="more">⋯</button></div>
+          </div>
+          <div class="run" data-run>
+            <div class="top"><span class="cls">Speedstakes</span><span class="pill p-scr">Scratched</span></div>
+            <div class="muted">Tap Scratch again to undo</div>
+            <div class="seg"><button>Checked in</button><button class="on-scr">Scratch</button><button class="more">⋯</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <nav class="tabbar"><a class="on" href="#"><svg class="ico"><use href="#i-check"/></svg>Check-in</a><a href="#"><svg class="ico"><use href="#i-list"/></svg>Order</a><a href="#"><svg class="ico"><use href="#i-trophy"/></svg>Results</a></nav>
+    </div>
+    <figcaption><span class="who public">Exhibitors</span><b>2. My runs</b>
+      <ul><li>"Your next run" card answers the #1 question at a trial: how long until I'm up?</li>
+          <li>One-tap Checked in / Scratch per run (tap again to undo). Try it.</li>
+          <li>Estimated minutes come from how fast the class is actually running.</li></ul></figcaption>
+  </figure>
+
+  <!-- 3. Running order -->
+  <figure>
+    <div class="phone"><div class="screen" id="ro">
+      <div class="appbar"><div class="t">Running order</div><div class="s">Saturday 11/7 · updated 9:41 AM</div></div>
+      <div class="chips">
+        <button class="chip">Gamblers<span class="n">done</span></button>
+        <button class="chip on live">S/C Agility<span class="n">18</span></button>
+        <button class="chip">B/N Agility<span class="n">9</span></button>
+        <button class="chip">S/C Agility 2<span class="n">16</span></button>
+        <button class="chip">S/C Jumping<span class="n">15</span></button>
+        <button class="chip">B/N Jumping<span class="n">8</span></button>
+        <button class="chip">Speedstakes<span class="n">21</span></button>
+      </div>
+      <div class="pad" style="padding-top:8px">
+        <div class="strip">
+          <div class="row"><span><b>Now running:</b> Clue <span class="muted">(Pat Rivera)</span></span><span class="live"><span class="dot"></span>LIVE</span></div>
+          <div style="margin-top:2px"><b>On deck:</b> Biscuit, Juno</div>
+        </div>
+        <div class="card" style="margin-top:10px;background:var(--blue-bg);border-color:#BAE6FD;padding:10px 12px">
+          <b>Pepper</b> — 4 dogs ahead · about 6 minutes
+        </div>
+        <div class="ht">12"</div>
+        <div class="list">
+          <div class="ro done"><span class="n">1</span><div><div class="d">Theo</div><div class="h">Sam Ortiz · Select</div></div><span class="pill p-done">Done</span></div>
+          <div class="ro scr"><span class="n">2</span><div><div class="d">Mishka</div><div class="h">Lee Park · Select</div></div><span class="pill p-scr">Scratched</span></div>
+          <div class="ro done"><span class="n">3</span><div><div class="d">Ziggy</div><div class="h">Morgan Hale · Regular</div></div><span class="pill p-done">Done</span></div>
+        </div>
+        <div class="ht">16"</div>
+        <div class="list">
+          <div class="ro ring"><span class="n">4</span><div><div class="d">Clue</div><div class="h">Pat Rivera · Select</div></div><span class="pill p-ring">In ring</span></div>
+          <div class="ro"><span class="n">5</span><div><div class="d">Biscuit</div><div class="h">Jo Kim · Select</div></div><span class="pill p-in">Checked in</span></div>
+          <div class="ro"><span class="n">6</span><div><div class="d">Juno</div><div class="h">Alex Ward · Regular</div></div><span class="pill p-in">Checked in</span></div>
+          <div class="ro"><span class="n">7</span><div><div class="d">Moss</div><div class="h">Riley Chen · Regular</div></div><span class="pill p-not">Not checked in</span></div>
+          <div class="ro"><span class="n">8</span><div><div class="d">Kona</div><div class="h">Casey Fox · Regular</div></div><span class="pill p-in">Checked in</span></div>
+          <div class="ro mine"><span class="n">9</span><div><div class="d"><span class="you">YOU</span>Pepper</div><div class="h">Dana Moore · Regular</div></div><span class="pill p-in">Checked in</span></div>
+          <div class="ro"><span class="n">10</span><div><div class="d">Arlo</div><div class="h">Jamie Ross · Regular</div></div><span class="pill p-not">Not checked in</span></div>
+        </div>
+        <div class="ht">20"</div>
+        <div class="list">
+          <div class="ro"><span class="n">11</span><div><div class="d">Mirage</div><div class="h">Taylor Quinn · Select</div></div><span class="pill p-in">Checked in</span></div>
+          <div class="ro"><span class="n">12</span><div><div class="d">Blaze</div><div class="h">Drew Patel · Regular</div></div><span class="pill p-not">Not checked in</span></div>
+        </div>
+      </div>
+    </div>
+    <nav class="tabbar"><a href="#"><svg class="ico"><use href="#i-check"/></svg>Check-in</a><a class="on" href="#"><svg class="ico"><use href="#i-list"/></svg>Order</a><a href="#"><svg class="ico"><use href="#i-trophy"/></svg>Results</a></nav>
+    </div>
+    <figcaption><span class="who public">Exhibitors</span><b>3. Running order</b>
+      <ul><li>Class chips show run counts; the orange dot marks the class in the ring now.</li>
+          <li>Grouped by jump height, your dog tagged YOU, live status on every row.</li>
+          <li>Updates quietly in place, with no full-page refresh flicker.</li></ul></figcaption>
+  </figure>
+
+  <!-- 4. Results -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="appbar"><div class="t">Results</div><div class="s">Saturday 11/7</div></div>
+      <div class="toggle"><button class="on">All results</button><button>My dogs</button></div>
+      <div class="chips">
+        <button class="chip on">Gamblers</button><button class="chip">S/C Agility</button><button class="chip">B/N Agility</button>
+        <button class="chip">Speedstakes</button>
+      </div>
+      <div class="pad" style="padding-top:6px">
+        <div class="ht">REGULAR · 16"</div>
+        <div class="list">
+          <div class="res"><span class="place p1">1</span><div><div class="d"><b>Juno</b> <span class="q">Q</span></div><div class="h muted">Alex Ward</div></div><div class="stats"><b>48 pts</b>34.21s</div></div>
+          <div class="res"><span class="place p2">2</span><div><div class="d"><b>Pepper</b> <span class="q">Q</span></div><div class="h muted"><span class="you">YOU</span>Dana Moore</div></div><div class="stats"><b>44 pts</b>36.80s</div></div>
+          <div class="res"><span class="place p3">3</span><div><div class="d"><b>Kona</b></div><div class="h muted">Casey Fox</div></div><div class="stats"><b>39 pts</b>35.02s</div></div>
+          <div class="res"><span class="place">—</span><div><div class="d"><b>Moss</b></div><div class="h muted">Riley Chen</div></div><div class="stats"><b>31 pts</b>38.40s</div></div>
+          <div class="res elim"><span class="place">—</span><div><div class="d"><b>Arlo</b></div><div class="h muted">Jamie Ross</div></div><div class="stats"><b>E</b>—</div></div>
+        </div>
+        <div class="ht">SELECT · 12"</div>
+        <div class="list">
+          <div class="res"><span class="place p1">1</span><div><div class="d"><b>Theo</b> <span class="q">Q</span></div><div class="h muted">Sam Ortiz</div></div><div class="stats"><b>52 pts</b>31.77s</div></div>
+          <div class="res"><span class="place p2">2</span><div><div class="d"><b>Ziggy</b></div><div class="h muted">Morgan Hale</div></div><div class="stats"><b>40 pts</b>33.10s</div></div>
+        </div>
+        <p class="muted" style="margin-top:10px">Tap a row for full scoring: SCT, faults, time faults, YPS.</p>
+      </div>
+    </div>
+    <nav class="tabbar"><a href="#"><svg class="ico"><use href="#i-check"/></svg>Check-in</a><a href="#"><svg class="ico"><use href="#i-list"/></svg>Order</a><a class="on" href="#"><svg class="ico"><use href="#i-trophy"/></svg>Results</a></nav>
+    </div>
+    <figcaption><span class="who public">Exhibitors</span><b>4. Results</b>
+      <ul><li>Phone-sized result rows instead of a wide 10-column table.</li>
+          <li>"My dogs" shows just your results across every class.</li>
+          <li>Details (SCT, faults, YPS) one tap away, not crammed in.</li></ul></figcaption>
+  </figure>
+
+  <!-- 5. Gate (simplified) -->
+  <figure>
+    <div class="phone"><div class="screen" id="gate">
+      <div class="g-head"><div class="t">Gate</div><div class="s">Saturday 11/7 · Ring 1</div></div>
+      <div class="g-sticky">
+        <div class="chips">
+          <button class="chip">Gamblers</button><button class="chip on live">S/C Agility</button>
+          <button class="chip">B/N Agility</button><button class="chip">S/C Jumping</button>
+        </div>
+        <div class="holds" id="holds"></div>
+      </div>
+      <div class="g-list" id="g-list"></div>
+    </div>
+    <div class="toast" id="g-toast"></div>
+    </div>
+    <div class="demo"><label><input type="checkbox" id="fast"> Preview only: run conflict timers 30× faster</label></div>
+    <figcaption><span class="who staff">Gate stewards</span><b>5. Gate (simplified)</b>
+      <ul><li>Only what the gate needs: dog name, breed, height bands, A-frame bands.</li>
+          <li><b>Tap a dog</b> to cross it off as it goes in the ring (tap again to undo).</li>
+          <li><b>Check in</b> / <b>Scratch</b> buttons only appear where they're useful.</li>
+          <li><b>Conflict hold:</b> Dana has Pepper and Ruby. Cross off Pepper, then cross off the
+              next dog (Juno) and a 6:00 hold starts for Ruby automatically.</li></ul></figcaption>
+  </figure>
+
+  <!-- 6. Admin reorder -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="appbar"><div class="t">Admin</div><div class="s">Saturday 11/7 · secretary</div></div>
+      <div class="adm-tabs"><span>Upload</span><span class="on">Reorder</span><span>Late entry</span><span>Maps</span><span>Results</span><span>Reset</span></div>
+      <div class="chips">
+        <button class="chip">Gamblers</button><button class="chip on">S/C Agility</button><button class="chip">B/N Agility</button>
+        <button class="chip">S/C Jumping</button>
+      </div>
+      <div class="pad" style="padding-top:6px">
+        <p class="muted" style="margin:0 2px 8px">Drag a dog by its handle. Changes go live for everyone when you save.</p>
+        <div class="drag" id="drag"></div>
+      </div>
+      <div class="savebar"><span class="muted" id="dirty">No changes</span><button class="btn primary" id="save" disabled>Save order</button></div>
+    </div>
+    <div class="toast" id="a-toast"></div>
+    </div>
+    <figcaption><span class="who staff">Secretary</span><b>6. Admin: reorder</b>
+      <ul><li>Real drag handles that work with a finger on a phone or tablet.</li>
+          <li>Position numbers update as you drag; save bar stays at the bottom.</li>
+          <li>Same Admin sections as today (upload, late entry, maps, results, reset).</li></ul></figcaption>
+  </figure>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script>
+  // Day tabs and chips: simple single-select highlighting
+  document.querySelectorAll('.daytabs, .chips, .toggle').forEach(group => {
+    group.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      group.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    });
+  });
+
+  // My runs: Checked in / Scratch toggles
+  const PILL = { in: ['p-in', 'Checked in'], scr: ['p-scr', 'Scratched'], not: ['p-not', 'Not checked in'] };
+  function setRun(run, state) {
+    const [ci, sc] = run.querySelectorAll('.seg button');
+    ci.className = state === 'in' ? 'on-in' : ''; sc.className = state === 'scr' ? 'on-scr' : '';
+    const pill = run.querySelector('.pill'); pill.className = 'pill ' + PILL[state][0]; pill.textContent = PILL[state][1];
+  }
+  document.querySelectorAll('[data-run]').forEach(run => {
+    const btns = run.querySelectorAll('.seg button'); if (!btns.length) return;
+    btns[0].onclick = () => setRun(run, btns[0].classList.contains('on-in') ? 'not' : 'in');
+    btns[1].onclick = () => setRun(run, btns[1].classList.contains('on-scr') ? 'not' : 'scr');
+  });
+  function checkAll(btn) {
+    btn.closest('.dog').querySelectorAll('[data-run]').forEach(r => {
+      const p = r.querySelector('.pill'); if (r.querySelector('.seg') && p.classList.contains('p-not')) setRun(r, 'in');
+    });
+    btn.textContent = 'All runs checked in'; btn.disabled = true;
+  }
+
+  // Gate (simplified). States: not = not checked in, in = checked in, done = crossed off, scr = scratched
+  const gate = [
+    { h: 12, type: 'Select',  dog: 'Theo',    breed: 'Crossbreed',            who: 'Sam Ortiz',    st: 'done' },
+    { h: 12, type: 'Regular', dog: 'Ziggy',   breed: 'Papillon',              who: 'Morgan Hale',  st: 'done' },
+    { h: 16, type: 'Select',  dog: 'Clue',    breed: 'Australian Kelpie',     who: 'Pat Rivera',   st: 'done' },
+    { h: 16, type: 'Select',  dog: 'Biscuit', breed: 'Shetland Sheepdog',     who: 'Jo Kim',       st: 'in' },
+    { h: 16, type: 'Regular', dog: 'Pepper',  breed: 'Border Collie',         who: 'Dana Moore',   st: 'in' },
+    { h: 16, type: 'Regular', dog: 'Juno',    breed: 'Border Collie',         who: 'Alex Ward',    st: 'in' },
+    { h: 16, type: 'Regular', dog: 'Ruby',    breed: 'Australian Shepherd',   who: 'Dana Moore',   st: 'in' },
+    { h: 16, type: 'Regular', dog: 'Moss',    breed: 'English Cocker Spaniel', who: 'Riley Chen',  st: 'not' },
+    { h: 20, type: 'Select',  dog: 'Mirage',  breed: 'Working Kelpie',        who: 'Taylor Quinn', st: 'in' },
+    { h: 20, type: 'Regular', dog: 'Kona',    breed: 'Labrador Retriever',    who: 'Casey Fox',    st: 'in' },
+    { h: 20, type: 'Regular', dog: 'Blaze',   breed: 'Belgian Malinois',      who: 'Drew Patel',   st: 'not' },
+  ];
+  const HOLD_SECONDS = 6 * 60;
+  const holds = [];   // { handler, dog (index of the dog being held), ends (ms) }
+
+  function toast(id, msg) { const t = document.getElementById(id); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2000); }
+  const dogsByHandler = h => gate.map((r, i) => r.who === h ? i : -1).filter(i => i >= 0);
+  const aframe = r => (r.h <= 12 || r.type === 'Select') ? 'down' : 'up';
+  const fmt = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const speed = () => document.getElementById('fast').checked ? 30 : 1;
+
+  function renderGate() {
+    const list = document.getElementById('g-list');
+    // NEXT skips dogs that are on an active conflict hold; the gate sends the following dog instead
+    const held = i => holds.some(h => h.dog === i && h.ends > Date.now());
+    const nextI = gate.findIndex((r, i) => (r.st === 'in' || r.st === 'not') && !held(i));
+    let html = '', prevH = null, prevA = null;
+    gate.forEach((r, i) => {
+      const a = aframe(r);
+      const hChanged = r.h !== prevH, aChanged = r.st !== 'scr' && a !== prevA;
+      if (hChanged || aChanged) {
+        html += `<div class="band">` +
+          (hChanged ? `<span class="h">${r.h}"</span>` : '') +
+          (aChanged ? `<span class="a ${a}">A-FRAME ${a.toUpperCase()}</span>` : '') +
+          (prevH !== null && hChanged ? `<span class="change">height change</span>` : '') + `</div>`;
+      }
+      prevH = r.h; if (r.st !== 'scr') prevA = a;
+
+      const multi = dogsByHandler(r.who).length > 1;
+      const hold = holds.find(h => h.dog === i);
+      const tags = [
+        r.st === 'not' ? '<span class="tag notin">NOT CHECKED IN</span>' : '',
+        multi && r.st !== 'done' && r.st !== 'scr' ? `<span class="tag conf">${r.who.split(' ')[0]} has ${dogsByHandler(r.who).length} dogs</span>` : '',
+        hold ? `<span class="tag held">ON HOLD</span>` : '',
+      ].join('');
+      let acts = '';
+      if (r.st === 'not') acts = `<button class="ci" data-a="in" data-i="${i}">Check in</button><button data-a="scr" data-i="${i}">Scratch</button>`;
+      else if (r.st === 'in') acts = `<button data-a="scr" data-i="${i}">Scratch</button>`;
+      else if (r.st === 'scr') acts = `<button data-a="unscr" data-i="${i}">Undo</button>`;
+      else acts = `<span class="undo">tap to undo</span>`;
+      html += `<div class="grow ${r.st === 'done' ? 'done' : ''} ${r.st === 'scr' ? 'scr' : ''} ${i === nextI ? 'next' : ''}" data-row="${i}">
+          <div><div class="dog">${i === nextI ? '<span class="nextlbl">NEXT</span>' : ''}${r.dog}</div>
+          <div class="breed">${r.breed}</div>${tags ? `<div class="tags">${tags}</div>` : ''}</div>
+          <div class="acts">${acts}</div></div>`;
+    });
+    list.innerHTML = html;
+    renderHolds();
+  }
+
+  function renderHolds() {
+    const now = Date.now();
+    document.getElementById('holds').innerHTML = holds.map((h, k) => {
+      const left = (h.ends - now) / 1000;
+      const over = left <= 0;
+      return `<div class="hold ${over ? 'over' : ''}"><span class="clock">${over ? '0:00' : fmt(left)}</span>
+        <span class="hw"><b>${gate[h.dog].dog}</b> · conflict hold<br>${over ? 'Hold over: call ' + h.handler + ' now' : h.handler + ' getting next dog'}</span>
+        <button data-clear="${k}">${over ? 'Done' : 'End hold'}</button></div>`;
+    }).join('');
+  }
+
+  // The conflict rule: when a dog is crossed off, look at the dog crossed off just before it.
+  // If that earlier dog's handler still has another dog waiting later in this class, start a hold for it.
+  function maybeStartHold(crossedIdx) {
+    const prevIdx = [...gate.keys()].slice(0, crossedIdx).reverse().find(j => gate[j].st === 'done');
+    if (prevIdx === undefined) return;
+    const handler = gate[prevIdx].who;
+    const waiting = dogsByHandler(handler).find(j => j > prevIdx && (gate[j].st === 'in' || gate[j].st === 'not'));
+    if (waiting === undefined || holds.some(h => h.dog === waiting)) return;
+    holds.push({ handler, dog: waiting, ends: Date.now() + HOLD_SECONDS * 1000 / speed() });
+    toast('g-toast', `Conflict hold started: ${gate[waiting].dog} (6:00)`);
+  }
+
+  document.getElementById('g-list').addEventListener('click', e => {
+    const b = e.target.closest('button[data-a]');
+    if (b) {
+      const r = gate[+b.dataset.i];
+      r.st = { in: 'in', scr: 'scr', unscr: 'in' }[b.dataset.a];
+      if (r.st === 'scr') { const k = holds.findIndex(h => h.dog === +b.dataset.i); if (k >= 0) holds.splice(k, 1); }
+      renderGate(); return;
+    }
+    const row = e.target.closest('[data-row]'); if (!row) return;
+    const i = +row.dataset.row, r = gate[i];
+    if (r.st === 'scr') return;
+    if (r.st === 'done') { r.st = 'in'; renderGate(); return; }
+    r.st = 'done';                                   // crossed off: went in the ring
+    const k = holds.findIndex(h => h.dog === i); if (k >= 0) holds.splice(k, 1);
+    maybeStartHold(i);
+    renderGate();
+  });
+  document.getElementById('holds').addEventListener('click', e => {
+    const b = e.target.closest('[data-clear]'); if (!b) return;
+    holds.splice(+b.dataset.clear, 1); renderGate();
+  });
+  let activeHolds = 0;
+  setInterval(() => {
+    const n = holds.filter(h => h.ends > Date.now()).length;
+    if (n !== activeHolds) { activeHolds = n; renderGate(); } else renderHolds();
+  }, 250);
+  renderGate();
+
+  // Admin reorder with drag handles
+  const order = [
+    ['12"', 'Theo', 'Sam Ortiz', false], ['12"', 'Ziggy', 'Morgan Hale', false], ['12"', 'Mishka', 'Lee Park', true],
+    ['16"', 'Clue', 'Pat Rivera', false], ['16"', 'Biscuit', 'Jo Kim', false], ['16"', 'Juno', 'Alex Ward', false],
+    ['16"', 'Moss', 'Riley Chen', false], ['16"', 'Pepper', 'Dana Moore', false], ['20"', 'Mirage', 'Taylor Quinn', false],
+  ];
+  const drag = document.getElementById('drag');
+  drag.innerHTML = order.map(([h, d, w, s], i) => `<div class="drow ${s ? 'scr' : ''}" data-k="${i}">
+      <span class="grip"><svg width="18" height="18"><use href="#i-grip"/></svg></span><span class="pos">${i + 1}</span>
+      <div><div class="d" style="font-weight:700">${d}</div><div class="h muted">${w}${s ? ' · scratched' : ''}</div></div>
+      <span class="pill p-not">${h}</span></div>`).join('');
+  const original = [...drag.children].map(r => r.dataset.k).join();
+  function renumber() {
+    [...drag.children].forEach((r, i) => r.querySelector('.pos').textContent = i + 1);
+    const changed = [...drag.children].map(r => r.dataset.k).join() !== original;
+    document.getElementById('save').disabled = !changed;
+    document.getElementById('dirty').textContent = changed ? 'Unsaved changes' : 'No changes';
+  }
+  if (window.Sortable) {
+    Sortable.create(drag, { handle: '.grip', animation: 150, ghostClass: 'ghost', onSort: renumber });
+  } else {
+    document.querySelector('.drag').insertAdjacentHTML('beforebegin', '<p class="muted">(Drag needs an internet connection to load in this preview.)</p>');
+  }
+  document.getElementById('save').onclick = () => { toast('a-toast', 'Order saved. Live for everyone.'); document.getElementById('save').disabled = true; document.getElementById('dirty').textContent = 'Saved'; };
+</script>
+</body>
+</html>

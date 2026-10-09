@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Competitor Entry Preview</title>
+<style>
+  :root {
+    --navy: #1E3A8A; --navy-d: #0F1E4A; --ink: #0F172A; --muted: #64748B; --line: #E2E8F0; --bg: #F1F5F9; --card: #FFFFFF;
+    --green: #16A34A; --green-bg: #DCFCE7; --green-ink: #166534;
+    --amber-bg: #FEF3C7; --amber-ink: #92400E; --red: #DC2626; --red-bg: #FEE2E2; --red-ink: #B91C1C;
+    --blue-bg: #E0F2FE; --blue-ink: #075985;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #E5E9F0; color: var(--ink);
+         font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  header.page { max-width: 1240px; margin: 0 auto; padding: 28px 16px 6px; }
+  header.page h1 { margin: 0 0 6px; font-size: 26px; color: var(--navy); }
+  header.page p { margin: 0; color: #334155; max-width: 820px; }
+  .try { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .grid { max-width: 1240px; margin: 0 auto; padding: 16px; display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 30px 20px; }
+  figure { margin: 0; display: flex; flex-direction: column; align-items: center; }
+  figcaption { width: 360px; max-width: 100%; margin-top: 10px; font-size: 13.5px; color: #334155; }
+  figcaption b { display: block; font-size: 15px; color: var(--ink); margin-bottom: 2px; }
+  figcaption ul { margin: 4px 0 0; padding-left: 18px; }
+  .step { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px;
+          border-radius: 4px; margin-bottom: 6px; background: var(--blue-bg); color: var(--blue-ink); }
+
+  .phone { width: 360px; max-width: 100%; height: 740px; background: var(--card); border-radius: 34px; border: 10px solid #0F172A;
+           box-shadow: 0 12px 30px rgba(15,23,42,.25); overflow: hidden; display: flex; flex-direction: column; position: relative; }
+  .screen { flex: 1; overflow-y: auto; background: var(--bg); }
+  .top { background: var(--navy); color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+  .top .back { font-size: 20px; opacity: .85; }
+  .top .t { font-weight: 800; font-size: 16px; flex: 1; }
+  .top .acct { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.18); display: grid; place-items: center;
+               font-size: 12px; font-weight: 800; }
+  .pad { padding: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .card + .card { margin-top: 12px; }
+  h2.sec { font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 2px 8px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .btn { display: block; width: 100%; border: 0; border-radius: 11px; padding: 14px; font: inherit; font-weight: 800; font-size: 16px;
+         cursor: pointer; text-align: center; }
+  .btn.primary { background: var(--navy); color: #fff; }
+  .btn.primary:disabled { background: #94A3B8; cursor: default; }
+  .btn.ghost { background: #fff; color: var(--ink); border: 1px solid #CBD5E1; }
+  .btn.danger { background: #fff; color: var(--red-ink); border: 1px solid #FCA5A5; }
+  .btn + .btn { margin-top: 8px; }
+  .sticky-foot { position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 10px 14px 14px; }
+  .totalrow { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .totalrow b { font-size: 20px; }
+  input.f, select.f { width: 100%; font: inherit; padding: 11px 12px; border: 1px solid #CBD5E1; border-radius: 10px; background: #fff; }
+  label.l { display: block; font-size: 12.5px; font-weight: 700; color: #475569; margin: 10px 0 4px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* Trial page */
+  .hero { background: linear-gradient(160deg, var(--navy), #2B4DB3); color: #fff; padding: 22px 16px 18px; }
+  .hero .k { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; opacity: .8; }
+  .hero h2 { margin: 4px 0 6px; font-size: 24px; line-height: 1.2; }
+  .hero .meta { font-size: 14px; opacity: .92; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 800; border-radius: 999px; padding: 4px 10px; margin-top: 12px; }
+  .badge.open { background: #BBF7D0; color: #14532D; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fact { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .fact .k { font-size: 12px; color: var(--muted); } .fact .v { font-weight: 800; }
+  .classlist { font-size: 14px; } .classlist div { display: flex; justify-content: space-between; gap: 14px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .classlist .muted { text-align: right; }
+  .classlist div:last-child { border-bottom: 0; }
+
+  /* Sign in */
+  .signin { padding: 28px 18px; }
+  .signin h2 { margin: 0 0 6px; font-size: 24px; }
+  .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12.5px; margin: 16px 0; }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: #CBD5E1; }
+  .gbtn { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .gmark { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #94A3B8; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #475569; }
+  .sent { background: var(--green-bg); color: var(--green-ink); border-radius: 10px; padding: 12px; margin-top: 14px; font-size: 14px; display: none; }
+
+  /* Dogs */
+  .dog { display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; }
+  .avatar { width: 48px; height: 48px; border-radius: 12px; background: #E0E7FF; color: var(--navy); display: grid; place-items: center;
+            font-weight: 800; font-size: 18px; }
+  .dog .n { font-weight: 800; font-size: 17px; } .dog .d { font-size: 13px; color: var(--muted); }
+  .chev { color: #94A3B8; font-size: 20px; }
+  .entry { border-left: 5px solid var(--green); }
+  .entry .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .pill { font-size: 11.5px; font-weight: 800; padding: 3px 8px; border-radius: 999px; }
+  .pill.ok { background: var(--green-bg); color: var(--green-ink); }
+  .pill.wait { background: var(--amber-bg); color: var(--amber-ink); }
+
+  /* Choose classes */
+  .dogtabs { display: flex; gap: 8px; padding: 12px 14px 0; }
+  .dogtabs button { flex: 1; border: 1px solid #CBD5E1; background: #fff; border-radius: 10px; padding: 9px; font: inherit; font-weight: 800; cursor: pointer; }
+  .dogtabs button.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .dogtabs .cnt { font-weight: 600; opacity: .8; font-size: 12.5px; }
+  .dayh { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 2px 6px; }
+  .dayh b { font-size: 15px; } .dayh button { border: 0; background: none; color: var(--navy); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .cls { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; background: #fff; border: 1px solid var(--line);
+         border-radius: 11px; padding: 11px 12px; margin-bottom: 7px; cursor: pointer; user-select: none; }
+  .cls .box { width: 24px; height: 24px; border-radius: 7px; border: 2px solid #94A3B8; display: grid; place-items: center; color: #fff; font-weight: 900; font-size: 14px; }
+  .cls.on { border-color: var(--navy); background: #EEF2FF; }
+  .cls.on .box { background: var(--navy); border-color: var(--navy); }
+  .cls .nm { font-weight: 700; } .cls .sub { font-size: 12.5px; color: var(--muted); }
+  .cls .pr { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* Review */
+  .line { display: flex; justify-content: space-between; font-size: 14px; padding: 4px 0; }
+  .line.sub { color: var(--muted); font-size: 13px; padding-left: 10px; }
+  .line.tot { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; font-weight: 800; font-size: 16px; }
+  details.waiver { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  details.waiver summary { font-weight: 700; cursor: pointer; }
+  details.waiver p { font-size: 12.5px; color: #475569; margin: 8px 0 0; }
+  .agree { display: flex; gap: 10px; align-items: flex-start; margin-top: 12px; font-size: 14px; }
+  .agree input { width: 20px; height: 20px; margin-top: 1px; }
+
+  /* Pay */
+  .handoff { text-align: center; padding: 40px 20px; }
+  .lock { width: 64px; height: 64px; border-radius: 50%; background: #E0E7FF; color: var(--navy); display: grid; place-items: center;
+          margin: 0 auto 14px; font-weight: 900; font-size: 26px; }
+  .placeholder { border: 2px dashed #CBD5E1; border-radius: 12px; padding: 16px; margin-top: 18px; text-align: left; font-size: 13.5px; color: #475569; background: #fff; }
+
+  /* Confirmation */
+  .done { text-align: center; padding: 26px 16px 8px; }
+  .check { width: 72px; height: 72px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center;
+           margin: 0 auto 12px; font-size: 36px; font-weight: 900; }
+  .done h2 { margin: 0 0 4px; }
+  .receipt .line { font-size: 13.5px; }
+
+  /* Manage */
+  .runrow { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .runrow:last-child { border-bottom: 0; }
+  .notice { background: var(--amber-bg); color: var(--amber-ink); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-top: 12px; }
+  .toast { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 9px 14px;
+           border-radius: 9px; font-size: 13.5px; opacity: 0; transition: opacity .2s; pointer-events: none; white-space: nowrap; z-index: 9; }
+  .toast.show { opacity: 1; }
+  .notes { max-width: 1240px; margin: 0 auto 40px; padding: 0 16px; }
+  .notes .box { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+  .notes h3 { margin: 0 0 6px; color: var(--navy); }
+  .notes ul { margin: 6px 0 14px; padding-left: 18px; }
+  .q { background: #F8FAFC; border-left: 4px solid var(--navy); padding: 8px 12px; border-radius: 6px; margin-bottom: 8px; }
+  @media (max-width: 420px) { .phone { height: 680px; border-width: 6px; border-radius: 24px; } }
+</style>
+</head>
+<body>
+
+<header class="page">
+  <h1>Competitor entry: preview</h1>
+  <p>What exhibitors would see when entering your trials directly: no JotForm, and their dogs and contact info saved for next time.
+     Payment goes through Square's own secure checkout, so card numbers never touch your app. Names, dogs and the trial are made up.</p>
+  <div class="try">Try: pick classes for Pepper and Ruby (the total updates), then tick the agreement and type a name on the review screen
+     to unlock payment. On "Manage entry", scratch a run.</div>
+</header>
+
+<main class="grid">
+
+  <!-- 1. Trial page -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="hero">
+        <div class="k">UKI Agility Trial</div>
+        <h2>Level Up Dog Sports · December 2026</h2>
+        <div class="meta">Sat Dec 5 – Sun Dec 6 · Ring 1 · Virginia</div>
+        <span class="badge open">Entries open · close Nov 20</span>
+      </div>
+      <div class="pad">
+        <div class="facts">
+          <div class="fact"><div class="k">Judge</div><div class="v">Morgan Ellis</div></div>
+          <div class="fact"><div class="k">Per run</div><div class="v">$15.00</div></div>
+          <div class="fact"><div class="k">Masters Series</div><div class="v">$35.00</div></div>
+          <div class="fact"><div class="k">Spots left</div><div class="v">142 runs</div></div>
+        </div>
+        <h2 class="sec">Classes</h2>
+        <div class="card classlist">
+          <div><span><b>Saturday</b></span><span class="muted">Agility 1 &amp; 2 · Jumping 1 &amp; 2 · Gamblers · Speedstakes · Masters Series</span></div>
+          <div><span><b>Sunday</b></span><span class="muted">Agility 1 &amp; 2 · Jumping 1 &amp; 2 · Snooker · Speedstakes · Masters Series</span></div>
+        </div>
+        <h2 class="sec">Good to know</h2>
+        <div class="card muted" style="font-size:13.5px">Late entries accepted until Nov 27 (+$5 per run). Refunds before closing, minus processing fees.
+          Premium list: <u>LUDS December 2026 Premium.pdf</u></div>
+      </div>
+      <div class="sticky-foot"><button class="btn primary">Enter this trial</button></div>
+    </div></div>
+    <figcaption><span class="step">1 · Public</span><b>Trial page</b>
+      <ul><li>One link per trial to post on Facebook, with dates, fees, closing date and premium list.</li>
+          <li>Live "spots left" if you cap entries; waitlist when full.</li></ul></figcaption>
+  </figure>
+
+  <!-- 2. Sign in -->
+  <figure>
+    <div class="phone"><div class="screen" style="background:#fff">
+      <div class="top"><span class="back">‹</span><span class="t">Sign in</span></div>
+      <div class="signin">
+        <h2>Welcome</h2>
+        <div class="muted" style="font-size:14px">No password needed. We'll email you a link that signs you in. New here? The same link creates your account.</div>
+        <label class="l">Email</label>
+        <input class="f" value="dana.moore@example.com">
+        <button class="btn primary" style="margin-top:12px" onclick="document.getElementById('sent').style.display='block'">Email me a sign-in link</button>
+        <div class="sent" id="sent">Check your email. The link works for 15 minutes, on this phone or any other.</div>
+        <div class="or">or</div>
+        <button class="btn ghost gbtn"><span class="gmark">G</span>Continue with Google</button>
+        <p class="muted" style="margin-top:22px">Competitor accounts can enter trials and manage their own dogs only. Trial admin access is invite-only.</p>
+      </div>
+    </div></div>
+    <figcaption><span class="step">2 · Sign in</span><b>Passwordless sign-in</b>
+      <ul><li>Email link or Google: nothing to forget, no reset requests on trial weekend.</li>
+          <li>Signing up never gives admin access.</li></ul></figcaption>
+  </figure>
+
+  <!-- 3. My account -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="top"><span class="t">My account</span><span class="acct">DM</span></div>
+      <div class="pad">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between"><b>Dana Moore</b><span class="muted"><u>Edit</u></span></div>
+          <div class="muted">UKI handler #20417 · dana.moore@example.com<br>14 Oak Hill Rd, Richmond, VA 23220</div>
+        </div>
+        <h2 class="sec">My dogs</h2>
+        <div class="card dog"><span class="avatar">P</span><div><div class="n">Pepper</div><div class="d">Border Collie · #41102 · 16" Regular · Champion</div></div><span class="chev">›</span></div>
+        <div class="card dog"><span class="avatar">R</span><div><div class="n">Ruby</div><div class="d">Australian Shepherd · #41388 · 16" Regular · Senior</div></div><span class="chev">›</span></div>
+        <button class="btn ghost" style="margin-top:10px">+ Add a dog</button>
+        <h2 class="sec">My entries</h2>
+        <div class="card entry">
+          <div class="row"><b>December 2026</b><span class="pill ok">Paid</span></div>
+          <div class="muted">Pepper &amp; Ruby · 10 runs · $155.00</div>
+        </div>
+        <div class="card entry" style="border-left-color:#94A3B8">
+          <div class="row"><b>November 2026</b><span class="pill wait">Trial this weekend</span></div>
+          <div class="muted">Pepper · 9 runs · <u>Check in</u> · <u>Running order</u></div>
+        </div>
+      </div>
+    </div></div>
+    <figcaption><span class="step">3 · Account</span><b>My account</b>
+      <ul><li>Contact info and dogs saved once (UKI numbers, heights, levels) and reused every trial.</li>
+          <li>Entries link straight into check-in and running order on trial day.</li></ul></figcaption>
+  </figure>
+
+  <!-- 4. Choose classes -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="top"><span class="back">‹</span><span class="t">Choose classes</span></div>
+      <div class="dogtabs" id="dogtabs"></div>
+      <div class="pad" style="padding-top:4px" id="classes"></div>
+      <div class="sticky-foot">
+        <div class="totalrow"><span class="muted" id="runcount">0 runs</span><b id="total">$0.00</b></div>
+        <button class="btn primary" id="toReview">Review entry</button>
+      </div>
+    </div></div>
+    <figcaption><span class="step">4 · Enter</span><b>Choose classes</b>
+      <ul><li>Pick a dog, tap classes. Levels and heights come from the dog's profile, so no mismatches.</li>
+          <li>"All" per day, running total always visible, Masters Series priced correctly.</li></ul></figcaption>
+  </figure>
+
+  <!-- 5. Review & sign -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="top"><span class="back">‹</span><span class="t">Review &amp; sign</span></div>
+      <div class="pad">
+        <div class="card" id="summary"></div>
+        <h2 class="sec">Agreement</h2>
+        <details class="waiver"><summary>UKI release agreement</summary>
+          <p>[The full release agreement from your premium goes here: liability release, responsibility for your dog,
+             and the trial's right to excuse a handler or dog.]</p></details>
+        <label class="agree"><input type="checkbox" id="agree">I've read the agreement and I'm authorized to enter on behalf of the owner and exhibitor.</label>
+        <label class="l">Type your full name to sign</label>
+        <input class="f" id="sig" placeholder="Full name">
+        <div class="muted" style="margin-top:6px">Signed today with your name and the time, kept with this entry.</div>
+      </div>
+      <div class="sticky-foot">
+        <div class="totalrow"><span class="muted">Total due</span><b id="total2">$0.00</b></div>
+        <button class="btn primary" id="payBtn" disabled>Continue to payment</button>
+      </div>
+    </div></div>
+    <figcaption><span class="step">5 · Sign</span><b>Review &amp; sign</b>
+      <ul><li>Everything on one screen: dogs, classes per day, total.</li>
+          <li>Same release agreement and signature as your JotForm, stored with each entry.</li></ul></figcaption>
+  </figure>
+
+  <!-- 6. Payment hand-off -->
+  <figure>
+    <div class="phone"><div class="screen" style="background:#fff">
+      <div class="handoff">
+        <div class="lock">$</div>
+        <h2 style="margin:0 0 6px">Taking you to secure checkout</h2>
+        <div class="muted" style="font-size:14px">You'll pay on Square's own payment page, then come right back here.
+          Card details go to Square only, never to this site.</div>
+        <div class="placeholder"><b>Square's hosted checkout page appears here</b><br>
+          Card, Apple Pay or Google Pay. Square sends the receipt, and the money lands in your existing Square account.</div>
+        <button class="btn ghost" style="margin-top:18px">Cancel and go back</button>
+      </div>
+    </div></div>
+    <figcaption><span class="step">6 · Pay</span><b>Payment hand-off</b>
+      <ul><li>Uses your existing Square account, so payouts and reports stay where they are.</li>
+          <li>Unpaid entries don't count; seats are held for 30 minutes during checkout.</li></ul></figcaption>
+  </figure>
+
+  <!-- 7. Confirmation -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="done"><div class="check">✓</div><h2>You're entered!</h2><div class="muted">Confirmation #LUDS-1205-0417 · emailed to dana.moore@example.com</div></div>
+      <div class="pad">
+        <div class="card receipt">
+          <b>December 2026 · Level Up Dog Sports</b>
+          <div class="line" style="margin-top:6px"><span>Pepper · Saturday</span><span>$95.00</span></div>
+          <div class="line sub"><span>Agility 1, Agility 2, Jumping 1, Speedstakes, Masters Series</span><span></span></div>
+          <div class="line"><span>Ruby · Sunday</span><span>$60.00</span></div>
+          <div class="line sub"><span>Agility 1, Jumping 1, Snooker, Speedstakes</span><span></span></div>
+          <div class="line tot"><span>Paid</span><span>$155.00</span></div>
+        </div>
+        <button class="btn ghost" style="margin-top:12px">Add to calendar</button>
+        <button class="btn primary">Manage entry</button>
+        <p class="muted" style="text-align:center">On trial day, check in from this app with one tap.</p>
+      </div>
+    </div></div>
+    <figcaption><span class="step">7 · Done</span><b>Confirmation</b>
+      <ul><li>Confirmation email with the same details; calendar invite.</li>
+          <li>The entry is instantly in your admin entries list, with no formatting step.</li></ul></figcaption>
+  </figure>
+
+  <!-- 8. Manage entry -->
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="top"><span class="back">‹</span><span class="t">Manage entry</span></div>
+      <div class="pad">
+        <div class="card">
+          <b>Pepper · Saturday</b>
+          <div id="manage"></div>
+        </div>
+        <button class="btn ghost" style="margin-top:12px">Add classes ($15 each)</button>
+        <div class="notice">Changes and refunds are open until <b>Nov 20</b> (closing). After that, entries are locked;
+          scratches still count for check-in but aren't refunded.</div>
+        <button class="btn danger" style="margin-top:12px">Scratch this dog from the whole trial</button>
+      </div>
+      <div class="toast" id="toast"></div>
+    </div></div>
+    <figcaption><span class="step">8 · Changes</span><b>Manage entry</b>
+      <ul><li>Competitors scratch or add runs themselves before closing; refunds go back through Square.</li>
+          <li>You see every change in the admin entries list, with who made it and when.</li></ul></figcaption>
+  </figure>
+
+</main>
+
+<section class="notes"><div class="box">
+  <h3>Questions for you</h3>
+  <div class="q">Should competitors be able to <b>change or scratch online</b> before closing, or should changes go through you?</div>
+  <div class="q">Refunds: <b>automatic</b> when someone scratches before closing, or should you approve each one?</div>
+  <div class="q">Do you <b>cap entries</b> (run limits per day) and want a waitlist?</div>
+  <div class="q">Can one person enter <b>dogs for someone else</b> (e.g. a spouse, or a junior handler)?</div>
+  <div class="q">Anything your JotForm asks that's missing here (e.g. emergency contact, height card, team names)?</div>
+</div></section>
+
+<script>
+  // ── Class picker state ─────────────────────────────────────────────────
+  const PRICE = 15, MASTERS = 35;
+  const DAYS = {
+    Saturday: ['Agility 1', 'Agility 2', 'Jumping 1', 'Jumping 2', 'Gamblers', 'Speedstakes', 'Masters Series'],
+    Sunday:   ['Agility 1', 'Agility 2', 'Jumping 1', 'Jumping 2', 'Snooker', 'Speedstakes', 'Masters Series'],
+  };
+  const dogs = {
+    Pepper: { sub: '16" Regular · Champion', pick: { Saturday: new Set(['Agility 1', 'Jumping 1']), Sunday: new Set() } },
+    Ruby:   { sub: '16" Regular · Senior',   pick: { Saturday: new Set(), Sunday: new Set(['Agility 1']) } },
+  };
+  let cur = 'Pepper';
+  const $ = id => document.getElementById(id);
+  const money = n => '$' + n.toFixed(2);
+  const price = c => c === 'Masters Series' ? MASTERS : PRICE;
+  const runs = c => c === 'Masters Series' ? 2 : 1;   // Masters Series = Masters Agility + Masters Jumping
+
+  function totals() {
+    let t = 0, r = 0;
+    Object.values(dogs).forEach(d => Object.values(d.pick).forEach(s => s.forEach(c => { t += price(c); r += runs(c); })));
+    return { t, r };
+  }
+  function render() {
+    $('dogtabs').innerHTML = Object.entries(dogs).map(([n, d]) => {
+      const c = Object.values(d.pick).reduce((a, s) => a + s.size, 0);
+      return `<button class="${n === cur ? 'on' : ''}" data-dog="${n}">${n} <span class="cnt">· ${c}</span></button>`;
+    }).join('');
+    const d = dogs[cur];
+    $('classes').innerHTML = `<div class="muted" style="margin:10px 2px 0">${cur}: ${d.sub}</div>` +
+      Object.entries(DAYS).map(([day, list]) => `<div class="dayh"><b>${day}</b><button data-all="${day}">${list.every(c => d.pick[day].has(c)) ? 'Clear' : 'All'}</button></div>` +
+        list.map(c => `<div class="cls ${d.pick[day].has(c) ? 'on' : ''}" data-day="${day}" data-c="${c}"><span class="box">${d.pick[day].has(c) ? '✓' : ''}</span>
+          <div><div class="nm">${c}</div><div class="sub">${c === 'Masters Series' ? 'Masters Agility + Masters Jumping' : c.startsWith('Speedstakes') || c === 'Gamblers' || c === 'Snooker' ? 'All levels combined' : d.sub.split('· ')[1]}</div></div>
+          <span class="pr">${money(price(c))}</span></div>`).join('')).join('');
+    const { t, r } = totals();
+    $('total').textContent = money(t); $('total2').textContent = money(t);
+    $('runcount').textContent = `${r} run${r === 1 ? '' : 's'}`;
+    $('summary').innerHTML = `<b>December 2026 · Level Up Dog Sports</b>` + Object.entries(dogs).flatMap(([n, dg]) =>
+      Object.entries(dg.pick).filter(([, s]) => s.size).map(([day, s]) => {
+        const sub = [...s].reduce((a, c) => a + price(c), 0);
+        return `<div class="line" style="margin-top:6px"><span>${n} · ${day}</span><span>${money(sub)}</span></div><div class="line sub"><span>${[...s].join(', ')}</span></div>`;
+      })).join('') + `<div class="line tot"><span>Total</span><span>${money(t)}</span></div>`;
+    checkPay();
+  }
+  $('dogtabs').addEventListener('click', e => { const b = e.target.closest('[data-dog]'); if (b) { cur = b.dataset.dog; render(); } });
+  $('classes').addEventListener('click', e => {
+    const all = e.target.closest('[data-all]');
+    if (all) { const day = all.dataset.all, s = dogs[cur].pick[day]; const full = DAYS[day].every(c => s.has(c)); DAYS[day].forEach(c => full ? s.delete(c) : s.add(c)); render(); return; }
+    const row = e.target.closest('.cls'); if (!row) return;
+    const s = dogs[cur].pick[row.dataset.day]; s.has(row.dataset.c) ? s.delete(row.dataset.c) : s.add(row.dataset.c); render();
+  });
+  $('toReview').onclick = () => $('summary').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // ── Review & sign: payment unlocks only with agreement + typed name + something picked ──
+  function checkPay() { $('payBtn').disabled = !($('agree').checked && $('sig').value.trim().length > 3 && totals().t > 0); }
+  $('agree').addEventListener('change', checkPay); $('sig').addEventListener('input', checkPay);
+
+  // ── Manage entry ────────────────────────────────────────────────────────
+  const managed = [['Agility 1', false], ['Agility 2', false], ['Jumping 1', false], ['Speedstakes', false], ['Masters Series', false]];
+  function renderManage() {
+    $('manage').innerHTML = managed.map(([c, s], i) => `<div class="runrow"><span style="${s ? 'text-decoration:line-through;color:#94A3B8' : ''}">${c}</span>
+      <button class="btn ${s ? 'ghost' : 'danger'}" style="width:auto;padding:6px 12px;font-size:13px" data-i="${i}">${s ? 'Undo' : 'Scratch'}</button></div>`).join('');
+  }
+  $('manage').addEventListener('click', e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    const m = managed[+b.dataset.i]; m[1] = !m[1]; renderManage();
+    const t = $('toast'); t.textContent = m[1] ? `${m[0]} scratched · ${money(price(m[0]))} refund requested` : `${m[0]} added back`;
+    t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2000);
+  });
+
+  render(); renderManage();
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# Python environments and caches (rebuild with: uv venv / pip install -r requirements.txt)
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Secrets: never commit these (use Railway variables instead)
+.env
+secrets.toml
+
+# Trial data with real entrant info: keep in ~/Documents/Trial Archive, not on GitHub
+*.xlsx
+*.xls
+*.csv
+*.db
+
+# Test caches
+.pytest_cache/
