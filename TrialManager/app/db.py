@@ -109,6 +109,67 @@ warning_states = Table(
     Column('at', DateTime(timezone=True)),
 )
 
+# ── Trial (run order, day-of entries) — see trial.py ────────────────────────
+
+runs = Table(
+    'tm_runs', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('day', String, nullable=False),                # ISO date
+    Column('class_name', String, nullable=False),         # Agility, Agility 2, Gamblers, ...
+    Column('run_key', String, nullable=False),            # stable id for syncing with JotForm
+    Column('level', String, default=''),
+    Column('class_type', String, default='Regular'),      # Regular | Select
+    Column('height', Integer, default=0),
+    Column('handler_number', String, default=''),
+    Column('first_name', String, default=''),
+    Column('last_name', String, default=''),
+    Column('dog_number', String, default=''),
+    Column('dog_name', String, default=''),
+    Column('breed', String, default=''),
+    Column('submission_id', String, default=''),
+    Column('source', String, default='jotform'),          # jotform | day_of
+    Column('fee', JSON),                                  # number; JSON keeps SQLite and Postgres alike
+    Column('scratched', Boolean, nullable=False, default=False),
+    Column('position', Integer, nullable=False, default=0),
+    Column('created_at', DateTime(timezone=True)),
+    Column('created_by', String, default=''),
+)
+
+class_settings = Table(
+    'tm_classes', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('day', String, nullable=False),
+    Column('class_name', String, nullable=False),
+    Column('sort', Integer, nullable=False, default=0),
+    Column('ring', String, default='1'),
+    Column('select_first', Boolean, nullable=False, default=True),
+    Column('combine_levels', Boolean, nullable=False, default=False),
+    Column('generated_at', DateTime(timezone=True)),
+)
+
+day_settings = Table(
+    'tm_days', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('day', String, nullable=False),
+    Column('levels_first', String, nullable=False, default='Senior/Champ'),   # or Beginner/Novice
+    Column('heights', String, nullable=False, default='tall'),                # tall = tall to small; small = small to tall
+)
+
+day_payments = Table(
+    'tm_day_payments', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('handler_number', String, nullable=False),
+    Column('amount', JSON, nullable=False),
+    Column('method', String, default=''),
+    Column('note', String, default=''),
+    Column('at', DateTime(timezone=True)),
+    Column('user_name', String, default=''),
+)
+
 _engine = None
 
 

@@ -13,13 +13,13 @@ from pathlib import Path
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import auth, db, formatter as fmt
+from app import auth, db, formatter as fmt, trial
 from app.core import Show
 
 HERE = Path(__file__).parent
@@ -477,3 +477,203 @@ async def download(request: Request, slug: str):
     data, filename = fmt.download(slug, user)
     return Response(data, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     headers={'Content-Disposition': f'attachment; filename="{filename}"'})
+
+
+# ── Run order ───────────────────────────────────────────────────────────────
+
+@app.exception_handler(trial.TrialError)
+async def _trial_error(request: Request, exc):
+    if request.headers.get('HX-Request'):
+        return HTMLResponse(f'<div class="flash error" id="ro-msg">{exc}</div>', status_code=200,
+                            headers={'HX-Retarget': '#ro-msg', 'HX-Reswap': 'outerHTML'})
+    return render(request, 'error.html', status_code=400, message=str(exc))
+
+
+def _days(show: Show) -> list:
+    return [str(show.saturday_date), str(show.sunday_date)]
+
+
+def _runorder_ctx(request, slug, day=None, cls=None):
+    d, ws, ctx = _show_ctx(request, slug, 'runorder')
+    built = trial.is_built(slug)
+    classes = trial.overview(slug) if built else []
+    days = _days(d.show)
+    day = day if day in days else days[0]
+    day_classes = [c for c in classes if c['day'] == day]
+    if day_classes and cls not in [c['class_name'] for c in day_classes]:
+        cls = day_classes[0]['class_name']
+    ev = trial.event_view(slug, day, cls) if built and day_classes else None
+    pending = trial.pending_changes(d) if built else None
+    return {**ctx, 'built': built, 'classes': classes, 'days': days, 'day': day, 'cls': cls, 'ev': ev,
+            'day_classes': day_classes, 'pending': pending, 'gap_target': trial.GAP_TARGET,
+            'day_sets': {dd: trial.day_setting(slug, dd) for dd in days},
+            'level_groups': trial.LEVEL_GROUPS, 'height_orders': trial.HEIGHT_ORDERS}
+
+
+@app.get('/shows/{slug}/runorder', response_class=HTMLResponse)
+def runorder_page(request: Request, slug: str, day: str = '', cls: str = ''):
+    require_user(request)
+    return render(request, 'runorder.html', **_runorder_ctx(request, slug, day, cls))
+
+
+def _runorder_table(request, slug, day, cls):
+    ctx = _runorder_ctx(request, slug, day, cls)
+    return render(request, '_runorder_table.html', oob=True, **ctx)
+
+
+@app.post('/shows/{slug}/runorder/build')
+async def runorder_build(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    d = fmt.load(slug)
+    if not trial.is_built(slug):   # the build page sets each day's order first
+        for day_ in _days(d.show):
+            lf, hs = form.get(f'levels_first_{day_}'), form.get(f'heights_{day_}')
+            if lf and hs:
+                trial.save_day(slug, day_, lf, hs, user, regroup=False)
+    trial.build_or_update(d, user)
+    return back(f'/shows/{slug}/runorder')
+
+
+@app.post('/shows/{slug}/runorder/day')
+async def runorder_day(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day_ = form.get('day', '')
+    trial.save_day(slug, day_, form.get('levels_first', ''), form.get('heights', ''), user)
+    return back(f'/shows/{slug}/runorder?day={day_}&cls={quote(form.get("cls", ""))}')
+
+
+@app.post('/shows/{slug}/runorder/generate')
+async def runorder_generate(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day, cls = form.get('day', ''), form.get('cls', '')
+    trial.generate(slug, day, cls, user=user)
+    return back(f'/shows/{slug}/runorder?day={day}&cls={quote(cls)}')
+
+
+@app.post('/shows/{slug}/runorder/reorder', response_class=HTMLResponse)
+async def runorder_reorder(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day, cls = form.get('day', ''), form.get('cls', '')
+    trial.reorder(slug, day, cls, form.getlist('run'), user)
+    return _runorder_table(request, slug, day, cls)
+
+
+@app.post('/shows/{slug}/runorder/move', response_class=HTMLResponse)
+async def runorder_move(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    try:
+        pos = int(form.get('position', ''))
+    except ValueError:
+        raise trial.TrialError('Type the position as a number, like 5.')
+    trial.move_to(slug, int(form['run_id']), pos, user)
+    return _runorder_table(request, slug, form.get('day', ''), form.get('cls', ''))
+
+
+@app.post('/shows/{slug}/runorder/undo', response_class=HTMLResponse)
+async def runorder_undo(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day, cls = form.get('day', ''), form.get('cls', '')
+    if not trial.undo(slug, day, cls, user):
+        raise trial.TrialError('Nothing to undo for this class.')
+    return _runorder_table(request, slug, day, cls)
+
+
+@app.post('/shows/{slug}/runorder/scratch/{run_id}', response_class=HTMLResponse)
+async def runorder_scratch(request: Request, slug: str, run_id: int):
+    user = require_user(request)
+    form = await check_csrf(request)
+    trial.toggle_run_scratch(slug, run_id, user)
+    return _runorder_table(request, slug, form.get('day', ''), form.get('cls', ''))
+
+
+@app.post('/shows/{slug}/runorder/class')
+async def runorder_class(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day, cls = form.get('day', ''), form.get('cls', '')
+    try:
+        sort = int(form.get('sort') or 0)
+    except ValueError:
+        sort = 0
+    trial.save_class(slug, day, cls, user, sort, form.get('ring', '1'), form.get('select_first') == 'on',
+                     form.get('combine_levels') == 'on')
+    return back(f'/shows/{slug}/runorder?day={day}&cls={quote(cls)}')
+
+
+@app.get('/shows/{slug}/runorder.csv')
+def runorder_csv(request: Request, slug: str, day: str = ''):
+    user = require_user(request)
+    data = trial.run_order_csv(slug, day or None)
+    db.log(user, 'download', slug, target='runorder.csv', day=day or 'both')
+    name = f'grid_run_order_export{"_" + day if day else ""}.csv'
+    return Response(data, media_type='text/csv', headers={'Content-Disposition': f'attachment; filename="{name}"'})
+
+
+@app.get('/shows/{slug}/scribe.pdf')
+def scribe_pdf(request: Request, slug: str, day: str, cls: list[str] = Query(default=[])):
+    user = require_user(request)
+    show = db.get_show(slug)
+    data = trial.scribe_sheets_pdf(slug, show.name, day, cls or None)
+    db.log(user, 'download', slug, target='scribe.pdf', day=day, classes=cls)
+    return Response(data, media_type='application/pdf',
+                    headers={'Content-Disposition': f'inline; filename="scribe_sheets_{day}.pdf"'})
+
+
+# ── Day-of entries ──────────────────────────────────────────────────────────
+
+@app.get('/shows/{slug}/dayof', response_class=HTMLResponse)
+def dayof_page(request: Request, slug: str):
+    require_user(request)
+    msg = request.session.pop('dayof_flash', '')
+    d, ws, ctx = _show_ctx(request, slug, 'dayof')
+    if not trial.is_built(slug):
+        return render(request, 'dayof.html', built=False, **ctx)
+    days = _days(d.show)
+    classes = {day_: [c['class_name'] for c in trial.class_list(slug, day_)] for day_ in days}
+    return render(request, 'dayof.html', built=True, dogs=trial.known_dogs(d), days=days, classes=classes,
+                  summary=trial.day_of_summary(slug), day_of_fee=trial.DAY_OF_FEE, msg=msg, error=None, form={}, **ctx)
+
+
+@app.post('/shows/{slug}/dayof/add', response_class=HTMLResponse)
+async def dayof_add(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    d = fmt.load(slug)
+    picked = {}
+    for v in form.getlist('classes'):
+        day_, _, cls = v.partition('|')
+        picked.setdefault(day_, []).append(cls)
+    if not picked:
+        raise trial.TrialError('Pick at least one class.')
+    if form.get('mode') == 'existing':
+        dog = next((x for x in trial.known_dogs(d) if x['key'] == form.get('dog_key')), None)
+        if not dog:
+            raise trial.TrialError('Pick the dog from the list.')
+    else:
+        height, ctype = trial.parse_height(f"{form.get('height', '')} {form.get('class_type', 'Regular')}")
+        dog = {k: form.get(k, '').strip() for k in ('handler_number', 'first_name', 'last_name', 'dog_number',
+                                                    'dog_name', 'breed', 'level', 'speedstakes_level')}
+        dog.update(height=height, class_type=ctype)
+        dog['speedstakes_level'] = dog['speedstakes_level'] or dog['level']
+    for day_, classes in picked.items():
+        trial.add_day_of(d, user, dog, day_, classes)
+    n = sum(len(v) for v in picked.values())
+    msg = f'Added {dog["dog_name"]} to {n} class{"es" if n != 1 else ""}. Now print new scribe sheets and update the check-in app.'
+    request.session['dayof_flash'] = msg
+    return back(f'/shows/{slug}/dayof')
+
+
+@app.post('/shows/{slug}/dayof/payment')
+async def dayof_payment(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    trial.add_payment(slug, user, form.get('handler_number', '').strip(), form.get('amount', ''),
+                      form.get('method', ''), form.get('note', ''))
+    request.session['dayof_flash'] = 'Payment recorded.'
+    return back(f'/shows/{slug}/dayof')

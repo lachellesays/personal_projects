@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Day-of entries · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% if not built %}
+  <div class="panel">Build the run order first (<a href="/shows/{{ slug }}/runorder">Run order</a>), then day-of entries go straight into it.</div>
+{% else %}
+{% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+<p class="muted">Each class entered today costs the normal fee plus {{ day_of_fee|money }}. New runs go to the end of their height group,
+  marked DAY OF. There's no separate processing step. Afterwards: check that class's conflicts, reprint its scribe sheets, and upload the new run order CSV to the check-in app.</p>
+<div class="dl-grid">
+  <div class="panel">
+    <h3>A. Add classes for a dog already entered</h3>
+    <form method="post" action="/shows/{{ slug }}/dayof/add"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="mode" value="existing">
+      <label class="l" for="dog_key">Dog</label>
+      <select class="f" id="dog_key" name="dog_key" required>
+        <option value="">Choose a dog…</option>
+        {% for g in dogs %}<option value="{{ g.key }}">{{ g.last_name }}, {{ g.first_name }} — {{ g.dog_name }} ({{ g.height }}" {{ g.class_type }}, {{ g.level }})</option>{% endfor %}
+      </select>
+      {% include "_dayof_classes.html" %}
+      <button class="btn primary">Add day-of classes</button>
+    </form>
+    <p class="hint">To drop a class, scratch it on the Run order page. To move a dog up a level, use UKI Manager's Move-Up page for now; move-ups take effect the next day.</p>
+  </div>
+  <div class="panel">
+    <h3>B. New handler or dog</h3>
+    <form method="post" action="/shows/{{ slug }}/dayof/add"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="mode" value="new">
+      <div class="row2"><div><label class="l">Handler first name</label><input class="f" name="first_name" required></div>
+        <div><label class="l">Last name</label><input class="f" name="last_name" required></div></div>
+      <div class="row2"><div><label class="l">Handler UKI #</label><input class="f" name="handler_number" inputmode="numeric"></div>
+        <div><label class="l">Dog UKI #</label><input class="f" name="dog_number" inputmode="numeric"></div></div>
+      <div class="row2"><div><label class="l">Dog's name</label><input class="f" name="dog_name" required></div>
+        <div><label class="l">Breed</label><input class="f" name="breed"></div></div>
+      <div class="row2"><div><label class="l">Jump height</label>
+          <select class="f" name="height">{% for h in [4, 8, 12, 16, 20, 22, 24] %}<option>{{ h }}</option>{% endfor %}</select></div>
+        <div><label class="l">Regular or Select</label><select class="f" name="class_type"><option>Regular</option><option>Select</option></select></div></div>
+      <div class="row2"><div><label class="l">Level</label>
+          <select class="f" name="level">{% for l in ['Nursery', 'Beginner', 'Novice', 'Senior', 'Champ'] %}<option>{{ l }}</option>{% endfor %}</select></div>
+        <div><label class="l">Speedstakes level</label>
+          <select class="f" name="speedstakes_level"><option value="">Same as level</option>{% for l in ['Nursery', 'Beginner', 'Novice', 'Senior', 'Champ'] %}<option>{{ l }}</option>{% endfor %}</select></div></div>
+      {% include "_dayof_classes.html" %}
+      <button class="btn primary">Add new entry</button>
+    </form>
+  </div>
+</div>
+
+<h3 style="margin-top:22px">Day-of entries and payments</h3>
+<div class="stats">
+  <div class="stat"><div class="k">Day-of fees</div><div class="v">{{ summary.fees|money }}</div></div>
+  <div class="stat"><div class="k">Paid</div><div class="v">{{ summary.paid|money }}</div></div>
+  <div class="stat"><div class="k">Still owed</div><div class="v">{{ (summary.fees - summary.paid)|money }}</div></div>
+</div>
+<div class="tscroll"><table class="t">
+  <thead><tr><th>Handler</th><th>Classes</th><th class="num">Fees</th><th class="num">Paid</th><th class="num">Balance</th><th>Record a payment</th></tr></thead>
+  <tbody>
+  {% for h in summary.handlers %}
+    <tr><td><span class="hname">{{ h.name or 'Payment only' }}</span><div class="muted">#{{ h.handler_number }}</div></td>
+      <td>{% for r in h.runs %}<div class="{{ 'muted' if r.scratched }}">{{ r.day|day }} · {{ r.class_name }} · {{ r.dog_name }}{% if r.scratched %} (scratched){% endif %}</div>{% endfor %}</td>
+      <td class="num">{{ h.fees|money }}</td><td class="num">{{ h.paid|money }}</td>
+      <td class="num">{% if h.balance > 0.005 %}<span class="owes">{{ h.balance|money }}</span>{% elif h.balance < -0.005 %}<span class="credit">{{ h.balance|money }}</span>{% else %}$0.00{% endif %}</td>
+      <td class="keep">{% if h.handler_number %}
+        <form method="post" action="/shows/{{ slug }}/dayof/payment" class="payform"><input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="handler_number" value="{{ h.handler_number }}">
+          <input class="f mini" name="amount" placeholder="{{ '%.2f'|format(h.balance if h.balance > 0 else 0) }}" inputmode="decimal" aria-label="Amount">
+          <select class="f mini" name="method" aria-label="Method"><option>Cash</option><option>Check</option><option>Square</option><option>Other</option></select>
+          <button class="btn small">Save</button></form>{% else %}<span class="muted">Add a handler # to take payment</span>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="6" class="muted" style="text-align:center;padding:20px">No day-of entries yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+{% endif %}
+{% endblock %}

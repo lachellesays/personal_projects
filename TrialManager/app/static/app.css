@@ -161,3 +161,35 @@ td.editing input { width: 100%; min-width: 120px; font: inherit; border: 2px sol
   .typo-grid, .dl-grid, .row2 { grid-template-columns: 1fr; }
   .t .hide-sm { display: none; }
 }
+
+/* Run order + day-of */
+.ro-grid { display: grid; grid-template-columns: 240px 1fr; gap: 14px; align-items: start; }
+.ro-classes { padding: 10px; }
+.ro-class { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; text-decoration: none; color: var(--ink); }
+.ro-class:hover { background: #F8FAFC; }
+.ro-class.on { background: var(--blue-bg); }
+.tag.conflict { background: var(--red-bg); color: var(--red-ink); }
+.tag.ok { background: var(--green-bg); color: var(--green-ink); }
+.tag.dayof { background: var(--amber-bg); color: var(--amber-ink); margin-left: 6px; }
+.ro-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.ro-actions { display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; }
+details.confirm { position: relative; }
+details.confirm summary { list-style: none; cursor: pointer; }
+details.confirm summary::-webkit-details-marker { display: none; }
+details.confirm .pop { position: absolute; right: 0; top: 36px; z-index: 5; width: 280px; background: #fff; border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px; box-shadow: 0 8px 24px rgba(15, 23, 42, .12); font-size: 13px; }
+.t.ro td.handle { cursor: grab; color: var(--muted); font-size: 18px; width: 22px; user-select: none; }
+.t.ro tr.grp td { background: #F8FAFC; font-weight: 700; color: var(--navy); font-size: 12.5px; }
+.t.ro tr.blockstart td { border-top: 2px solid var(--line); }
+.t.ro tr.conflict td { background: #FFF7F7; }
+.t.ro .blk { font-weight: 700; white-space: nowrap; }
+.t.ro .sortable-ghost td { background: var(--blue-bg); }
+input.f.mini, select.f.mini { width: 74px; padding: 4px 6px; font-size: 13px; }
+label.chk { display: inline-flex; align-items: center; gap: 6px; margin: 4px 12px 4px 0; font-size: 14px; }
+.classpick { margin: 4px 0 8px; }
+.classpick b { display: block; font-size: 12px; }
+.payform { display: flex; gap: 6px; align-items: center; }
+@media (max-width: 900px) { .ro-grid { grid-template-columns: 1fr; } }
+.dayset { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 14px; }
+.seg label { display: inline-flex; align-items: center; gap: 6px; }

@@ -1,0 +1,9 @@
+    <div class="panel ro-classes" id="ro-classes"{% if oob %} hx-swap-oob="true"{% endif %}>
+      <h3>{{ day|day }} classes</h3>
+      {% for c in day_classes %}
+        <a class="ro-class {{ 'on' if c.class_name == cls }}" href="/shows/{{ slug }}/runorder?day={{ day }}&cls={{ c.class_name|urlencode }}">
+          <span><b>{{ c.class_name }}</b><br><span class="muted">Ring {{ c.ring }} · {{ c.runs }} dogs{% if c.day_of %} · {{ c.day_of }} day-of{% endif %}</span></span>
+          {% if c.conflicts %}<span class="tag conflict">{{ c.conflicts }}</span>{% else %}<span class="tag ok">OK</span>{% endif %}
+        </a>
+      {% else %}<div class="muted">No classes this day.</div>{% endfor %}
+    </div>

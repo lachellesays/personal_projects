@@ -7,6 +7,7 @@
   <title>{% block title %}Trial Manager{% endblock %}</title>
   <link rel="stylesheet" href="/static/app.css">
   <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js" defer></script>
+  {% block head %}{% endblock %}
 </head>
 <body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
 {% if user %}
@@ -21,6 +22,9 @@
         <a class="nav {{ 'on' if tab == 'typos' }}" href="/shows/{{ slug }}/typos">Fix typos <span class="n" id="side-fixes">{{ fix_count }}</span></a>
         <a class="nav {{ 'on' if tab == 'warnings' }}" href="/shows/{{ slug }}/warnings">Warnings <span class="n">{{ open_warnings }}</span></a>
         <a class="nav {{ 'on' if tab == 'download' }}" href="/shows/{{ slug }}/download">Download</a>
+        <div class="lbl">Trial day</div>
+        <a class="nav {{ 'on' if tab == 'runorder' }}" href="/shows/{{ slug }}/runorder">Run order</a>
+        <a class="nav {{ 'on' if tab == 'dayof' }}" href="/shows/{{ slug }}/dayof">Day-of entries</a>
       {% endif %}
       <div class="lbl">Admin</div>
       <a class="nav {{ 'on' if request.url.path.startswith('/people') }}" href="/people">People</a>

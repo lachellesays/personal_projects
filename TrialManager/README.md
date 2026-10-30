@@ -13,6 +13,8 @@ show the same shows, scratches and typo fixes. You can run them side by side and
 - **Warnings:** credits, addresses typed two ways (pick one), state/zip mismatches (one-click fix), plus anything else the formatter notices. Dismiss or Reopen.
 - **Download:** the same workbook as today, with a download history. "N new entries since your last download" appears on every page.
 - **People:** invite-only admin accounts. See below.
+- **Run order** (Trial day): builds every class grouped by level then height (Gamblers and Masters: all levels together), Select before Regular. Each day has its own order, chosen when you build: by default Saturday is Senior/Champ first, tall to small, and Sunday is Beginner/Novice first, small to tall. Dogs are shuffled inside each height with a handler's dogs spread apart. Shows the **Gap** for each handler (fewer than 10 dogs = conflict), drag-and-drop or "Move to", Undo, per-class settings (order in the day, ring, Select/Regular first), and new JotForm entries join the end of their height group. Exports **grid_run_order_export.csv** in the exact columns the check-in app reads, and **scribe sheets** (PDF, four per page, in UKI Manager's Judging Sheet layout; Gamblers has its own sheet).
+- **Day-of entries:** add classes for a dog already entered, or a brand-new handler/dog. Each class is the normal fee plus $5, goes straight into the run order (marked DAY OF; no separate processing step), and payments are tracked per handler.
 
 ## Accounts (no public sign-up)
 - **The first account** can only be created by the email in the `BOOTSTRAP_ADMIN_EMAIL` variable, and only while no accounts exist. Open the app, and it takes you to a one-time setup page.

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Run order · {{ d.show.name }}{% endblock %}
+{% block head %}<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" defer></script>{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% if not built %}
+  <div class="panel" style="max-width:720px">
+    <h3>Build the run order</h3>
+    <p>Every run from the entries goes into its class, grouped by level and then by height. Select runs before Regular
+      at each height. Dogs are shuffled inside each height, and each handler's dogs are spread as far apart as possible.</p>
+    <form method="post" action="/shows/{{ slug }}/runorder/build"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="dl-grid">
+      {% for dd in days %}{% set ds = day_sets[dd] %}
+        <div class="dayset"><b>{{ dd|day }}</b>
+          <div class="seg">{% for g in level_groups %}<label><input type="radio" name="levels_first_{{ dd }}" value="{{ g }}" {{ 'checked' if ds.levels_first == g }}> {{ g }} first</label>{% endfor %}</div>
+          <div class="seg">{% for k, label in height_orders.items() %}<label><input type="radio" name="heights_{{ dd }}" value="{{ k }}" {{ 'checked' if ds.heights == k }}> {{ label }}</label>{% endfor %}</div>
+        </div>
+      {% endfor %}
+      </div>
+      <p class="muted">Defaults: Saturday Senior/Champ first, tall to small; Sunday Beginner/Novice first, small to tall.
+        You can change a day later; each class keeps its order inside each height.</p>
+      <p class="muted">Later entries from JotForm go to the end of their height group, so building now doesn't lock anything.</p>
+      <button class="btn primary big">Build run order</button></form>
+  </div>
+{% else %}
+  {% if pending and (pending.new or pending.gone) %}
+    <div class="banner"><span>
+      {% if pending.new %}<b>{{ pending.new|length }} new run{{ 's' if pending.new|length != 1 }}</b> from JotForm not in the run order yet. {% endif %}
+      {% if pending.gone %}<b>{{ pending.gone|length }} run{{ 's' if pending.gone|length != 1 }}</b> no longer in JotForm. {% endif %}</span>
+      <form method="post" action="/shows/{{ slug }}/runorder/build"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn small">Update run order</button></form></div>
+  {% endif %}
+  <div class="toolbar">
+    {% for dd in days %}<a class="fchip {{ 'on' if dd == day }}" href="/shows/{{ slug }}/runorder?day={{ dd }}">{{ dd|day }}</a>{% endfor %}
+    {% set ds = day_sets[day] %}
+    <details class="confirm"><summary class="btn small">Day order: {{ ds.levels_first }} first · {{ height_orders[ds.heights] }}</summary>
+      <div class="pop" style="left:0;right:auto"><form method="post" action="/shows/{{ slug }}/runorder/day"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="cls" value="{{ cls }}">
+        <div class="seg">{% for g in level_groups %}<label><input type="radio" name="levels_first" value="{{ g }}" {{ 'checked' if ds.levels_first == g }}> {{ g }} first</label>{% endfor %}</div>
+        <div class="seg">{% for k, label in height_orders.items() %}<label><input type="radio" name="heights" value="{{ k }}" {{ 'checked' if ds.heights == k }}> {{ label }}</label>{% endfor %}</div>
+        <p class="hint">Changes every {{ day|day }} class. Dogs keep their order inside each height.</p>
+        <button class="btn small primary">Save</button></form></div></details>
+    <span style="flex:1"></span>
+    <a class="btn small" href="/shows/{{ slug }}/runorder.csv?day={{ day }}">Run order CSV ({{ day|day }})</a>
+    <a class="btn small" href="/shows/{{ slug }}/runorder.csv">CSV, both days</a>
+    <a class="btn small" href="/shows/{{ slug }}/scribe.pdf?day={{ day }}" target="_blank">Scribe sheets ({{ day|day }})</a>
+  </div>
+  <p class="muted" style="margin:-4px 0 10px">Scribe sheets are collated for cutting: print, cut the stack into quarters, then stack the piles top-left, top-right, bottom-left, bottom-right to get running order.</p>
+  <div class="ro-grid">
+    {% include "_ro_classes.html" %}
+    <div>{% include "_runorder_table.html" %}</div>
+  </div>
+{% endif %}
+{% endblock %}
