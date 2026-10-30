@@ -147,6 +147,25 @@ class_settings = Table(
     Column('select_first', Boolean, nullable=False, default=True),
     Column('combine_levels', Boolean, nullable=False, default=False),
     Column('generated_at', DateTime(timezone=True)),
+    # Course details for scoring (see scoring.py)
+    Column('yards_bn', Integer), Column('yards_senior', Integer), Column('yards_champ', Integer),
+    Column('rate', String, default='fast'),                # fast = UKI Manager's "Lower SCT"; slow = "Higher SCT"
+    Column('sct_extra', Integer, default=0),               # judge's extra seconds (0-3)
+    Column('opening_time', Integer), Column('closing_time', Integer),   # Gamblers
+    Column('course_time', Integer),                                      # Snooker
+    Column('calculated_at', DateTime(timezone=True)),
+)
+
+scores = Table(
+    'tm_scores', metadata,
+    Column('run_id', Integer, primary_key=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('status', String, default=''),                  # '' | E | ABS | NFC
+    Column('time', JSON), Column('course_faults', JSON), Column('refusals', JSON),
+    Column('opening_points', Integer), Column('gamble_points', Integer), Column('points', Integer),
+    Column('result', JSON),                                # computed on Calculate: sct, faults, q, place, level points
+    Column('updated_at', DateTime(timezone=True)),
+    Column('updated_by', String, default=''),
 )
 
 day_settings = Table(

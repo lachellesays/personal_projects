@@ -25,6 +25,7 @@
         <div class="lbl">Trial day</div>
         <a class="nav {{ 'on' if tab == 'runorder' }}" href="/shows/{{ slug }}/runorder">Run order</a>
         <a class="nav {{ 'on' if tab == 'dayof' }}" href="/shows/{{ slug }}/dayof">Day-of entries</a>
+        <a class="nav {{ 'on' if tab == 'scoring' }}" href="/shows/{{ slug }}/scoring">Scoring</a>
       {% endif %}
       <div class="lbl">Admin</div>
       <a class="nav {{ 'on' if request.url.path.startswith('/people') }}" href="/people">People</a>

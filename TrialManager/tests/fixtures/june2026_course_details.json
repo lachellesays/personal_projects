@@ -1,0 +1,17 @@
+{"show": "Level Up Dog Sports June 2026", "source": "UKI Manager > Enter Scores > Yardage (read 2026-10-29)",
+ "note": "Yardage BN = Beginner/Novice, Champ column = Senior/Champ (Senior column blank). All classes YPS Rate 'Lower SCT', no spreads.",
+ "classes": [
+  {"day": "Saturday", "event": "Gamblers-1", "aframe": true, "opening_time": 25, "close_time": 14},
+  {"day": "Saturday", "event": "Agility-1", "aframe": true, "yards_bn": 160, "yards_champ": 177},
+  {"day": "Saturday", "event": "Agility-2", "aframe": true, "yards_bn": 156, "yards_champ": 179},
+  {"day": "Saturday", "event": "Snooker-1", "aframe": false, "opening_time": 48},
+  {"day": "Saturday", "event": "Jumping-1", "aframe": false, "yards_bn": 148, "yards_champ": 155},
+  {"day": "Saturday", "event": "Jumping-2", "aframe": false, "yards_bn": 152, "yards_champ": 154},
+  {"day": "Saturday", "event": "Speedstakes-1", "aframe": false, "yards_bn": 147, "yards_champ": 163},
+  {"day": "Sunday", "event": "Speedstakes-1", "aframe": false, "yards_champ": 176},
+  {"day": "Sunday", "event": "Speedstakes-2", "aframe": false, "yards_bn": 137, "yards_champ": 156},
+  {"day": "Sunday", "event": "Jumping-1", "aframe": false, "yards_bn": 144, "yards_champ": 145},
+  {"day": "Sunday", "event": "Masters Jumping-1", "aframe": false, "yards_champ": 172},
+  {"day": "Sunday", "event": "Agility-1", "aframe": true, "yards_bn": 174, "yards_champ": 177},
+  {"day": "Sunday", "event": "Masters Agility-1", "aframe": true, "yards_champ": 189}
+ ]}

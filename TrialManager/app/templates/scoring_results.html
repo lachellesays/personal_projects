@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Results · {{ cls }} · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+{% include "_scoring_top.html" %}
+<div class="ro-grid">
+  {% include "_scoring_classes.html" %}
+  <div>
+    <div class="ro-head"><h2 style="margin:0">{{ cls }} results <span class="muted">{{ day|day }}</span></h2>
+      <a class="btn small" href="/shows/{{ slug }}/scoring?day={{ day }}&cls={{ cls|urlencode }}">Back to scores</a></div>
+    {% if not ev.calculated %}<div class="flash info">Not calculated yet (or scores changed since). Go back and click Calculate.</div>
+    {% else %}
+    <div class="panel" style="margin-bottom:12px"><h3>Publish to the check-in app</h3>
+      <p class="muted">In Trial Secretary: Admin → Publish results → pick the class → paste → Preview → Publish.</p>
+      {% for x in exports %}
+        <div class="export"><b>{{ x.name }}</b>
+          <textarea class="f" id="json-{{ loop.index }}" rows="2" readonly>{{ x.json }}</textarea>
+          <button class="btn small" type="button" onclick="var t=document.getElementById('json-{{ loop.index }}');navigator.clipboard.writeText(t.value);this.textContent='Copied'">Copy</button></div>
+      {% endfor %}
+    </div>
+    {% for g in groups %}
+      <h4 style="margin:14px 0 6px">{{ g.label }}</h4>
+      <div class="tscroll"><table class="t">
+        <thead><tr><th class="num">Place</th><th>Dog</th><th>Handler</th><th class="num">SCT</th><th class="num">Time</th>
+          {% if ev.kind in ('gamblers', 'snooker') %}<th class="num">Points</th>{% else %}<th class="num">Faults</th><th class="num">YPS</th>{% endif %}
+          <th>Q</th><th class="num">Level pts</th></tr></thead>
+        <tbody>{% for r in g.rows %}{% set res = r.res %}
+          <tr class="{{ 'scr' if res.status }}"><td class="num"><b>{{ res.place or '' }}</b></td><td>{{ r.dog_name }}</td><td>{{ r.first_name }} {{ r.last_name }}</td>
+            <td class="num">{{ res.sct }}</td><td class="num">{{ '%.2f'|format(res.time) if res.time else '' }}</td>
+            {% if ev.kind in ('gamblers', 'snooker') %}<td class="num">{{ res.status or res.points }}</td>
+            {% else %}<td class="num">{{ res.status or (res.total_faults if res.total_faults is not none else '') }}</td><td class="num">{{ res.yps or '' }}</td>{% endif %}
+            <td>{% if res.q %}<span class="tag ok">Q</span>{% elif not res.scored %}<span class="muted">no score</span>{% endif %}</td>
+            <td class="num">{{ res.level_points or '' }}</td></tr>
+        {% endfor %}</tbody></table></div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import auth, db, formatter as fmt, trial
+from app import auth, db, formatter as fmt, results, trial
 from app.core import Show
 
 HERE = Path(__file__).parent
@@ -482,6 +482,7 @@ async def download(request: Request, slug: str):
 # ── Run order ───────────────────────────────────────────────────────────────
 
 @app.exception_handler(trial.TrialError)
+@app.exception_handler(results.ResultsError)
 async def _trial_error(request: Request, exc):
     if request.headers.get('HX-Request'):
         return HTMLResponse(f'<div class="flash error" id="ro-msg">{exc}</div>', status_code=200,
@@ -677,3 +678,82 @@ async def dayof_payment(request: Request, slug: str):
                       form.get('method', ''), form.get('note', ''))
     request.session['dayof_flash'] = 'Payment recorded.'
     return back(f'/shows/{slug}/dayof')
+
+
+# ── Scoring ─────────────────────────────────────────────────────────────────
+
+def _scoring_ctx(request, slug, day, cls, tab='scoring'):
+    d, ws, ctx = _show_ctx(request, slug, tab)
+    days = _days(d.show)
+    day = day if day in days else days[0]
+    built = trial.is_built(slug)
+    classes = results.overview(slug, day) if built else []
+    if classes and cls not in [c['class_name'] for c in classes]:
+        cls = classes[0]['class_name']
+    ev = results.entry_view(slug, day, cls) if classes else None
+    return {**ctx, 'built': built, 'days': days, 'day': day, 'cls': cls, 'score_classes': classes, 'ev': ev,
+            'fault_choices': results.FAULT_CHOICES, 'refusal_choices': results.REFUSAL_CHOICES,
+            'gamble_choices': results.GAMBLE_CHOICES, 'flash': request.session.pop('scoring_flash', '')}
+
+
+@app.get('/shows/{slug}/scoring', response_class=HTMLResponse)
+def scoring_page(request: Request, slug: str, day: str = '', cls: str = ''):
+    require_user(request)
+    return render(request, 'scoring.html', **_scoring_ctx(request, slug, day, cls))
+
+
+@app.post('/shows/{slug}/scoring/course')
+async def scoring_course(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day_, cls = form.get('day', ''), form.get('cls', '')
+    results.save_course(slug, day_, cls, dict(form), user)
+    request.session['scoring_flash'] = 'Course details saved.'
+    return back(f'/shows/{slug}/scoring?day={day_}&cls={quote(cls)}')
+
+
+@app.post('/shows/{slug}/scoring/score/{run_id}', response_class=HTMLResponse)
+async def scoring_score(request: Request, slug: str, run_id: int):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day_, cls = form.get('day', ''), form.get('cls', '')
+    results.save_score(slug, run_id, dict(form), user)
+    ctx = _scoring_ctx(request, slug, day_, cls)
+    row = next(r for r in ctx['ev']['rows'] if r['id'] == run_id)
+    return render(request, '_score_row.html', r=row, oob=True, **ctx)
+
+
+@app.post('/shows/{slug}/scoring/calculate')
+async def scoring_calculate(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day_, cls = form.get('day', ''), form.get('cls', '')
+    out = results.calculate(slug, day_, cls, user)
+    msg = f"Calculated: {out['qs']} qualifying run{'s' if out['qs'] != 1 else ''}."
+    if out['unscored']:
+        msg += f" {out['unscored']} dog{'s have' if out['unscored'] != 1 else ' has'} no score yet."
+    request.session['scoring_flash'] = msg
+    return back(f'/shows/{slug}/scoring/results?day={day_}&cls={quote(cls)}')
+
+
+@app.get('/shows/{slug}/scoring/results', response_class=HTMLResponse)
+def scoring_results(request: Request, slug: str, day: str = '', cls: str = ''):
+    require_user(request)
+    ctx = _scoring_ctx(request, slug, day, cls)
+    groups, exports = [], []
+    if ctx['ev'] and ctx['ev']['calculated']:
+        import json as _json
+        groups = results.results_view(slug, ctx['day'], ctx['cls'])
+        for combined in sorted({r['combined'] for r in ctx['ev']['rows']}):
+            exports.append({'name': combined, 'json': _json.dumps(results.results_json(slug, ctx['day'], ctx['cls'], combined))})
+    return render(request, 'scoring_results.html', groups=groups, exports=exports, **ctx)
+
+
+@app.get('/shows/{slug}/results.xlsx')
+def results_xlsx(request: Request, slug: str):
+    user = require_user(request)
+    show = db.get_show(slug)
+    data = results.results_workbook(slug, show)
+    db.log(user, 'download', slug, target='results.xlsx')
+    return Response(data, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition': f'attachment; filename="Results_{slug}.xlsx"'})

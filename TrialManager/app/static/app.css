@@ -193,3 +193,9 @@ label.chk { display: inline-flex; align-items: center; gap: 6px; margin: 4px 12p
 .dayset { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .seg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 14px; }
 .seg label { display: inline-flex; align-items: center; gap: 6px; }
+.row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 6px; }
+.t.score input.f.mini { width: 78px; }
+.t.score tr.done td { background: #FBFDFF; }
+.export { display: grid; grid-template-columns: 200px 1fr auto; gap: 8px; align-items: center; margin: 6px 0; }
+.export textarea { font-family: ui-monospace, monospace; font-size: 11px; }
+@media (max-width: 900px) { .row3, .export { grid-template-columns: 1fr; } }

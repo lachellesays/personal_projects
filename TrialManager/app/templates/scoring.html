@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Scoring · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% if not built %}
+  <div class="panel">Build the run order first (<a href="/shows/{{ slug }}/runorder">Run order</a>); scoring works from it.</div>
+{% else %}
+{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+<div id="ro-msg"></div>
+{% include "_scoring_top.html" %}
+<div class="ro-grid">
+  {% include "_scoring_classes.html" %}
+  <div>
+  {% if ev %}{% set c = ev.course %}
+    <div class="panel" style="margin-bottom:12px">
+      <h3>1. Course details for {{ cls }}</h3>
+      <form method="post" action="/shows/{{ slug }}/scoring/course" class="course-form"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="cls" value="{{ cls }}">
+        {% if ev.kind == 'gamblers' %}
+          <div class="row3"><div><label class="l">Opening time (sec)</label><input class="f" name="opening_time" value="{{ c.opening_time or '' }}" inputmode="numeric"></div>
+            <div><label class="l">Gamble time (sec)</label><input class="f" name="closing_time" value="{{ c.closing_time or '' }}" inputmode="numeric"></div>
+            <div><label class="l">Extra seconds</label><input class="f" name="sct_extra" value="{{ c.sct_extra or 0 }}" inputmode="numeric"></div></div>
+          <p class="hint">To qualify: at least {{ (c.opening_time or 0) * 6 // 10 }} opening points plus a gamble, or 5 short plus the 15-point gamble.</p>
+        {% elif ev.kind == 'snooker' %}
+          <div class="row3"><div><label class="l">Course time (sec)</label><input class="f" name="course_time" value="{{ c.course_time or '' }}" inputmode="numeric"></div>
+            <div><label class="l">Extra seconds</label><input class="f" name="sct_extra" value="{{ c.sct_extra or 0 }}" inputmode="numeric"></div></div>
+          <p class="hint">To qualify: 37 points or more, and the dog stops the clock.</p>
+        {% else %}
+          <div class="row3"><div><label class="l">Yards: Beginner/Novice</label><input class="f" name="yards_bn" value="{{ c.yards_bn or '' }}" inputmode="numeric"></div>
+            <div><label class="l">Yards: Senior/Champ</label><input class="f" name="yards_champ" value="{{ c.yards_champ or '' }}" inputmode="numeric"></div>
+            <div><label class="l">Yards: Senior (if different)</label><input class="f" name="yards_senior" value="{{ c.yards_senior or '' }}" inputmode="numeric"></div></div>
+          <div class="row3"><div><label class="l">Rate of travel</label>
+              <select class="f" name="rate"><option value="fast" {{ 'selected' if c.rate != 'slow' }}>Faster rate (lower SCT)</option>
+                <option value="slow" {{ 'selected' if c.rate == 'slow' }}>Slower rate (higher SCT)</option></select></div>
+            <div><label class="l">Extra seconds (judge, 0–3)</label><input class="f" name="sct_extra" value="{{ c.sct_extra or 0 }}" inputmode="numeric"></div></div>
+          <p class="hint">{% if not c.yards_champ and not c.yards_bn %}Enter the max yardage the judge gives you. SCTs fill in once saved. {% elif ev.open %}All levels are judged at Champ rates in this class (Masters, or no Beginner/Novice yardage). {% endif %}{% if not ev.open or not c.yards_champ %}Leave Beginner/Novice blank for an all-levels class: everyone then uses the Champ yardage and rates.{% endif %}</p>
+        {% endif %}
+        <button class="btn small primary">Save course details</button>
+      </form>
+    </div>
+    <div class="panel">
+      <div class="ro-head" style="margin-bottom:6px"><h3 style="margin:0">2. Scores <span class="muted">{{ ev.scored }} of {{ ev.rows|length }} entered · saves as you type</span></h3>
+        <div class="ro-actions">
+          <form method="post" action="/shows/{{ slug }}/scoring/calculate"><input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="cls" value="{{ cls }}">
+            <button class="btn primary">3. Calculate</button></form>
+          {% if ev.calculated %}<a class="btn" href="/shows/{{ slug }}/scoring/results?day={{ day }}&cls={{ cls|urlencode }}">Results</a>{% endif %}
+        </div></div>
+      {% if not ev.calculated and ev.scored %}<div class="flash info">Scores changed since the last Calculate. Calculate again before publishing.</div>{% endif %}
+      <div class="tscroll"><table class="t score">
+        <thead><tr><th class="num">#</th><th>Dog</th><th class="hide-sm">Level · Height</th><th class="num">SCT</th>
+          {% if ev.kind == 'gamblers' %}<th>Opening pts</th><th>Gamble</th><th>Time</th>
+          {% elif ev.kind == 'snooker' %}<th>Points</th><th>Time</th>
+          {% else %}<th>Time</th><th>Faults</th><th>Refusals</th>{% endif %}
+          <th>E / ABS / NFC</th><th class="hide-sm">Result</th></tr></thead>
+        <tbody>{% for r in ev.rows %}{% include "_score_row.html" %}{% endfor %}</tbody>
+      </table></div>
+      <p class="hint">Type the time, pick faults and refusals (all in 5s), or mark E, ABS or NFC. Each row saves when you leave it.</p>
+    </div>
+  {% else %}<div class="panel muted">No classes this day.</div>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

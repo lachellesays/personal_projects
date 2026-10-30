@@ -1,0 +1,9 @@
+<div class="panel ro-classes">
+  <h3>{{ day|day }} classes</h3>
+  {% for c in score_classes %}
+    <a class="ro-class {{ 'on' if c.class_name == cls }}" href="/shows/{{ slug }}/scoring?day={{ day }}&cls={{ c.class_name|urlencode }}">
+      <span><b>{{ c.class_name }}</b><br><span class="muted">{{ c.scored }} of {{ c.runs }} scored</span></span>
+      {% if c.calculated %}<span class="tag ok">Done</span>{% elif c.scored %}<span class="tag dayof">In progress</span>{% endif %}
+    </a>
+  {% endfor %}
+</div>

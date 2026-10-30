@@ -220,3 +220,68 @@ def test_scribe_sheets_are_collated_for_cutting():
     assert [p[1]['seq'] for p in pages[:5]] == [6, 7, 8, 9, 10]          # top-right pile = 6-10
     assert [p[3]['seq'] if p[3] else None for p in pages[:5]] == [16, 17, 18, 19, None]
     assert [r['seq'] if r else None for r in pages[5]] == [1, 2, 3, None]  # a new class starts a new page
+
+
+def test_scoring_end_to_end(built):
+    import io, json
+    import openpyxl
+    from app import results
+    c, token = built
+    page = c.get(f'/shows/{SLUG}/scoring?day={SAT}&cls=Agility')
+    assert page.status_code == 200 and 'Course details for Agility' in page.text
+    # Calculating without yardage is refused
+    r = c.post(f'/shows/{SLUG}/scoring/calculate', data={'csrf': token, 'day': SAT, 'cls': 'Agility'}, follow_redirects=True)
+    assert 'Fill in the course details' in r.text
+    c.post(f'/shows/{SLUG}/scoring/course', data={'csrf': token, 'day': SAT, 'cls': 'Agility', 'yards_bn': '160',
+                                                   'yards_champ': '177', 'rate': 'fast', 'sct_extra': '0'})
+    rows = results.entry_view(SLUG, SAT, 'Agility')['rows']
+    by = {r['dog_name']: r for r in rows}
+    assert by['Ace']['sct'] == 56 and by['Fig']['sct'] == 59 and by['Elf']['sct'] == 66   # 20R Champ, 20S Champ, 12R Beginner
+    def score(dog, **kw):
+        resp = c.post(f'/shows/{SLUG}/scoring/score/{by[dog]["id"]}', data={'csrf': token, 'day': SAT, 'cls': 'Agility', **kw},
+                      headers={'HX-Request': 'true'})
+        assert resp.status_code == 200 and f'sr-{by[dog]["id"]}' in resp.text
+    score('Ace', time='30.10', course_faults='0', refusals='0')
+    score('Bolt', time='29.50', course_faults='0', refusals='0')
+    score('Cody', time='31.00', course_faults='5', refusals='0')
+    score('Jet', time='57.25', course_faults='0', refusals='0')       # over SCT 56 -> 1.25 time faults
+    score('Ivy', status='E')
+    r = c.post(f'/shows/{SLUG}/scoring/calculate', data={'csrf': token, 'day': SAT, 'cls': 'Agility'}, follow_redirects=True)
+    assert 'Calculated: 2 qualifying runs' in r.text and 'no score yet' in r.text
+    res = {x['dog_name']: (x['score'] or {}).get('result') for x in results.class_runs(SLUG, SAT, 'Agility')}
+    assert (res['Bolt']['place'], res['Bolt']['level_points']) == (1, 6)
+    assert (res['Ace']['place'], res['Ace']['level_points']) == (2, 5)
+    assert res['Cody']['place'] == 0 and res['Jet']['time_faults'] == 1.25 and not res['Jet']['q']
+    # Ace and Bolt are Champ 20" Regular; Cody is Senior so placed separately
+    exports = json.loads(r.text.split('id="json-1"')[1].split('>', 1)[1].split('</textarea>')[0].replace('&#34;', '"').replace('&quot;', '"'))
+    assert isinstance(exports, list)
+    js = results.results_json(SLUG, SAT, 'Agility', 'Senior/Champ Agility')
+    bolt = next(x for x in js if x['uki_dog_number'] == 'Bolt')
+    assert bolt['place'] == '1' and bolt['qualify'] == 'Y' and bolt['faults'] == '0.00'
+    # Changing a score marks the class as needing Calculate again
+    score('Ace', time='28.00', course_faults='0', refusals='0')
+    assert not results.entry_view(SLUG, SAT, 'Agility')['calculated']
+    c.post(f'/shows/{SLUG}/scoring/calculate', data={'csrf': token, 'day': SAT, 'cls': 'Agility'})
+    # UKI results spreadsheet
+    wb = openpyxl.load_workbook(io.BytesIO(c.get(f'/shows/{SLUG}/results.xlsx').content))
+    ws = wb['Raw Results']
+    head = [x.value for x in ws[1]]
+    assert head == results.RAW_RESULTS_COLUMNS
+    rows_ = [dict(zip(head, [x.value for x in row])) for row in ws.iter_rows(min_row=2)]
+    ace = next(x for x in rows_ if x['Dog Name'] == 'Ace')
+    assert ace['Place'] == 1 and ace['Level Points'] == 6 and ace['SCT'] == 56 and ace['Class'] == 'Agility'
+
+
+def test_scoring_games(built):
+    from app import results
+    c, token = built
+    c.post(f'/shows/{SLUG}/scoring/course', data={'csrf': token, 'day': SAT, 'cls': 'Gamblers', 'opening_time': '30', 'closing_time': '15'})
+    rows = {r['dog_name']: r for r in results.entry_view(SLUG, SAT, 'Gamblers')['rows']}
+    assert rows['Ace']['sct'] == 45
+    for dog, op, g, t in [('Ace', '18', '10', '40'), ('Bolt', '30', '0', '41'), ('Cody', '14', '15', '42')]:
+        c.post(f'/shows/{SLUG}/scoring/score/{rows[dog]["id"]}', data={'csrf': token, 'day': SAT, 'cls': 'Gamblers',
+               'opening_points': op, 'gamble_points': g, 'time': t}, headers={'HX-Request': 'true'})
+    c.post(f'/shows/{SLUG}/scoring/calculate', data={'csrf': token, 'day': SAT, 'cls': 'Gamblers'})
+    res = {x['dog_name']: (x['score'] or {}).get('result') for x in results.class_runs(SLUG, SAT, 'Gamblers')}
+    assert res['Ace']['q'] and not res['Bolt']['q'] and res['Cody']['q']   # 14 is 4 short of 18; the 15-point gamble makes it up
+    assert res['Ace']['place'] == 1 and res['Cody']['place'] == 1          # Champ and Senior are placed separately

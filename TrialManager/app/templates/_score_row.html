@@ -1,0 +1,24 @@
+{% set s = r.score or {'status': '', 'time': none, 'course_faults': none, 'refusals': none, 'opening_points': none, 'gamble_points': none, 'points': none} %}{% set res = r.result or {} %}
+<tr id="sr-{{ r.id }}" {% if oob %}hx-swap-oob="true"{% endif %} class="{{ 'done' if s.status or s.time is not none or s.points is not none or s.opening_points is not none }}"
+    hx-post="/shows/{{ slug }}/scoring/score/{{ r.id }}" hx-trigger="change" hx-include="#sr-{{ r.id }}" hx-swap="none"
+    hx-vals='{"day": "{{ day }}", "cls": "{{ cls }}"}'>
+  <td class="num"><b>{{ r.seq }}</b></td>
+  <td><span class="dname">{{ r.dog_name }}</span>{% if r.source == 'day_of' %}<span class="tag dayof">DAY OF</span>{% endif %}
+    <div class="muted">{{ r.first_name }} {{ r.last_name }}</div></td>
+  <td class="hide-sm">{{ r.level }}<div class="muted">{{ r.height }}" {{ r.class_type }}</div></td>
+  <td class="num">{{ r.sct if r.sct is not none else '–' }}</td>
+  {% if ev.kind == 'gamblers' %}
+    <td><input class="f mini" name="opening_points" value="{{ s.opening_points if s.opening_points is not none else '' }}" inputmode="numeric" aria-label="Opening points for {{ r.dog_name }}"></td>
+    <td><select class="f mini" name="gamble_points" aria-label="Gamble points">{% for g in gamble_choices %}<option {{ 'selected' if (s.gamble_points or 0) == g }}>{{ g }}</option>{% endfor %}</select></td>
+    <td><input class="f mini" name="time" value="{{ '%.2f'|format(s.time) if s.time is not none else '' }}" inputmode="decimal" aria-label="Time for {{ r.dog_name }}"></td>
+  {% elif ev.kind == 'snooker' %}
+    <td><input class="f mini" name="points" value="{{ s.points if s.points is not none else '' }}" inputmode="numeric" aria-label="Points for {{ r.dog_name }}"></td>
+    <td><input class="f mini" name="time" value="{{ '%.2f'|format(s.time) if s.time is not none else '' }}" inputmode="decimal" aria-label="Time for {{ r.dog_name }}"></td>
+  {% else %}
+    <td><input class="f mini" name="time" value="{{ '%.2f'|format(s.time) if s.time is not none else '' }}" inputmode="decimal" aria-label="Time for {{ r.dog_name }}"></td>
+    <td><select class="f mini" name="course_faults" aria-label="Faults">{% for f in fault_choices %}<option {{ 'selected' if (s.course_faults or 0) == f }}>{{ f }}</option>{% endfor %}</select></td>
+    <td><select class="f mini" name="refusals" aria-label="Refusals">{% for f in refusal_choices %}<option {{ 'selected' if (s.refusals or 0) == f }}>{{ f }}</option>{% endfor %}</select></td>
+  {% endif %}
+  <td><select class="f mini" name="status" aria-label="E, ABS or NFC"><option value="">–</option>{% for st in ['E', 'ABS', 'NFC'] %}<option {{ 'selected' if s.status == st }}>{{ st }}</option>{% endfor %}</select></td>
+  <td class="hide-sm">{% if res %}{% if res.q %}<span class="tag ok">Q{% if res.place %} · {{ res.place }}{% endif %}</span>{% elif res.status %}<span class="muted">{{ res.status }}</span>{% elif res.scored %}<span class="muted">{{ res.total_faults if res.total_faults is not none else res.points }}</span>{% endif %}{% endif %}</td>
+</tr>
