@@ -1,4 +1,4 @@
-{% set s = r.score or {'status': '', 'time': none, 'course_faults': none, 'refusals': none, 'opening_points': none, 'gamble_points': none, 'points': none} %}{% set res = r.result or {} %}
+{% set s = r.score or {'status': '', 'time': none, 'course_faults': none, 'refusals': none, 'opening_points': none, 'opening_path': '', 'gamble_points': none, 'points': none} %}{% set res = r.result or {} %}
 <tr id="sr-{{ r.id }}" {% if oob %}hx-swap-oob="true"{% endif %} class="{{ 'done' if s.status or s.time is not none or s.points is not none or s.opening_points is not none }}"
     hx-post="/shows/{{ slug }}/scoring/score/{{ r.id }}" hx-trigger="change" hx-include="#sr-{{ r.id }}" hx-swap="none"
     hx-vals='{"day": "{{ day }}", "cls": "{{ cls }}"}'>
@@ -8,7 +8,10 @@
   <td class="hide-sm">{{ r.level }}<div class="muted">{{ r.height }}" {{ r.class_type }}</div></td>
   <td class="num">{{ r.sct if r.sct is not none else '–' }}</td>
   {% if ev.kind == 'gamblers' %}
-    <td><input class="f mini" name="opening_points" value="{{ s.opening_points if s.opening_points is not none else '' }}" inputmode="numeric" aria-label="Opening points for {{ r.dog_name }}"></td>
+    <td class="keep"><input class="f opening" name="opening_points" value="{{ s.opening_path or (s.opening_points if s.opening_points is not none else '') }}"
+        inputmode="numeric" autocomplete="off" placeholder="e.g. 11531151" aria-label="Opening obstacle points for {{ r.dog_name }}"
+        oninput="var t=0,d=this.value.replace(/[^0-9]/g,'');for(var i=0;i<d.length;i++)t+=+d[i];this.nextElementSibling.textContent=d?'= '+t:''">
+      <span class="sum">{% if s.opening_points is not none %}= {{ s.opening_points }}{% endif %}</span></td>
     <td><select class="f mini" name="gamble_points" aria-label="Gamble points">{% for g in gamble_choices %}<option {{ 'selected' if (s.gamble_points or 0) == g }}>{{ g }}</option>{% endfor %}</select></td>
     <td><input class="f mini" name="time" value="{{ '%.2f'|format(s.time) if s.time is not none else '' }}" inputmode="decimal" aria-label="Time for {{ r.dog_name }}"></td>
   {% elif ev.kind == 'snooker' %}

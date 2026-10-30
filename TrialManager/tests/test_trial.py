@@ -278,10 +278,13 @@ def test_scoring_games(built):
     c.post(f'/shows/{SLUG}/scoring/course', data={'csrf': token, 'day': SAT, 'cls': 'Gamblers', 'opening_time': '30', 'closing_time': '15'})
     rows = {r['dog_name']: r for r in results.entry_view(SLUG, SAT, 'Gamblers')['rows']}
     assert rows['Ace']['sct'] == 45
-    for dog, op, g, t in [('Ace', '18', '10', '40'), ('Bolt', '30', '0', '41'), ('Cody', '14', '15', '42')]:
+    for dog, op, g, t in [('Ace', '11531151', '10', '40'), ('Bolt', '555555', '0', '41'), ('Cody', '5-5-3-1', '15', '42')]:
         c.post(f'/shows/{SLUG}/scoring/score/{rows[dog]["id"]}', data={'csrf': token, 'day': SAT, 'cls': 'Gamblers',
                'opening_points': op, 'gamble_points': g, 'time': t}, headers={'HX-Request': 'true'})
     c.post(f'/shows/{SLUG}/scoring/calculate', data={'csrf': token, 'day': SAT, 'cls': 'Gamblers'})
     res = {x['dog_name']: (x['score'] or {}).get('result') for x in results.class_runs(SLUG, SAT, 'Gamblers')}
-    assert res['Ace']['q'] and not res['Bolt']['q'] and res['Cody']['q']   # 14 is 4 short of 18; the 15-point gamble makes it up
+    assert res['Ace']['q'] and not res['Bolt']['q'] and res['Cody']['q']   # 18 + gamble; 30 but no gamble; 14 + 15-point gamble
+    assert res['Ace']['points'] == 28 and res['Cody']['points'] == 29
+    page = c.get(f'/shows/{SLUG}/scoring?day={SAT}&cls=Gamblers').text
+    assert 'value="11531151"' in page and '= 18' in page
     assert res['Ace']['place'] == 1 and res['Cody']['place'] == 1          # Champ and Senior are placed separately

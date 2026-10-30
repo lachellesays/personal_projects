@@ -49,13 +49,13 @@
       {% if not ev.calculated and ev.scored %}<div class="flash info">Scores changed since the last Calculate. Calculate again before publishing.</div>{% endif %}
       <div class="tscroll"><table class="t score">
         <thead><tr><th class="num">#</th><th>Dog</th><th class="hide-sm">Level · Height</th><th class="num">SCT</th>
-          {% if ev.kind == 'gamblers' %}<th>Opening pts</th><th>Gamble</th><th>Time</th>
+          {% if ev.kind == 'gamblers' %}<th>Opening points <span class="muted">(one digit per obstacle)</span></th><th>Gamble</th><th>Time</th>
           {% elif ev.kind == 'snooker' %}<th>Points</th><th>Time</th>
           {% else %}<th>Time</th><th>Faults</th><th>Refusals</th>{% endif %}
           <th>E / ABS / NFC</th><th class="hide-sm">Result</th></tr></thead>
         <tbody>{% for r in ev.rows %}{% include "_score_row.html" %}{% endfor %}</tbody>
       </table></div>
-      <p class="hint">Type the time, pick faults and refusals (all in 5s), or mark E, ABS or NFC. Each row saves when you leave it.</p>
+      <p class="hint">{% if ev.kind == 'gamblers' %}Opening points: type the scribe sheet's obstacle points as one string, like 11531151; they're added up for you (1+1+5+3+1+1+5+1 = 18). {% else %}Type the time, pick faults and refusals (all in 5s), or mark E, ABS or NFC. {% endif %}Each row saves when you leave it.</p>
     </div>
   {% else %}<div class="panel muted">No classes this day.</div>{% endif %}
   </div>

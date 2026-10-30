@@ -163,6 +163,7 @@ scores = Table(
     Column('status', String, default=''),                  # '' | E | ABS | NFC
     Column('time', JSON), Column('course_faults', JSON), Column('refusals', JSON),
     Column('opening_points', Integer), Column('gamble_points', Integer), Column('points', Integer),
+    Column('opening_path', String, default=''),           # Gamblers: obstacle points as typed, e.g. 11531151
     Column('result', JSON),                                # computed on Calculate: sct, faults, q, place, level points
     Column('updated_at', DateTime(timezone=True)),
     Column('updated_by', String, default=''),

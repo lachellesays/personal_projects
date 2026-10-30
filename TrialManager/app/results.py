@@ -16,7 +16,7 @@ from app import db, scoring, trial
 FAULT_CHOICES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 REFUSAL_CHOICES = [0, 5, 10, 15, 20]
 GAMBLE_CHOICES = [0, 10, 15, 20]
-EMPTY_SCORE = {'status': '', 'time': None, 'course_faults': None, 'refusals': None, 'opening_points': None,
+EMPTY_SCORE = {'status': '', 'time': None, 'course_faults': None, 'refusals': None, 'opening_points': None, 'opening_path': '',
                'gamble_points': None, 'points': None, 'result': None}
 COURSE_FIELDS = ('yards_bn', 'yards_senior', 'yards_champ', 'sct_extra', 'opening_time', 'closing_time', 'course_time')
 
@@ -89,8 +89,11 @@ def save_score(slug: str, run_id: int, form: dict, user: dict):
         raise ResultsError('Status must be blank, E, ABS or NFC.')
     values = {'status': status, 'time': _num(form.get('time'), 'Time'),
               'course_faults': _num(form.get('course_faults'), 'Faults'), 'refusals': _num(form.get('refusals'), 'Refusals'),
-              'opening_points': _int_or_none(form.get('opening_points')), 'gamble_points': _int_or_none(form.get('gamble_points')),
-              'points': _int_or_none(form.get('points'))}
+              'gamble_points': _int_or_none(form.get('gamble_points')), 'points': _int_or_none(form.get('points'))}
+    try:
+        values['opening_path'], values['opening_points'] = scoring.opening_points_from(form.get('opening_points'))
+    except ValueError as e:
+        raise ResultsError(str(e))
     with db.engine().begin() as c:
         c.execute(delete(db.scores).where(db.scores.c.run_id == run_id))
         c.execute(insert(db.scores).values(run_id=run_id, show_slug=slug, result=None, updated_at=db.now(),

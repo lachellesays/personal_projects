@@ -121,3 +121,12 @@ def test_new_columns_are_added_to_an_existing_database(tmp_path, monkeypatch):
         assert rows[0]['class_name'] == 'Agility' and rows[0]['yards_bn'] is None and rows[0]['calculated_at'] is None
     finally:
         db.reset_engine()
+
+
+def test_gamblers_opening_digits_are_added_up():
+    assert sc.opening_points_from('11531151') == ('11531151', 18)
+    assert sc.opening_points_from('1-1-2-5-1-3-0-5-2') == ('112513052', 20)   # the scribe sheet's example
+    assert sc.opening_points_from(' 1 5 3 ') == ('153', 9)
+    assert sc.opening_points_from('') == ('', None)
+    with pytest.raises(ValueError):
+        sc.opening_points_from('1a5')

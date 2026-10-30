@@ -99,6 +99,19 @@ def sct(class_name: str, level: str, height: int, class_type: str, course: dict)
     return _round(seconds) + (SELECT_SECONDS if select else 0) + extra
 
 
+def opening_points_from(typed) -> tuple:
+    """Gamblers opening as the scribe writes it, one digit per obstacle: '11531151' -> 18 (1+1+5+3+1+1+5+1).
+    Dashes, spaces, plus signs and commas are ignored, so '1-1-2-5-1-3-0-5-2' works too.
+    Returns (digits as typed, total), or ('', None) when nothing was entered."""
+    text = str(typed or '').strip()
+    if not text:
+        return '', None
+    if any(ch not in '0123456789-+, ' for ch in text):
+        raise ValueError('Opening points: type one digit per obstacle, like 11531151.')
+    digits = ''.join(ch for ch in text if ch.isdigit())
+    return digits, sum(int(ch) for ch in digits)
+
+
 def gamblers_minimum(opening_time) -> int:
     """Opening time × 6 with the zero dropped: 30 seconds → 18 points."""
     return int(opening_time or 0) * 6 // 10

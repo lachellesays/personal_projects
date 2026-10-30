@@ -199,3 +199,5 @@ label.chk { display: inline-flex; align-items: center; gap: 6px; margin: 4px 12p
 .export { display: grid; grid-template-columns: 200px 1fr auto; gap: 8px; align-items: center; margin: 6px 0; }
 .export textarea { font-family: ui-monospace, monospace; font-size: 11px; }
 @media (max-width: 900px) { .row3, .export { grid-template-columns: 1fr; } }
+.t.score input.f.opening { width: 130px; padding: 4px 6px; font-size: 13px; letter-spacing: .5px; }
+.t.score .sum { margin-left: 6px; font-weight: 700; color: var(--navy); white-space: nowrap; }
