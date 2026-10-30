@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     JSON, Boolean, Column, DateTime, Integer, MetaData, String, Table, Text, create_engine, delete, desc,
-    func, insert, select, update,
+    func, insert, inspect, select, text, update,
 )
 
 from app.core import Show
@@ -214,7 +214,23 @@ def engine():
     if _engine is None:
         _engine = create_engine(database_url(), pool_pre_ping=True)
         metadata.create_all(_engine)
+        add_missing_columns(_engine)
     return _engine
+
+
+def add_missing_columns(eng):
+    """create_all() makes new tables but never changes existing ones. When a release adds a column to a table
+    that's already in the database, add it here (empty, so existing rows read it as "not set yet")."""
+    existing = inspect(eng)
+    with eng.begin() as c:
+        for table in metadata.sorted_tables:
+            if not existing.has_table(table.name):
+                continue
+            have = {col['name'] for col in existing.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in have:
+                    kind = col.type.compile(dialect=eng.dialect)
+                    c.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {col.name} {kind}'))
 
 
 def reset_engine():

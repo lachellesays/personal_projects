@@ -101,3 +101,23 @@ def test_matches_uki_manager_on_june_2026():
         for r in sc.place_class(cls, runs, course[(day, cls)]):
             assert (r['place'], r['level_points']) == r['want'], (day, cls, r['level'], r['height'], r['class_type'])
     assert checked > 270
+
+
+def test_new_columns_are_added_to_an_existing_database(tmp_path, monkeypatch):
+    """A database made by an earlier release gets the scoring columns added on startup."""
+    import sqlite3
+    from app import db, trial
+    path = tmp_path / 'old.db'
+    con = sqlite3.connect(path)
+    con.execute('create table tm_classes (id integer primary key, show_slug varchar not null, day varchar not null, '
+                'class_name varchar not null, sort integer not null, ring varchar, select_first boolean not null, '
+                'combine_levels boolean not null, generated_at datetime)')
+    con.execute("insert into tm_classes values (1, 's', '2026-12-05', 'Agility', 0, '1', 1, 0, null)")
+    con.commit(); con.close()
+    monkeypatch.setenv('DATABASE_URL', f'sqlite:///{path}')
+    db.reset_engine()
+    try:
+        rows = trial.class_list('s')
+        assert rows[0]['class_name'] == 'Agility' and rows[0]['yards_bn'] is None and rows[0]['calculated_at'] is None
+    finally:
+        db.reset_engine()
