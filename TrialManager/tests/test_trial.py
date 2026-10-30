@@ -288,3 +288,49 @@ def test_scoring_games(built):
     page = c.get(f'/shows/{SLUG}/scoring?day={SAT}&cls=Gamblers').text
     assert 'value="11531151"' in page and '= 18' in page
     assert res['Ace']['place'] == 1 and res['Cody']['place'] == 1          # Champ and Senior are placed separately
+
+
+def test_masters_series_end_to_end(admin, app_env):
+    import io
+    import openpyxl
+    from app import results, trial
+    subs = [submission(str(i), f'H{i}', 'Smith', f'7{i}', f'8{i}', name, sun=['Masters Series'], paid='35.00',
+                       level='Champion', height=h)
+            for i, (name, h) in enumerate([('Ace', '20 Regular'), ('Bolt', '20 Regular'), ('Cody', '20 Regular'),
+                                           ('Dot', '20 Regular'), ('Elf', '16 Select')], start=1)]
+    app_env['data'] = subs
+    c, token = admin
+    c.post(f'/shows/{SLUG}/refresh', data={'csrf': token})
+    c.post(f'/shows/{SLUG}/runorder/build', data={'csrf': token})
+    assert trial.masters_order(SLUG, SUN) == {'Masters Agility': 'first', 'Masters Jumping': 'second'}
+    for cls, yards in (('Masters Agility', '189'), ('Masters Jumping', '172')):
+        c.post(f'/shows/{SLUG}/scoring/course', data={'csrf': token, 'day': SUN, 'cls': cls, 'yards_champ': yards})
+    def enter(cls, scores):
+        rows = {r['dog_name']: r for r in results.entry_view(SLUG, SUN, cls)['rows']}
+        for dog, kw in scores.items():
+            c.post(f'/shows/{SLUG}/scoring/score/{rows[dog]["id"]}', data={'csrf': token, 'day': SUN, 'cls': cls, **kw},
+                   headers={'HX-Request': 'true'})
+        c.post(f'/shows/{SLUG}/scoring/calculate', data={'csrf': token, 'day': SUN, 'cls': cls})
+    enter('Masters Agility', {'Ace': {'time': '40'}, 'Bolt': {'time': '38', 'course_faults': '5'},
+                              'Cody': {'status': 'E'}, 'Dot': {'status': 'ABS'}, 'Elf': {'time': '45'}})
+    # Second class: reverse order of the first round's results within each height (winner last)
+    c.post(f'/shows/{SLUG}/runorder/masters', data={'csrf': token, 'day': SUN, 'cls': 'Masters Jumping'})
+    order = [r['dog_name'] for r in trial.event_view(SLUG, SUN, 'Masters Jumping')['rows'] if r['height'] == 20]
+    assert order == ['Dot', 'Cody', 'Bolt', 'Ace']          # 1060, 160, 43, 40
+    enter('Masters Jumping', {'Ace': {'time': '30'}, 'Bolt': {'time': '29'}, 'Cody': {'time': '28'}, 'Dot': {'time': '27'},
+                              'Elf': {'status': 'E'}})
+    page = c.get(f'/shows/{SLUG}/scoring/masters?day={SUN}').text
+    assert 'Masters Series overall' in page and 'Qualified' in page
+    mv = results.masters_view(SLUG, SUN)
+    rows = {d['dog_name']: d for g in mv['groups'] for d in g['rows']}
+    assert (rows['Ace']['place'], rows['Ace']['overall'], rows['Ace']['prize']) == (1, 70.0, 16.0)   # 4 entered at 20"
+    assert (rows['Bolt']['place'], rows['Bolt']['overall']) == (2, 72.0)
+    assert rows['Cody']['place'] == 3 and rows['Dot']['place'] == 0 and 'forfeits' in rows['Dot']['note']
+    assert rows['Elf']['place'] == 1 and rows['Elf']['prize'] == 4.0                                  # 16" Select on its own
+    assert not rows['Dot']['bye']                # fastest Jumping, but absent in Agility forfeits it
+    jump = {r['dog_name']: r['result'] for r in results.entry_view(SLUG, SUN, 'Masters Jumping')['rows']}
+    assert jump['Dot']['place'] == 0 and jump['Dot'].get('forfeit') and jump['Cody']['place'] == 1
+    wb = openpyxl.load_workbook(io.BytesIO(c.get(f'/shows/{SLUG}/results.xlsx').content))
+    assert 'Masters Scoring' in wb.sheetnames and 'Masters Byes' in wb.sheetnames
+    byes = [r[4] for r in wb['Masters Byes'].iter_rows(min_row=2, values_only=True)]
+    assert set(byes) == {'Ace', 'Bolt', 'Cody', 'Elf'}   # 1st/2nd overall at 20", Cody won Jumping, Elf at 16" Select

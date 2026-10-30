@@ -1,5 +1,7 @@
 <div class="toolbar">
   {% for dd in days %}<a class="fchip {{ 'on' if dd == day }}" href="/shows/{{ slug }}/scoring?day={{ dd }}">{{ dd|day }}</a>{% endfor %}
   <span style="flex:1"></span>
+  {% if score_classes and score_classes|selectattr('class_name', 'equalto', 'Masters Agility')|list %}
+    <a class="btn small" href="/shows/{{ slug }}/scoring/masters?day={{ day }}">Masters Series overall</a>{% endif %}
   <a class="btn small" href="/shows/{{ slug }}/results.xlsx">Results spreadsheet for UKI</a>
 </div>

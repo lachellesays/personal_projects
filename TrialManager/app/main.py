@@ -508,7 +508,8 @@ def _runorder_ctx(request, slug, day=None, cls=None):
     return {**ctx, 'built': built, 'classes': classes, 'days': days, 'day': day, 'cls': cls, 'ev': ev,
             'day_classes': day_classes, 'pending': pending, 'gap_target': trial.GAP_TARGET,
             'day_sets': {dd: trial.day_setting(slug, dd) for dd in days},
-            'level_groups': trial.LEVEL_GROUPS, 'height_orders': trial.HEIGHT_ORDERS}
+            'level_groups': trial.LEVEL_GROUPS, 'height_orders': trial.HEIGHT_ORDERS,
+            'masters_role': trial.masters_order(slug, day).get(cls) if built else None}
 
 
 @app.get('/shows/{slug}/runorder', response_class=HTMLResponse)
@@ -757,3 +758,19 @@ def results_xlsx(request: Request, slug: str):
     db.log(user, 'download', slug, target='results.xlsx')
     return Response(data, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     headers={'Content-Disposition': f'attachment; filename="Results_{slug}.xlsx"'})
+
+
+@app.get('/shows/{slug}/scoring/masters', response_class=HTMLResponse)
+def scoring_masters(request: Request, slug: str, day: str = ''):
+    require_user(request)
+    ctx = _scoring_ctx(request, slug, day, '')
+    return render(request, 'masters.html', mv=results.masters_view(slug, ctx['day']), **ctx)
+
+
+@app.post('/shows/{slug}/runorder/masters')
+async def runorder_masters(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day_, cls = form.get('day', ''), form.get('cls', '')
+    trial.order_masters_from_first_round(slug, day_, cls, user)
+    return back(f'/shows/{slug}/runorder?day={day_}&cls={quote(cls)}')

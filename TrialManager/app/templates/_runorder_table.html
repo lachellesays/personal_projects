@@ -10,6 +10,14 @@
     <form hx-post="/shows/{{ slug }}/runorder/undo" hx-target="#ro-table" hx-swap="outerHTML">
       <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="cls" value="{{ cls }}">
       <button class="btn small">Undo last change</button></form>
+    {% if masters_role == 'second' %}
+    <details class="confirm"><summary class="btn small primary">Order from first round</summary>
+      <div class="pop">Masters rule: this class runs in reverse order of the first Masters class's results, worst first and the winner last,
+        within each height. Calculate the first class before doing this.
+        <form method="post" action="/shows/{{ slug }}/runorder/masters"><input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="cls" value="{{ cls }}">
+          <button class="btn small primary">Reorder from results</button></form></div></details>
+    {% endif %}
     <details class="confirm"><summary class="btn small">New order…</summary>
       <div class="pop">Shuffle this class into a brand-new order? Hand changes to this class are lost (Undo can bring them back).
         <form method="post" action="/shows/{{ slug }}/runorder/generate"><input type="hidden" name="csrf" value="{{ csrf }}">

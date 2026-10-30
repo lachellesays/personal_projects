@@ -336,12 +336,48 @@ def _place_in_group(slug: str, run_key: str):
     dset = day_setting(slug, new['day'])
     key = _group_key(dict(new), setting, dset)
     at = 0
-    for i, r in enumerate(others):
-        if _group_key(r, setting, dset) <= key:
-            at = i + 1
+    if new['source'] == 'day_of' and masters_order(slug, new['day']).get(new['class_name']) == 'first':
+        # Masters rule: day-of entries run first within the first Masters class
+        at = next((i for i, r in enumerate(others) if _group_key(r, setting, dset) >= key), len(others))
+    else:
+        for i, r in enumerate(others):
+            if _group_key(r, setting, dset) <= key:
+                at = i + 1
     ids = [r['id'] for r in others]
     ids.insert(at, new['id'])
     _save_positions(ids)
+
+
+MASTERS = ('Masters Agility', 'Masters Jumping')
+
+
+def masters_order(slug: str, day: str) -> dict:
+    """{'Masters Jumping': 'first', 'Masters Agility': 'second'} for a day with both, by running order."""
+    found = [s['class_name'] for s in class_list(slug, day) if s['class_name'] in MASTERS]
+    return {found[0]: 'first', found[1]: 'second'} if len(found) == 2 else {}
+
+
+def order_masters_from_first_round(slug: str, day: str, class_name: str, user: dict):
+    """Masters rule: the second class runs in reverse order of placing from the first class —
+    within each height, the dog with the worst first-round score runs first and the best runs last."""
+    from app import results, scoring
+    order = masters_order(slug, day)
+    if order.get(class_name) != 'second':
+        raise TrialError('Only the second Masters class of the day is ordered from the first round.')
+    first = next(c for c, o in order.items() if o == 'first')
+    view = results.entry_view(slug, day, first)
+    if not view['calculated']:
+        raise TrialError(f'Calculate {first} first.')
+    score = {results._dog_key(r): scoring.masters_round_score(r['result']) for r in view['rows']}
+    setting, dset = get_class(slug, day, class_name), day_setting(slug, day)
+    runs_ = _event(slug, day, class_name)
+    before = [r['id'] for r in runs_]
+    def worst_first(r):
+        s_ = score.get(results._dog_key(r))
+        return (_group_key(r, setting, dset), 0 if s_ is None else 1, -(s_ or 0))
+    runs_.sort(key=worst_first)
+    _save_positions([r['id'] for r in runs_])
+    db.log(user, 'reorder', slug, target=f'{day}|{class_name}', event=f'reverse order of {first} results', before=before)
 
 
 def reorder(slug: str, day: str, class_name: str, ordered_ids: list, user: dict):

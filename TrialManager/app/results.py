@@ -114,9 +114,20 @@ def _yards(run: dict, course: dict, class_name: str):
     return course.get('yards_bn')
 
 
-def calculate(slug: str, day: str, class_name: str, user: dict) -> dict:
+def _masters_forfeits(slug: str, day: str, class_name: str) -> set:
+    """Dogs absent/NFC in the other Masters round of the day: they forfeit Q's and awards in this one."""
+    if class_name not in MASTERS_CLASSES:
+        return set()
+    other = MASTERS_CLASSES[1 - MASTERS_CLASSES.index(class_name)]
+    if other not in [s['class_name'] for s in trial.class_list(slug, day)]:
+        return set()
+    return {_dog_key(r) for r in class_runs(slug, day, other) if (r['score'] or {}).get('status') in ('ABS', 'NFC')}
+
+
+def calculate(slug: str, day: str, class_name: str, user: dict, _partner: bool = True) -> dict:
     """Work out SCT, faults, Q, places and level points for one class and save them."""
     setting = trial.get_class(slug, day, class_name)
+    forfeits = _masters_forfeits(slug, day, class_name)
     course = course_of(setting)
     runs_ = class_runs(slug, day, class_name)
     missing_sct = 0
@@ -127,6 +138,8 @@ def calculate(slug: str, day: str, class_name: str, user: dict) -> dict:
         r['result']['scored'] = has_score(r['score'])
         if not r['result']['scored']:
             r['result'].update(q=False, total_faults=None, time_faults=0.0, yps=None, points=None)
+        if _dog_key(r) in forfeits:
+            r['result'].update(q=False, forfeit=True)
     if missing_sct:
         raise ResultsError('Fill in the course details (yardage or times) before calculating.')
     scoring.place_class(class_name, runs_, course)
@@ -141,6 +154,10 @@ def calculate(slug: str, day: str, class_name: str, user: dict) -> dict:
         c.execute(update(db.class_settings).where(db.class_settings.c.id == setting['id']).values(calculated_at=db.now()))
     unscored = sum(1 for r in runs_ if not r['result']['scored'])
     db.log(user, 'calculate', slug, target=f'{day}|{class_name}', unscored=unscored)
+    if _partner and class_name in MASTERS_CLASSES:   # an absence here can change the other round's awards
+        other = MASTERS_CLASSES[1 - MASTERS_CLASSES.index(class_name)]
+        if any(s['class_name'] == other and s['calculated_at'] for s in trial.class_list(slug, day)):
+            calculate(slug, day, other, user, _partner=False)
     return {'runs': len(runs_), 'unscored': unscored, 'qs': sum(1 for r in runs_ if r['result']['q'])}
 
 
@@ -250,10 +267,85 @@ def results_workbook(slug: str, show) -> bytes:
                            f"{r['first_name']} {r['last_name']}".strip(), _intish(r['dog_number']), r['dog_name'], r['breed'],
                            res.get('sct'), faults, res.get('points') or 0, round(res.get('time') or 0, 2),
                            res.get('place') or 0, res.get('level_points') or 0])
+    _masters_sheets(wb, slug, show)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 
+def _masters_sheets(wb, slug: str, show):
+    """'Masters Scoring' and 'Masters Byes' sheets, like UKI Manager's workbook, when Masters ran."""
+    for day in (str(show.saturday_date), str(show.sunday_date)):
+        mv = masters_view(slug, day)
+        if not mv['available']:
+            continue
+        ws = wb.create_sheet('Masters Scoring')
+        ws.append(['Height', 'HandlerID', 'HandlerName', 'DogID', 'DogName', 'Jumping SCT', 'Jumping Faults', 'Jumping Time',
+                   'Jumping Total', 'Agility SCT', 'Agility Faults', 'Agility Time', 'Agility Total', 'Overall Total',
+                   'Place', 'Prize $', 'Final Qualified'])
+        byes = wb.create_sheet('Masters Byes')
+        byes.append(['Jump Height', 'Handler #', 'Handler Name', 'Dog #', 'Dog Name'])
+        for g in mv['groups']:
+            height = f"{g['height']} inch" + ('(s)' if g['class_type'] == 'Select' else '')
+            for d in g['rows']:
+                ws.append([height, _intish(d['handler_number']), d['handler'], _intish(d['dog_number']), d['dog_name']]
+                          + _round_cells(d.get('jumping'), d.get('jumping_sct')) + [d['jumping_score']]
+                          + _round_cells(d.get('agility'), d.get('agility_sct')) + [d['agility_score']]
+                          + [d['overall'], d['place'], d['prize'], 'Y' if d['bye'] else ''])
+                if d['bye']:
+                    byes.append([height, _intish(d['handler_number']), d['handler'], _intish(d['dog_number']), d['dog_name']])
+        return
+
+
 def _intish(v):
     return int(v) if str(v or '').isdigit() else v
+
+
+# ── Masters Series (both rounds combined) ───────────────────────────────────
+
+MASTERS_CLASSES = ('Masters Agility', 'Masters Jumping')
+
+
+def _dog_key(r: dict) -> str:
+    return r['dog_number'] or f"{r['handler_number']}:{r['dog_name'].lower()}"
+
+
+def masters_view(slug: str, day: str) -> dict:
+    """Overall Masters Series results for one day, or why they can't be worked out yet."""
+    names = [s['class_name'] for s in trial.class_list(slug, day)]
+    if not all(c in names for c in MASTERS_CLASSES):
+        return {'available': False, 'reason': 'This day doesn’t have both Masters Agility and Masters Jumping.'}
+    views = {c: entry_view(slug, day, c) for c in MASTERS_CLASSES}
+    waiting = [c for c, v in views.items() if not v['calculated']]
+    if waiting:
+        return {'available': False, 'reason': 'Calculate ' + ' and '.join(waiting) + ' first.'}
+    dogs = {}
+    for cls, key in (('Masters Agility', 'agility'), ('Masters Jumping', 'jumping')):
+        for r in views[cls]['rows']:
+            d = dogs.setdefault(_dog_key(r), {'id': _dog_key(r), 'dog_name': r['dog_name'], 'dog_number': r['dog_number'],
+                                              'handler': f"{r['first_name']} {r['last_name']}".strip(),
+                                              'handler_number': r['handler_number'], 'height': r['height'],
+                                              'class_type': r['class_type']})
+            d[key] = r['result']
+            d[key + '_sct'] = r['sct']
+    rows = scoring.masters_series(list(dogs.values()))
+    groups = {}
+    for d in rows:
+        groups.setdefault((d['height'], d['class_type']), []).append(d)
+    out = []
+    for (h, t), members in sorted(groups.items()):
+        members.sort(key=lambda d: (d['place'] or 999, d['overall'] if d['overall'] is not None else 9999))
+        out.append({'label': f'{h}" {t}', 'height': h, 'class_type': t, 'entered': len(members), 'rows': members,
+                    'fund': scoring.masters_prizes(len(members))})
+    return {'available': True, 'groups': out}
+
+
+def _round_cells(res: dict, sct_):
+    """SCT, faults and time for a round, the way UKI's Masters sheet shows them."""
+    res = res or {}
+    status = res.get('status') or ''
+    if status == 'E':
+        return [sct_, 100, 60]
+    if status in ('ABS', 'NFC') or not res.get('scored'):
+        return [sct_, 1000, 60]
+    return [sct_, res.get('total_faults') or 0, round(res.get('time') or 0, 2)]

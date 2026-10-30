@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Masters Series · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% include "_scoring_top.html" %}
+<div class="ro-head"><h2 style="margin:0">Masters Series overall <span class="muted">{{ day|day }}</span></h2></div>
+{% if not mv.available %}
+  <div class="flash info">{{ mv.reason }}</div>
+{% else %}
+<p class="muted">Each round = time + all faults in seconds (E = 100 + 60, absent/NFC = 1000 + 60). Lowest overall wins; ties go to the
+  Agility round, then Jumping. Absent or NFC in either round forfeits; eliminated in both isn't placed. Prize fund is $4 per dog entered
+  at the height (1st takes all up to 10 entered, then 70/30). Final = 1st and 2nd overall plus each round's winner.</p>
+{% for g in mv.groups %}
+  <h4 style="margin:16px 0 6px">{{ g.label }} <span class="muted">· {{ g.entered }} entered · prize fund {{ (g.fund[0] + g.fund[1])|money }}</span></h4>
+  <div class="tscroll"><table class="t">
+    <thead><tr><th class="num">Place</th><th>Dog</th><th>Handler</th><th class="num">Jumping</th><th class="num">Agility</th>
+      <th class="num">Overall</th><th class="num">Prize</th><th>Final</th><th class="hide-sm">Note</th></tr></thead>
+    <tbody>{% for r in g.rows %}
+      <tr class="{{ 'scr' if not r.place }}"><td class="num"><b>{{ r.place or '' }}</b></td><td>{{ r.dog_name }}</td><td>{{ r.handler }}</td>
+        <td class="num">{{ '%.2f'|format(r.jumping_score) if r.jumping_score is not none else '–' }}{% if (r.jumping or {}).status %} <span class="muted">{{ r.jumping.status }}</span>{% endif %}</td>
+        <td class="num">{{ '%.2f'|format(r.agility_score) if r.agility_score is not none else '–' }}{% if (r.agility or {}).status %} <span class="muted">{{ r.agility.status }}</span>{% endif %}</td>
+        <td class="num"><b>{{ '%.2f'|format(r.overall) if r.overall is not none else '' }}</b></td>
+        <td class="num">{{ r.prize|money if r.prize else '' }}</td>
+        <td>{% if r.bye %}<span class="tag ok">Qualified</span>{% endif %}</td>
+        <td class="hide-sm muted">{{ r.note }}{% if r.runoff %}<span class="owes">Tied: runoff needed</span>{% endif %}</td></tr>
+    {% endfor %}</tbody></table></div>
+{% endfor %}
+{% endif %}
+{% endblock %}

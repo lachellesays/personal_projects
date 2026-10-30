@@ -130,3 +130,73 @@ def test_gamblers_opening_digits_are_added_up():
     assert sc.opening_points_from('') == ('', None)
     with pytest.raises(ValueError):
         sc.opening_points_from('1a5')
+
+
+def _round(status='', time=0.0, faults=0.0, place=0):
+    return {'scored': True, 'status': status, 'time': time, 'total_faults': faults, 'place': place}
+
+
+def test_masters_series_rules_from_the_premium():
+    assert sc.masters_round_score(_round('E')) == 160 and sc.masters_round_score(_round('ABS')) == 1060
+    assert sc.masters_round_score(_round(time=49.97, faults=0.97)) == 50.94
+    assert sc.masters_prizes(3) == (12.0, 0.0) and sc.masters_prizes(11) == (30.8, 13.2) and sc.masters_prizes(20) == (56.0, 24.0)
+    dogs = [  # June 2026, 20" Regular
+        {'id': 'a', 'height': 20, 'class_type': 'Regular', 'jumping': _round(time=32.33, place=1), 'agility': _round('E')},
+        {'id': 'b', 'height': 20, 'class_type': 'Regular', 'jumping': _round('E'), 'agility': _round('E')},
+        {'id': 'c', 'height': 20, 'class_type': 'Regular', 'jumping': _round('E'), 'agility': _round('E')},
+        {'id': 'd', 'height': 20, 'class_type': 'Regular', 'jumping': _round('E'), 'agility': _round('ABS')},
+        {'id': 'e', 'height': 20, 'class_type': 'Regular', 'jumping': _round(time=49.97, faults=0.97), 'agility': _round(time=60.48, faults=0.48)},
+        {'id': 'f', 'height': 20, 'class_type': 'Regular', 'jumping': _round('E'), 'agility': _round('ABS')},
+        {'id': 's', 'height': 20, 'class_type': 'Select', 'jumping': _round(time=33.13, place=1), 'agility': _round('E')},
+    ]
+    out = {d['id']: d for d in sc.masters_series(dogs)}
+    assert (out['e']['place'], out['e']['prize'], out['e']['bye']) == (1, 24.0, True)      # 6 entered -> $24
+    assert (out['a']['place'], out['a']['prize'], out['a']['bye']) == (2, 0.0, True)
+    assert out['b']['place'] == 0 and out['b']['note'] == 'Eliminated in both rounds' and not out['b']['bye']
+    assert out['d']['place'] == 0 and 'forfeits' in out['d']['note']
+    assert (out['s']['place'], out['s']['prize'], out['s']['bye']) == (1, 4.0, True)      # Select is its own height
+    assert out['e']['overall'] == 111.90
+
+
+def test_masters_ties_go_to_agility_then_runoff():
+    dogs = [{'id': 1, 'height': 12, 'class_type': 'Regular', 'agility': _round(time=40), 'jumping': _round(time=30)},
+            {'id': 2, 'height': 12, 'class_type': 'Regular', 'agility': _round(time=35), 'jumping': _round(time=35)},
+            {'id': 3, 'height': 12, 'class_type': 'Regular', 'agility': _round(time=35), 'jumping': _round(time=35)}]
+    out = {d['id']: d for d in sc.masters_series(dogs)}
+    assert out[1]['place'] == 3                       # same 70 total, but the slower Agility
+    assert out[2]['runoff'] and out[3]['runoff'] and not out[1]['runoff']
+
+
+@pytest.mark.skipif(not JUNE_RESULTS.exists(), reason='June 2026 results not on this computer')
+def test_masters_matches_uki_manager_on_june_2026():
+    """Rebuild June's Masters Series from the raw scores; places, prizes and Final qualifiers must match UKI's sheets."""
+    import pandas as pd
+    raw = pd.read_excel(JUNE_RESULTS, sheet_name='Raw Results')
+    raw['Class'] = raw['Class'].str.strip()
+    raw['Height'] = raw['Height'].astype(str).str.strip()
+    dogs = {}
+    for cls, key in (('Masters Agility', 'agility'), ('Masters Jumping', 'jumping')):
+        rows = raw[raw['Class'] == cls]
+        runs = []
+        for r in rows.itertuples():
+            f = str(r.Faults)
+            res = sc.score_run(cls, {'status': f if f in sc.STATUSES else '', 'time': r.Time,
+                                     'course_faults': 0 if f in sc.STATUSES else float(f)}, int(r.SCT), {})
+            res['scored'] = True
+            runs.append({'id': int(r._8), 'level': r.Level, 'height': int(r.Height.split()[0]),
+                         'class_type': 'Select' if '(s)' in r.Height else 'Regular', 'result': res})
+        absent_other = set(raw[(raw['Class'] != cls) & raw['Class'].isin(['Masters Agility', 'Masters Jumping'])
+                               & raw['Faults'].astype(str).isin(['ABS', 'NFC'])]['Dog ID'].astype(int))
+        for r in runs:
+            if r['id'] in absent_other:
+                r['result']['q'] = False
+        for r in sc.place_class(cls, runs, {'yards_champ': 1}):
+            d = dogs.setdefault(r['id'], {'id': r['id'], 'height': r['height'], 'class_type': r['class_type']})
+            d[key] = {**r['result'], 'place': r['place']}
+    out = {d['id']: d for d in sc.masters_series(list(dogs.values()))}
+    sheet = pd.read_excel(JUNE_RESULTS, sheet_name='Masters Scoring', header=None, skiprows=8).dropna(subset=[3])
+    for row in sheet.itertuples(index=False):
+        dog = int(row[3])
+        assert (out[dog]['place'], out[dog]['prize']) == (int(row[16] or 0), float(row[17] or 0)), dog
+    byes = set(pd.read_excel(JUNE_RESULTS, sheet_name='Masters Byes')['Dog #'].dropna().astype(int))
+    assert {d for d, v in out.items() if v['bye']} == byes

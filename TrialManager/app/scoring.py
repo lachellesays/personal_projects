@@ -182,3 +182,77 @@ def place_class(class_name: str, runs: list, course: dict) -> list:
         for i, r in enumerate(qs, start=1):
             r['place'], r['level_points'] = i, points_for(i, entered)
     return runs
+
+
+# ── Masters Series (rules from the premium's "Masters Series Tournament Rules") ──────────────────────────
+#
+# - Each height (Regular and Select separately) is its own competition; Agility and Jumping are combined.
+# - A round's score = time + course faults + time faults, all as seconds. E = 100 faults + 60 seconds;
+#   ABS or NFC = 1000 faults + 60 seconds.
+# - An ABS/NFC in either round forfeits the overall; a double E is not placed; lowest total wins.
+# - Ties: the Agility score decides, then Jumping; still tied = runoff.
+# - Prize fund per height = $4 × dogs entered at that height: 1st takes it all up to 10 entered, 70% / 30% above.
+# - Final (bye) qualification per height: 1st and 2nd overall, plus each individual round's winner.
+
+MASTERS_E = 100 + 60
+MASTERS_ABSENT = 1000 + 60
+MASTERS_PRIZE_PER_DOG = 4.00
+
+
+def masters_round_score(result: dict):
+    """A Masters round in seconds, or None if the dog has no score for it."""
+    if not result or not result.get('scored'):
+        return None
+    status = result.get('status') or ''
+    if status == 'E':
+        return MASTERS_E
+    if status in ('ABS', 'NFC'):
+        return MASTERS_ABSENT
+    return round(float(result.get('time') or 0) + float(result.get('total_faults') or 0), 2)
+
+
+def masters_prizes(entered: int) -> tuple:
+    fund = round(MASTERS_PRIZE_PER_DOG * entered, 2)
+    if entered <= 10:
+        return fund, 0.0
+    return round(fund * 0.7, 2), round(fund * 0.3, 2)
+
+
+def masters_series(dogs: list) -> list:
+    """dogs: dicts with height, class_type, agility / jumping (score_run results with place) for one dog.
+    Fills in agility_score, jumping_score, overall, place, prize, bye, runoff and note."""
+    groups = {}
+    for d in dogs:
+        groups.setdefault((d['height'], d['class_type']), []).append(d)
+    for members in groups.values():
+        first, second = masters_prizes(len(members))
+        ranked = []
+        for d in members:
+            a, j = masters_round_score(d.get('agility')), masters_round_score(d.get('jumping'))
+            d.update(agility_score=a, jumping_score=j, overall=None, place=0, prize=0.0, bye=False, runoff=False, note='')
+            if a is None or j is None:
+                d['note'] = 'Missing a round'
+            elif MASTERS_ABSENT in (a, j):
+                d['note'] = 'Absent or NFC in a round: forfeits overall'
+            elif a == MASTERS_E and j == MASTERS_E:
+                d['note'] = 'Eliminated in both rounds'
+            else:
+                d['overall'] = round(a + j, 2)
+                ranked.append(d)
+        ranked.sort(key=lambda d: (d['overall'], d['agility_score'], d['jumping_score']))
+        for i, d in enumerate(ranked, start=1):
+            d['place'] = i
+            if i > 1:
+                prev = ranked[i - 2]
+                if (prev['overall'], prev['agility_score'], prev['jumping_score']) == (d['overall'], d['agility_score'], d['jumping_score']):
+                    d['runoff'] = prev['runoff'] = True
+        if ranked:
+            ranked[0]['prize'] = first
+        if len(ranked) > 1:
+            ranked[1]['prize'] = second
+        for d in members:
+            if d['note'].startswith('Absent'):
+                continue   # an absence in either round forfeits everything
+            round_winner = any((d.get(k) or {}).get('place') == 1 for k in ('agility', 'jumping'))
+            d['bye'] = d['place'] in (1, 2) or round_winner
+    return dogs
