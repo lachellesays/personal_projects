@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Show setup · {{ d.show.name }}{% endblock %}
+{% block head %}<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" defer></script>{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+<div id="ro-msg"></div>
+
+<div class="panel setup-sec">
+  <h3>1. Trial details</h3>
+  <form method="post" action="/shows/{{ slug }}/edit"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="row3">
+      <div style="grid-column: span 3"><label class="l" for="name">Show name</label><input class="f" id="name" name="name" value="{{ form.name }}" required></div>
+      <div><label class="l" for="sat">Saturday</label><input class="f" id="sat" name="saturday_date" type="date" value="{{ form.saturday_date }}" required></div>
+      <div><label class="l" for="sun">Sunday</label><input class="f" id="sun" name="sunday_date" type="date" value="{{ form.sunday_date }}" required></div>
+      <div></div>
+      <div><label class="l" for="sid">UKI show ID</label><input class="f" id="sid" name="show_id" inputmode="numeric" value="{{ form.show_id }}" required></div>
+      <div><label class="l" for="fid">JotForm form ID</label><input class="f" id="fid" name="form_id" inputmode="numeric" value="{{ form.form_id }}" required>
+        <div class="hint">The long number in the form's web address.</div></div>
+    </div>
+    <button class="btn primary small">Save trial details</button>
+  </form>
+</div>
+
+{% for dd in days %}{% set ds = day_sets[dd] %}
+<div class="panel setup-sec" id="day-{{ dd }}">
+  <h3>{{ loop.index + 1 }}. {{ dd|day }}</h3>
+  <form method="post" action="/shows/{{ slug }}/setup/day"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="day" value="{{ dd }}">
+    <label class="l">Run order inside each class</label>
+    <div class="seg">{% for g in level_groups %}<label><input type="radio" name="levels_first" value="{{ g }}" {{ 'checked' if ds.levels_first == g }}> {{ g }} first</label>{% endfor %}</div>
+    <div class="seg">{% for k, label in height_orders.items() %}<label><input type="radio" name="heights" value="{{ k }}" {{ 'checked' if ds.heights == k }}> {{ label }}</label>{% endfor %}</div>
+    <label class="l" style="margin-top:12px">Class order <span class="muted">— drag to match the schedule</span></label>
+    {% if day_classes[dd] %}
+    <ol class="class-order" data-sortable>
+      {% for c in day_classes[dd] %}
+      <li><span class="handle" title="Drag to move">&#8801;</span><input type="hidden" name="class" value="{{ c.class_name }}">
+        <b class="cname">{{ c.class_name }}</b>
+        <label class="mini-l">Ring <input class="f mini" name="ring::{{ c.class_name }}" value="{{ c.ring }}" aria-label="Ring for {{ c.class_name }}"></label>
+        <label class="chk"><input type="checkbox" name="select_first::{{ c.class_name }}" {{ 'checked' if c.select_first }}> Select before Regular</label>
+        <label class="chk"><input type="checkbox" name="combine::{{ c.class_name }}" {{ 'checked' if c.combine_levels }}> All levels together</label>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}<p class="muted">No classes entered for this day yet. They appear here once entries come in from JotForm.</p>{% endif %}
+    <p class="hint">{% if built %}Saving re-sorts each class into its groups; dogs keep their order inside each height.{% else %}These settings are used when you build the run order.{% endif %}
+      Masters: whichever Masters class is higher in this list is treated as the first round.</p>
+    <button class="btn primary small">Save {{ dd|day }}</button>
+  </form>
+</div>
+{% endfor %}
+
+<div class="panel setup-sec">
+  <h3>{{ days|length + 2 }}. Run order</h3>
+  {% if built %}<p>The run order is built. <a href="/shows/{{ slug }}/runorder">Go to Run order</a> to check conflicts, move dogs and print scribe sheets.</p>
+  {% else %}<p>When the setup above looks right, build the run order.</p>
+    <form method="post" action="/shows/{{ slug }}/runorder/build"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn primary">Build run order</button></form>{% endif %}
+</div>
+<script>
+window.addEventListener('load', function () {
+  document.querySelectorAll('[data-sortable]').forEach(function (el) {
+    Sortable.create(el, { handle: '.handle', animation: 120, forceFallback: true, fallbackTolerance: 3 });
+  });
+});
+</script>
+{% endblock %}

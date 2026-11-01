@@ -8,6 +8,7 @@ The rules themselves live in scoring.py.
 
 import io
 from datetime import date
+from pathlib import Path
 
 from sqlalchemy import delete, insert, select, update
 
@@ -349,3 +350,56 @@ def _round_cells(res: dict, sct_):
     if status in ('ABS', 'NFC') or not res.get('scored'):
         return [sct_, 1000, 60]
     return [sct_, res.get('total_faults') or 0, round(res.get('time') or 0, 2)]
+
+
+# ── Masters Final (bye) certificates ────────────────────────────────────────
+
+CERTIFICATE_BACKGROUND = Path(__file__).parent / 'static' / 'certificates' / 'masters_final_2027.png'
+
+
+def masters_certificates_pdf(slug: str, day: str, show_name: str) -> bytes:
+    """UKI's Masters Final certificate for every qualifier that day, filled in like UKI Manager's
+    (handler, dog, height, trial name & date). The Show manager line is left to sign."""
+    from reportlab.lib.pagesizes import landscape, letter
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+
+    mv = masters_view(slug, day)
+    if not mv['available']:
+        raise ResultsError(mv['reason'])
+    qualifiers = [d for g in mv['groups'] for d in g['rows'] if d['bye']]
+    if not qualifiers:
+        raise ResultsError('No dogs qualified for the Final that day.')
+    pw, ph = landscape(letter)                     # 792 × 612, the template's shape
+    sx, sy = pw / 1680, ph / 1300                  # template pixels → points
+    def at(px, py):
+        return px * sx, ph - py * sy
+    background = ImageReader(str(CERTIFICATE_BACKGROUND))
+    buf = io.BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=(pw, ph))
+    pdf.setTitle('Masters Final certificates')
+    trial = f'{show_name}   on   {day}'
+    for d in qualifiers:
+        pdf.drawImage(background, 0, 0, width=pw, height=ph)
+        height = f"{d['height']} inch" + ('(s)' if d['class_type'] == 'Select' else '')
+        pdf.setFont('Times-Bold', 15)
+        pdf.drawString(*at(290, 586), _fit(pdf, d['handler'], 'Times-Bold', 15, 530 * sx))
+        pdf.drawString(*at(925, 586), _fit(pdf, d['dog_name'], 'Times-Bold', 15, 320 * sx))
+        pdf.setFont('Times-Roman', 14)
+        pdf.drawString(*at(1352, 586), height)
+        size = 14
+        while size > 9 and pdf.stringWidth(trial, 'Times-Roman', size) > 620 * sx:
+            size -= 0.5
+        pdf.setFont('Times-Roman', size)
+        pdf.drawCentredString(*at(1146, 833), trial)
+        pdf.showPage()
+    pdf.save()
+    return buf.getvalue()
+
+
+def _fit(pdf, text: str, font: str, size: float, width: float) -> str:
+    """Shrink the font so a long name stays on its line."""
+    while size > 9 and pdf.stringWidth(text, font, size) > width:
+        size -= 0.5
+    pdf.setFont(font, size)
+    return text

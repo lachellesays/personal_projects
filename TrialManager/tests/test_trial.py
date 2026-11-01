@@ -78,9 +78,11 @@ def test_build_page_sets_each_day_and_can_change_later(admin, app_env):
     app_env['data'] = trial_subs()
     c, token = admin
     c.post(f'/shows/{SLUG}/refresh', data={'csrf': token})
-    page = c.get(f'/shows/{SLUG}/runorder').text
-    assert 'name="levels_first_2026-12-05" value="Senior/Champ" checked' in page
-    assert 'name="heights_2026-12-06" value="small" checked' in page
+    page = c.get(f'/shows/{SLUG}/setup').text                      # defaults shown in Show setup
+    sat_form = page.split('id="day-2026-12-05"')[1].split('</form>')[0]
+    sun_form = page.split('id="day-2026-12-06"')[1].split('</form>')[0]
+    assert 'value="Senior/Champ" checked' in sat_form and 'value="tall" checked' in sat_form
+    assert 'value="Beginner/Novice" checked' in sun_form and 'value="small" checked' in sun_form
     c.post(f'/shows/{SLUG}/runorder/build', data={'csrf': token, f'levels_first_{SAT}': 'Beginner/Novice', f'heights_{SAT}': 'small',
                                                   f'levels_first_{SUN}': 'Beginner/Novice', f'heights_{SUN}': 'small'})
     rows = event(SAT, 'Agility')['rows']
@@ -302,7 +304,7 @@ def test_masters_series_end_to_end(admin, app_env):
     c, token = admin
     c.post(f'/shows/{SLUG}/refresh', data={'csrf': token})
     c.post(f'/shows/{SLUG}/runorder/build', data={'csrf': token})
-    assert trial.masters_order(SLUG, SUN) == {'Masters Agility': 'first', 'Masters Jumping': 'second'}
+    assert trial.masters_order(SLUG, SUN) == {'Masters Jumping': 'first', 'Masters Agility': 'second'}
     for cls, yards in (('Masters Agility', '189'), ('Masters Jumping', '172')):
         c.post(f'/shows/{SLUG}/scoring/course', data={'csrf': token, 'day': SUN, 'cls': cls, 'yards_champ': yards})
     def enter(cls, scores):
@@ -311,14 +313,14 @@ def test_masters_series_end_to_end(admin, app_env):
             c.post(f'/shows/{SLUG}/scoring/score/{rows[dog]["id"]}', data={'csrf': token, 'day': SUN, 'cls': cls, **kw},
                    headers={'HX-Request': 'true'})
         c.post(f'/shows/{SLUG}/scoring/calculate', data={'csrf': token, 'day': SUN, 'cls': cls})
-    enter('Masters Agility', {'Ace': {'time': '40'}, 'Bolt': {'time': '38', 'course_faults': '5'},
-                              'Cody': {'status': 'E'}, 'Dot': {'status': 'ABS'}, 'Elf': {'time': '45'}})
-    # Second class: reverse order of the first round's results within each height (winner last)
-    c.post(f'/shows/{SLUG}/runorder/masters', data={'csrf': token, 'day': SUN, 'cls': 'Masters Jumping'})
-    order = [r['dog_name'] for r in trial.event_view(SLUG, SUN, 'Masters Jumping')['rows'] if r['height'] == 20]
-    assert order == ['Dot', 'Cody', 'Bolt', 'Ace']          # 1060, 160, 43, 40
     enter('Masters Jumping', {'Ace': {'time': '30'}, 'Bolt': {'time': '29'}, 'Cody': {'time': '28'}, 'Dot': {'time': '27'},
                               'Elf': {'status': 'E'}})
+    # Second class: reverse order of the first round's results within each height (winner last)
+    c.post(f'/shows/{SLUG}/runorder/masters', data={'csrf': token, 'day': SUN, 'cls': 'Masters Agility'})
+    order = [r['dog_name'] for r in trial.event_view(SLUG, SUN, 'Masters Agility')['rows'] if r['height'] == 20]
+    assert order == ['Ace', 'Bolt', 'Cody', 'Dot']          # 30, 29, 28, 27 (Dot fastest runs last)
+    enter('Masters Agility', {'Ace': {'time': '40'}, 'Bolt': {'time': '38', 'course_faults': '5'},
+                              'Cody': {'status': 'E'}, 'Dot': {'status': 'ABS'}, 'Elf': {'time': '45'}})
     page = c.get(f'/shows/{SLUG}/scoring/masters?day={SUN}').text
     assert 'Masters Series overall' in page and 'Qualified' in page
     mv = results.masters_view(SLUG, SUN)
@@ -334,3 +336,35 @@ def test_masters_series_end_to_end(admin, app_env):
     assert 'Masters Scoring' in wb.sheetnames and 'Masters Byes' in wb.sheetnames
     byes = [r[4] for r in wb['Masters Byes'].iter_rows(min_row=2, values_only=True)]
     assert set(byes) == {'Ace', 'Bolt', 'Cody', 'Elf'}   # 1st/2nd overall at 20", Cody won Jumping, Elf at 16" Select
+
+    cert = c.get(f'/shows/{SLUG}/scoring/masters/certificates.pdf?day={SUN}')
+    assert cert.content[:4] == b'%PDF' and cert.content.count(b'/Type /Page\n') + cert.content.count(b'/Type /Page ') >= 1
+    assert 'Print Final certificates (4)' in c.get(f'/shows/{SLUG}/scoring/masters?day={SUN}').text
+
+
+def test_show_setup_before_and_after_building(admin, app_env):
+    from app import trial
+    app_env['data'] = trial_subs()
+    c, token = admin
+    c.post(f'/shows/{SLUG}/refresh', data={'csrf': token})
+    page = c.get(f'/shows/{SLUG}/setup').text
+    sat = page.split('id="day-2026-12-05"')[1].split('</form>')[0]
+    assert sat.index('Gamblers') < sat.index('Agility')                       # premium default: Gamblers first on Saturday
+    assert not trial.is_built(SLUG) and 'Build run order' in page
+    # Reorder Saturday: Agility, Gamblers; Agility in ring 2 with Regular first
+    r = c.post(f'/shows/{SLUG}/setup/day', data={
+        'csrf': token, 'day': SAT, 'levels_first': 'Senior/Champ', 'heights': 'tall', 'class': ['Agility', 'Gamblers'],
+        'ring::Agility': '2', 'ring::Gamblers': '1', 'select_first::Gamblers': 'on', 'combine::Gamblers': 'on'}, follow_redirects=True)
+    assert 'Sat 12/5 saved' in r.text
+    classes = trial.class_list(SLUG, SAT)
+    assert [x['class_name'] for x in classes] == ['Agility', 'Gamblers']
+    assert classes[0]['ring'] == '2' and classes[0]['select_first'] is False and classes[1]['combine_levels'] is True
+    c.post(f'/shows/{SLUG}/runorder/build', data={'csrf': token})
+    csv_text = c.get(f'/shows/{SLUG}/runorder.csv?day={SAT}').text
+    assert csv_text.index('Agility') < csv_text.index('Gamblers')
+    sc20 = [x['class_type'] for x in trial.event_view(SLUG, SAT, 'Agility')['rows'] if x['height'] == 20 and x['group'] == 'Senior/Champ']
+    assert sc20 == sorted(sc20, key=lambda t: t != 'Regular')                 # Regular first now
+    # Trial details save from the same page
+    r = c.post(f'/shows/{SLUG}/edit', data={'csrf': token, 'name': 'Renamed Trial', 'show_id': '7104', 'form_id': '261266312429152',
+                                          'saturday_date': SAT, 'sunday_date': SUN}, follow_redirects=True)
+    assert 'Trial details saved' in r.text and 'Renamed Trial' in r.text

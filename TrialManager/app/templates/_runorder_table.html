@@ -23,15 +23,7 @@
         <form method="post" action="/shows/{{ slug }}/runorder/generate"><input type="hidden" name="csrf" value="{{ csrf }}">
           <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="cls" value="{{ cls }}">
           <button class="btn small danger">Yes, make a new order</button></form></div></details>
-    <details class="confirm"><summary class="btn small">Class settings</summary>
-      <div class="pop">
-        <form method="post" action="/shows/{{ slug }}/runorder/class"><input type="hidden" name="csrf" value="{{ csrf }}">
-          <input type="hidden" name="day" value="{{ day }}"><input type="hidden" name="cls" value="{{ cls }}">
-          <label class="l">Running order in the day</label><input class="f" name="sort" value="{{ ev.setting.sort }}" inputmode="numeric">
-          <label class="l">Ring</label><input class="f" name="ring" value="{{ ev.setting.ring }}">
-          <label class="chk"><input type="checkbox" name="select_first" {{ 'checked' if ev.setting.select_first }}> Select before Regular at each height</label>
-          <label class="chk"><input type="checkbox" name="combine_levels" {{ 'checked' if ev.setting.combine_levels }}> All levels in one group (Gamblers, Masters)</label>
-          <button class="btn small primary">Save</button></form></div></details>
+    <a class="btn small" href="/shows/{{ slug }}/setup#day-{{ day }}">Class settings</a>
   </div>
 </div>
 <form id="ro-form" hx-post="/shows/{{ slug }}/runorder/reorder" hx-trigger="end" hx-target="#ro-table" hx-swap="outerHTML">

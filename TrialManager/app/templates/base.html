@@ -18,6 +18,7 @@
       <a class="nav {{ 'on' if not slug and request.url.path.startswith('/shows') }}" href="/shows">All shows</a>
       {% if slug and d %}
         <div class="lbl">{{ d.show.name }}</div>
+        <a class="nav {{ 'on' if tab == 'setup' }}" href="/shows/{{ slug }}/setup">Show setup</a>
         <a class="nav {{ 'on' if tab == 'entries' }}" href="/shows/{{ slug }}/entries">Entries <span class="n" title="Entries received from JotForm">{{ d.stats.submissions }}</span></a>
         <a class="nav {{ 'on' if tab == 'typos' }}" href="/shows/{{ slug }}/typos">Fix typos <span class="n" id="side-fixes">{{ fix_count }}</span></a>
         <a class="nav {{ 'on' if tab == 'warnings' }}" href="/shows/{{ slug }}/warnings">Warnings <span class="n">{{ open_warnings }}</span></a>

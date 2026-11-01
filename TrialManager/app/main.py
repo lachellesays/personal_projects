@@ -344,7 +344,8 @@ async def show_save(request: Request, slug: str = None):
         show.saturday_date, show.sunday_date = sat.isoformat(), sun.isoformat()
     slug = db.save_show(show, slug)
     db.log(user, 'show', slug, event='saved')
-    return back(f'/shows/{slug}/entries')
+    request.session['setup_flash'] = 'Trial details saved.'
+    return back(f'/shows/{slug}/setup')
 
 
 @app.post('/shows/{slug}/refresh')
@@ -774,3 +775,42 @@ async def runorder_masters(request: Request, slug: str):
     day_, cls = form.get('day', ''), form.get('cls', '')
     trial.order_masters_from_first_round(slug, day_, cls, user)
     return back(f'/shows/{slug}/runorder?day={day_}&cls={quote(cls)}')
+
+
+@app.get('/shows/{slug}/scoring/masters/certificates.pdf')
+def masters_certificates(request: Request, slug: str, day: str):
+    user = require_user(request)
+    show = db.get_show(slug)
+    data = results.masters_certificates_pdf(slug, day, show.name)
+    db.log(user, 'download', slug, target='masters certificates', day=day)
+    return Response(data, media_type='application/pdf',
+                    headers={'Content-Disposition': f'inline; filename="masters_final_certificates_{day}.pdf"'})
+
+
+# ── Show setup ──────────────────────────────────────────────────────────────
+
+@app.get('/shows/{slug}/setup', response_class=HTMLResponse)
+def show_setup(request: Request, slug: str):
+    require_user(request)
+    d, ws, ctx = _show_ctx(request, slug, 'setup')
+    trial.ensure_classes_from_entries(d)
+    days = _days(d.show)
+    return render(request, 'show_setup.html', days=days, day_sets={dd: trial.day_setting(slug, dd) for dd in days},
+                  day_classes={dd: trial.class_list(slug, dd) for dd in days}, built=trial.is_built(slug),
+                  level_groups=trial.LEVEL_GROUPS, height_orders=trial.HEIGHT_ORDERS,
+                  flash=request.session.pop('setup_flash', ''),
+                  form={'name': d.show.name, 'show_id': d.show.show_id, 'form_id': d.show.form_id,
+                        'saturday_date': d.show.saturday_date, 'sunday_date': d.show.sunday_date}, **ctx)
+
+
+@app.post('/shows/{slug}/setup/day')
+async def show_setup_day(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day_ = form.get('day', '')
+    names = form.getlist('class')
+    classes = [{'class_name': n, 'ring': form.get(f'ring::{n}', '1'), 'select_first': form.get(f'select_first::{n}') == 'on',
+                'combine_levels': form.get(f'combine::{n}') == 'on'} for n in names]
+    trial.save_day_setup(slug, day_, form.get('levels_first', ''), form.get('heights', ''), classes, user)
+    request.session['setup_flash'] = f'{day(day_)} saved.'
+    return back(f'/shows/{slug}/setup#day-{day_}')

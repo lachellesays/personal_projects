@@ -65,8 +65,18 @@ def class_fee(class_name: str) -> float:
     return MASTERS_CLASS_COST if class_name.lower().startswith('master') else CLASS_COST
 
 
-def _sort_index(class_name: str) -> int:
-    return CLASS_ORDER.index(class_name) if class_name in CLASS_ORDER else len(CLASS_ORDER)
+# Default class order for each day (from the LUDS premium); Show setup can change it per trial.
+SATURDAY_ORDER = ['Gamblers', 'Snooker', 'Agility', 'Agility 2', 'Jumping', 'Jumping 2', 'Speedstakes', 'Speedstakes 2',
+                  'Masters Jumping', 'Masters Agility']
+SUNDAY_ORDER = ['Speedstakes', 'Speedstakes 2', 'Jumping', 'Jumping 2', 'Masters Jumping', 'Agility', 'Agility 2',
+                'Masters Agility', 'Gamblers', 'Snooker']
+
+
+def _sort_index(class_name: str, day: str = None) -> int:
+    order = CLASS_ORDER
+    if day:
+        order = SATURDAY_ORDER if date.fromisoformat(day).weekday() == 5 else SUNDAY_ORDER
+    return order.index(class_name) if class_name in order else len(order)
 
 
 def _num(v) -> float:
@@ -141,17 +151,41 @@ def build_or_update(d, user: dict) -> dict:
 
 # ── Class settings ──────────────────────────────────────────────────────────
 
-def ensure_classes(slug: str):
-    """Give every day + class that has runs a settings row (order, ring, Select first, combine levels)."""
+def ensure_classes(slug: str, also: set = frozenset()):
+    """Give every day + class that has runs (or is in `also`) a settings row: order in the day, ring,
+    Select first, combine levels. New classes slot in where the day's default order puts them."""
     with db.engine().begin() as c:
         have = {(r.day, r.class_name) for r in c.execute(select(db.class_settings.c.day, db.class_settings.c.class_name)
                                                          .where(db.class_settings.c.show_slug == slug))}
         used = {(r.day, r.class_name) for r in c.execute(select(db.runs.c.day, db.runs.c.class_name)
                                                          .where(db.runs.c.show_slug == slug).distinct())}
-        for day_, cls in sorted(used - have):
+        for day_, cls in sorted((used | set(also)) - have):
             c.execute(insert(db.class_settings).values(
-                show_slug=slug, day=day_, class_name=cls, sort=_sort_index(cls), ring='1', select_first=True,
+                show_slug=slug, day=day_, class_name=cls, sort=_sort_index(cls, day_) * 10, ring='1', select_first=True,
                 combine_levels=cls in COMBINED_BY_DEFAULT))
+
+
+def ensure_classes_from_entries(d):
+    """Settings rows for every class people entered, even before the run order is built (for Show setup)."""
+    ensure_classes(d.slug, {(r['day'], r['class_name']) for r in _jotform_runs(d)})
+
+
+def save_day_setup(slug: str, day: str, levels_first: str, heights: str, classes: list, user: dict):
+    """Show setup for one day: run order direction plus each class's place in the day, ring and Select first.
+    `classes` is in running order: dicts with class_name, ring, select_first, combine_levels."""
+    save_day(slug, day, levels_first, heights, user)
+    current = {s['class_name']: s for s in class_list(slug, day)}
+    if sorted(current) != sorted(c['class_name'] for c in classes):
+        raise TrialError('The classes changed while you were editing. Reload the page and try again.')
+    for n, c in enumerate(classes, start=1):
+        s = current[c['class_name']]
+        with db.engine().begin() as conn:
+            conn.execute(update(db.class_settings).where(db.class_settings.c.id == s['id']).values(
+                sort=n * 10, ring=(c.get('ring') or '1').strip()[:10], select_first=bool(c.get('select_first')),
+                combine_levels=bool(c.get('combine_levels'))))
+        if (s['select_first'], s['combine_levels']) != (bool(c.get('select_first')), bool(c.get('combine_levels'))):
+            regroup_keep_order(slug, day, c['class_name'])
+    db.log(user, 'setup', slug, target=day, classes=[c['class_name'] for c in classes])
 
 
 def class_list(slug: str, day: str = None) -> list:
@@ -160,7 +194,7 @@ def class_list(slug: str, day: str = None) -> list:
         q = q.where(db.class_settings.c.day == day)
     with db.engine().connect() as c:
         rows = [dict(r) for r in c.execute(q).mappings()]
-    return sorted(rows, key=lambda s: (s['day'], s['sort'], _sort_index(s['class_name']), s['class_name']))
+    return sorted(rows, key=lambda s: (s['day'], s['sort'], _sort_index(s['class_name'], s['day']), s['class_name']))
 
 
 def get_class(slug: str, day: str, class_name: str) -> dict:

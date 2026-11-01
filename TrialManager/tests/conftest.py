@@ -92,7 +92,7 @@ def admin(client):
     token = csrf_of(page.text)
     r = client.post('/shows/new', data={'csrf': token, 'name': 'Test Trial', 'show_id': '7104', 'form_id': '261266312429152',
                                         'saturday_date': '2026-12-05', 'sunday_date': '2026-12-06'}, follow_redirects=False)
-    assert r.headers['location'] == '/shows/2026-12-05-test-trial/entries'
+    assert r.headers['location'] == '/shows/2026-12-05-test-trial/setup'
     return client, token
 
 

@@ -201,3 +201,12 @@ label.chk { display: inline-flex; align-items: center; gap: 6px; margin: 4px 12p
 @media (max-width: 900px) { .row3, .export { grid-template-columns: 1fr; } }
 .t.score input.f.opening { width: 130px; padding: 4px 6px; font-size: 13px; letter-spacing: .5px; }
 .t.score .sum { margin-left: 6px; font-weight: 700; color: var(--navy); white-space: nowrap; }
+.setup-sec { margin-bottom: 14px; max-width: 900px; }
+ol.class-order { list-style: none; padding: 0; margin: 6px 0 8px; counter-reset: cls; }
+ol.class-order li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 9px; margin-bottom: 6px; background: #fff; counter-increment: cls; }
+ol.class-order li::before { content: counter(cls) "."; color: var(--muted); font-weight: 700; width: 18px; }
+ol.class-order .handle { cursor: grab; color: var(--muted); font-size: 18px; user-select: none; }
+ol.class-order .cname { min-width: 150px; }
+ol.class-order .mini-l { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+ol.class-order li.sortable-ghost { background: var(--blue-bg); }

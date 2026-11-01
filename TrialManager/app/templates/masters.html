@@ -3,7 +3,9 @@
 {% block main %}
 {% include "_show_head.html" %}
 {% include "_scoring_top.html" %}
-<div class="ro-head"><h2 style="margin:0">Masters Series overall <span class="muted">{{ day|day }}</span></h2></div>
+<div class="ro-head"><h2 style="margin:0">Masters Series overall <span class="muted">{{ day|day }}</span></h2>
+  {% if mv.available %}{% set n = mv.groups|map(attribute='rows')|sum(start=[])|selectattr('bye')|list|length %}
+    {% if n %}<a class="btn primary" href="/shows/{{ slug }}/scoring/masters/certificates.pdf?day={{ day }}" target="_blank">Print Final certificates ({{ n }})</a>{% endif %}{% endif %}</div>
 {% if not mv.available %}
   <div class="flash info">{{ mv.reason }}</div>
 {% else %}
