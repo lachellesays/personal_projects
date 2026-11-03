@@ -836,24 +836,26 @@ def render_admin():
                 released = db.maps_released(ENGINE, day, now_utc, datetime.now(TZ).date())
                 with st.container(border=True):
                     if released:
-                        when = f" (released {rel.astimezone(TZ).strftime('%a %-m/%-d at %-I:%M %p')})" if rel else ""
+                        when = f" (released {rel.astimezone(TZ).strftime('%a %-m/%-d at %-I:%M %p %Z')})" if rel else ""
                         st.success(f"Exhibitors can see this day's course maps on the Running order tab{when}.")
                     elif status['on_hold']:
                         st.warning("On hold: hidden from exhibitors until you save a release time or click Release now.")
                     elif rel:
-                        st.warning(f"Hidden from exhibitors until {rel.astimezone(TZ).strftime('%A %-m/%-d at %-I:%M %p')}.")
+                        st.warning(f"Hidden from exhibitors until {rel.astimezone(TZ).strftime('%A %-m/%-d at %-I:%M %p %Z')}.")
                     else:
                         st.warning("Hidden from exhibitors: no release time is set and the trial day hasn't started. "
                                    "Set a release time below, or maps show automatically from midnight on the trial day.")
                     # Only show a saved time that's actually on this trial day (Release now saves "now", maybe days early)
                     default_t = rel.astimezone(TZ).time() if rel and rel.astimezone(TZ).date() == day else dtime(7, 0)
                     c1, c2 = st.columns([2, 3])
-                    t = c1.time_input(f"Release time on {_day_label(day)}", value=default_t, step=300, key=f"rel_t_{day}")
+                    zone = datetime.combine(day, dtime(12, 0), tzinfo=TZ).strftime('%Z')   # EST / EDT on that date
+                    t = c1.time_input(f"Release time on {_day_label(day)} ({zone})", value=default_t, step=300,
+                                      key=f"rel_t_{day}", help=f"Trial time zone: {TZ.key}. Times are checked on the server.")
                     c2.write("")
                     b1, b2, b3 = c2.columns(3)
                     if b1.button("Save time", key=f"rel_save_{day}", use_container_width=True):
                         db.set_map_release_time(ENGINE, day, datetime.combine(day, t, tzinfo=TZ))
-                        st.session_state.admin_flash = f"Maps release at {t.strftime('%-I:%M %p')} on {_day_label(day)}."
+                        st.session_state.admin_flash = f"Maps release at {t.strftime('%-I:%M %p')} {zone} on {_day_label(day)}."
                         st.rerun()
                     if not released and b2.button("Release now", key=f"rel_now_{day}", use_container_width=True):
                         # start of this minute: the public page rounds down to the minute, so it shows right away
