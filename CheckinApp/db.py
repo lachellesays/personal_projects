@@ -14,7 +14,7 @@ from datetime import date, datetime, timezone
 
 import pandas as pd
 from sqlalchemy import (
-    JSON, Column, Date, DateTime, Float, Integer, LargeBinary, MetaData, String, Table,
+    JSON, Boolean, Column, Date, DateTime, Float, Integer, LargeBinary, MetaData, String, Table,
     UniqueConstraint, and_, create_engine, delete, func, insert, select, update,
 )
 
@@ -72,6 +72,17 @@ course_maps = Table(
     Column('mime', String, default='image/png'),
     Column('image', LargeBinary, nullable=False),
     Column('uploaded_at', DateTime(timezone=True)),
+)
+
+# A-frame banners on the Gate: on for Agility classes, off for everything else, unless the
+# secretary switches a class (e.g. a Gamblers course with an A-frame). Only switched classes are stored.
+aframe_settings = Table(
+    'aframe_settings', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('trial_date', Date, nullable=False),
+    Column('class_name', String, nullable=False),
+    Column('has_aframe', Boolean, nullable=False),
+    UniqueConstraint('trial_date', 'class_name'),
 )
 
 # Fields copied from the CSV / typed in for a late entry
@@ -315,3 +326,26 @@ def classes_with_maps(engine, trial_date: date) -> set:
     with engine.connect() as c:
         return {r[0] for r in c.execute(select(course_maps.c.class_name).distinct()
                                         .where(course_maps.c.trial_date == trial_date))}
+
+
+# ── A-frame ──────────────────────────────────────────────────────────────────
+
+def default_aframe(class_name: str) -> bool:
+    """Agility classes (Agility 1, Agility 2, Masters Agility) have an A-frame; Jumping, Speedstakes and games don't."""
+    return 'agility' in (class_name or '').lower()
+
+
+def aframe_by_class(engine, trial_date: date) -> dict:
+    """{class_name: has A-frame} for every class that day, defaults plus the secretary's switches."""
+    with engine.connect() as c:
+        switched = {r.class_name: r.has_aframe for r in c.execute(
+            select(aframe_settings).where(aframe_settings.c.trial_date == trial_date))}
+    return {name: switched.get(name, default_aframe(name)) for name in class_names(engine, trial_date)}
+
+
+def set_aframe(engine, trial_date: date, class_name: str, on: bool):
+    with _write(engine) as c:
+        c.execute(delete(aframe_settings).where(and_(aframe_settings.c.trial_date == trial_date,
+                                                     aframe_settings.c.class_name == class_name)))
+        if on != default_aframe(class_name):
+            c.execute(insert(aframe_settings).values(trial_date=trial_date, class_name=class_name, has_aframe=on))

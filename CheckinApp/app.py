@@ -577,8 +577,8 @@ def render_gate():
 
     @st.fragment(run_every=5)
     def gate_steward_view(target_class):
-        # Speedstakes / Jumping classes don't run the A-Frame — skip the equipment-change banners
-        has_aframe = not any(kw in target_class.lower() for kw in ('speedstakes', 'jumping'))
+        # A-frame banners only for classes with an A-frame: Agility by default, others when switched on in Admin
+        has_aframe = read('aframe_by_class', day).get(target_class, db.default_aframe(target_class))
 
         g_df = read('runs_for_day', day, target_class)
         if g_df.empty:
@@ -670,7 +670,7 @@ def render_admin():
     st.header("Secretary Admin")
     if pin_unlocked('admin', 'ADMIN_PIN', 'Admin PIN'):
         section = st.radio(
-            "Section", ["Upload run order", "Reorder", "Late entry", "Course maps",
+            "Section", ["Upload run order", "Reorder", "Late entry", "Course maps", "A-frame",
                         "Publish results", "Reset statuses"],
             horizontal=True, label_visibility="collapsed", key="admin_section",
         )
@@ -834,6 +834,24 @@ def render_admin():
                     st.rerun()
                 have = read('classes_with_maps', day)
                 st.caption("Maps uploaded: " + (', '.join(c for c in sorted_classes if c in have) or 'none yet'))
+
+        # ── A-frame ──
+        elif section == "A-frame":
+            if not sorted_classes:
+                st.info("Upload a run order first.")
+            else:
+                st.caption("Which classes show the SET A-FRAME UP / DOWN banners on the Gate. Agility classes are on "
+                           "by default and everything else is off. Turn a class on when its course has an A-frame "
+                           "(for example, Gamblers).")
+                current = read('aframe_by_class', day)
+                for cls in sorted_classes:
+                    on = current.get(cls, db.default_aframe(cls))
+                    label = cls + ("" if on == db.default_aframe(cls) else "  (changed)")
+                    new_on = st.toggle(label, value=on, key=f"aframe_{day}_{cls}")
+                    if new_on != on:
+                        db.set_aframe(ENGINE, day, cls, new_on)
+                        st.session_state.admin_flash = f"A-frame {'on' if new_on else 'off'} for {cls}."
+                        st.rerun()
 
         # ── Publish results ──
         elif section == "Publish results":
