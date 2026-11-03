@@ -241,3 +241,11 @@ def test_public_pages_only_get_maps_through_the_release_check():
     assert "read('public_course_map'" in public
     admin = src[admin_start:]
     assert admin.count("'latest_course_map'") == 1 and 'Show me this class' in admin
+
+
+def test_conflict_gaps_skip_scratched_runs():
+    from run_order import conflict_gaps
+    rows = [{'handler': h, 'out': o} for h, o in [('A', False), ('B', False), ('B', True), ('A', False), ('C', False)]]
+    got = conflict_gaps(rows)
+    assert [r['gap'] for r in got] == [None, None, None, 1, None]       # one dog (B) ran between A's runs
+    assert got[3]['conflict'] and got[0]['conflict_partner'] and not got[2]['conflict']

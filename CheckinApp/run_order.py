@@ -97,3 +97,28 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
             .size().reset_index(name='runs')
             .sort_values(['trial_date', 'class_order'])
             .drop(columns='class_order'))
+
+
+GAP_TARGET = 10   # fewer dogs than this between a handler's runs = conflict (same rule as Trial Manager and UKI Manager)
+
+
+def conflict_gaps(rows: list) -> list:
+    """rows: dicts in running order with 'handler' and 'out' (scratched). Returns the rows with 'gap' (dogs since
+    the handler's previous run, scratched runs not counted), 'conflict' and 'conflict_partner' (that earlier run)."""
+    out, last, count = [dict(r) for r in rows], {}, 0
+    for i, r in enumerate(out):
+        r.setdefault('gap', None)
+        r.setdefault('conflict', False)
+        r.setdefault('conflict_partner', False)
+        if r.get('out'):
+            continue
+        h = r['handler']
+        if h in last:
+            prev_i, prev_count = last[h]
+            r['gap'] = count - prev_count - 1
+            if r['gap'] < GAP_TARGET:
+                r['conflict'] = True
+                out[prev_i]['conflict_partner'] = True
+        last[h] = (i, count)
+        count += 1
+    return out

@@ -24,7 +24,7 @@ from streamlit_sortables import sort_items
 
 import db
 from cached import engine, read
-from run_order import RunOrderError, parse_run_order_csv, summarize
+from run_order import RunOrderError, parse_run_order_csv, summarize, conflict_gaps, GAP_TARGET
 
 
 def load_dotenv():
@@ -680,7 +680,7 @@ def render_admin():
     st.header("Secretary Admin")
     if pin_unlocked('admin', 'ADMIN_PIN', 'Admin PIN'):
         section = st.radio(
-            "Section", ["Upload run order", "Reorder", "Late entry", "Course maps", "A-frame",
+            "Section", ["Upload run order", "Reorder", "Course maps", "A-frame",
                         "Publish results", "Reset statuses"],
             horizontal=True, label_visibility="collapsed", key="admin_section",
         )
@@ -763,6 +763,37 @@ def render_admin():
                         new_labels = [x for x in labels if x != mv_dog]
                         new_labels.insert(int(mv_pos) - 1, mv_dog)
                         changed = save_now = True
+
+                # Conflict check for the order shown above (updates as you drag, before saving)
+                info = {int(r['id']): r for _, r in cls_runs.iterrows()}   # run id -> row
+                checked = conflict_gaps([{'handler': info[label_to_id[l]]['handler_number'] or info[label_to_id[l]]['handler_name'],
+                                          'out': info[label_to_id[l]]['status'] == 'Scratch', 'label': l} for l in new_labels])
+                n_conf = sum(1 for c in checked if c['conflict'])
+                st.markdown(f"**Conflicts in this order:** "
+                            + (f"<span style='color:#B91C1C;font-weight:700'>{n_conf}</span>" if n_conf else
+                               "<span style='color:#166534;font-weight:700'>none</span>")
+                            + f" <span style='color:#64748B'>(fewer than {GAP_TARGET} dogs between a handler's runs"
+                            + ("; not saved yet" if changed else "") + ")</span>", unsafe_allow_html=True)
+                table, n = [], 0
+                for c in checked:
+                    r = info[label_to_id[c['label']]]
+                    if not c['out']:
+                        n += 1
+                    table.append({'#': '' if c['out'] else n, 'Height': f'{r["height"]}"' + (' Select' if r['class_type'] == 'Select' else ''),
+                                  'Dog': r['dog_name'] + (' (scratched)' if c['out'] else ''), 'Handler': r['handler_name'],
+                                  'Gap': '' if c['gap'] is None else str(c['gap'])})
+                def _shade(row):
+                    c = checked[row.name]
+                    if c['conflict']:
+                        return ['background-color: #FEE2E2'] * (len(row) - 1) + ['background-color: #FEE2E2; color: #B91C1C']
+                    if c['conflict_partner']:
+                        return ['background-color: #FFF7D6'] * len(row)
+                    if c['out']:
+                        return ['color: #94A3B8'] * len(row)
+                    return [''] * len(row)
+                st.dataframe(pd.DataFrame(table).style.apply(_shade, axis=1), hide_index=True, use_container_width=True,
+                             height=min(38 + 35 * len(table), 640))
+                st.caption("Red: conflict (Gap = dogs since that handler's last run). Yellow: that handler's earlier run.")
 
                 if st.button("Save order", type="primary" if changed else "secondary", disabled=not changed) \
                         or save_now:
