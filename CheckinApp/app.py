@@ -14,7 +14,7 @@ import json
 import os
 import re
 import time
-from datetime import date, datetime
+from datetime import date, datetime, time as dtime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -456,10 +456,20 @@ def render_order():
         return
     sel_c = class_picker('ro_sel')
 
-    course_map = read('latest_course_map', day, sel_c)
+    # Exhibitors only get a map through public_course_map, which refuses before the day's release time.
+    # The minute is rounded down, so a cached answer can only ever be later than the real release, never earlier.
+    now_floor = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    course_map = read('public_course_map', day, sel_c, now_floor, datetime.now(TZ).date())
     if course_map:
         with st.expander("Course map"):
             st.image(course_map, use_container_width=True)
+    else:
+        status = read('map_release_status', day)
+        rel = status['release_at']
+        if status['on_hold']:
+            st.caption("Course maps will be posted soon.")
+        elif rel and datetime.now(timezone.utc) < rel:
+            st.caption(f"Course maps will be posted at {rel.astimezone(TZ).strftime('%-I:%M %p')}.")
 
     @st.fragment(run_every=10)
     def live_running_order_view(target_class, handler_num):
@@ -819,18 +829,59 @@ def render_admin():
             if df.empty:
                 st.info("Upload a run order first.")
             else:
+                # When exhibitors can see this day's maps
+                status = db.map_release_status(ENGINE, day)
+                rel = status['release_at']
+                now_utc = datetime.now(timezone.utc)
+                released = db.maps_released(ENGINE, day, now_utc, datetime.now(TZ).date())
+                with st.container(border=True):
+                    if released:
+                        when = f" (released {rel.astimezone(TZ).strftime('%a %-m/%-d at %-I:%M %p')})" if rel else ""
+                        st.success(f"Exhibitors can see this day's course maps on the Running order tab{when}.")
+                    elif status['on_hold']:
+                        st.warning("On hold: hidden from exhibitors until you save a release time or click Release now.")
+                    elif rel:
+                        st.warning(f"Hidden from exhibitors until {rel.astimezone(TZ).strftime('%A %-m/%-d at %-I:%M %p')}.")
+                    else:
+                        st.warning("Hidden from exhibitors: no release time is set and the trial day hasn't started. "
+                                   "Set a release time below, or maps show automatically from midnight on the trial day.")
+                    # Only show a saved time that's actually on this trial day (Release now saves "now", maybe days early)
+                    default_t = rel.astimezone(TZ).time() if rel and rel.astimezone(TZ).date() == day else dtime(7, 0)
+                    c1, c2 = st.columns([2, 3])
+                    t = c1.time_input(f"Release time on {_day_label(day)}", value=default_t, step=300, key=f"rel_t_{day}")
+                    c2.write("")
+                    b1, b2, b3 = c2.columns(3)
+                    if b1.button("Save time", key=f"rel_save_{day}", use_container_width=True):
+                        db.set_map_release_time(ENGINE, day, datetime.combine(day, t, tzinfo=TZ))
+                        st.session_state.admin_flash = f"Maps release at {t.strftime('%-I:%M %p')} on {_day_label(day)}."
+                        st.rerun()
+                    if not released and b2.button("Release now", key=f"rel_now_{day}", use_container_width=True):
+                        # start of this minute: the public page rounds down to the minute, so it shows right away
+                        db.set_map_release_time(ENGINE, day, now_utc.replace(second=0, microsecond=0))
+                        st.session_state.admin_flash = "Course maps released."
+                        st.rerun()
+                    if released and b3.button("Hide again", key=f"rel_hide_{day}", use_container_width=True,
+                                              help="Hides this day's maps until you save a release time or click Release now"):
+                        db.hold_maps(ENGINE, day)
+                        st.session_state.admin_flash = "Course maps hidden. Save a new release time when ready."
+                        st.rerun()
+
                 upload_class = st.selectbox("Assign Map to Class:", sorted_classes, key="map_up_sel")
                 current = read('latest_course_map', day, upload_class)
                 if current:
-                    st.caption("Current map:")
-                    st.image(current, width=300)
+                    # Not shown automatically, so a map isn't left on screen before its release
+                    if st.checkbox("Show me this class's current map (admin only)", key=f"map_peek_{day}_{upload_class}"):
+                        st.image(current, width=300)
+                    else:
+                        st.caption("A map is uploaded for this class.")
                 map_ver = st.session_state.get('map_ver', 0)
                 uploaded_file = st.file_uploader("Choose Image", type=['jpg', 'png', 'jpeg'], key=f"map_file_{map_ver}")
                 if uploaded_file and st.button("Upload map", type="primary"):
                     db.save_course_map(ENGINE, day, upload_class, uploaded_file.name,
                                        uploaded_file.type or 'image/png', uploaded_file.getvalue())
                     st.session_state.map_ver = map_ver + 1
-                    st.session_state.admin_flash = f"Map uploaded for {upload_class}."
+                    st.session_state.admin_flash = (f"Map uploaded for {upload_class}."
+                                                    + ("" if released else " It stays hidden until the release time."))
                     st.rerun()
                 have = read('classes_with_maps', day)
                 st.caption("Maps uploaded: " + (', '.join(c for c in sorted_classes if c in have) or 'none yet'))

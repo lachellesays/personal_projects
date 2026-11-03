@@ -74,6 +74,15 @@ course_maps = Table(
     Column('uploaded_at', DateTime(timezone=True)),
 )
 
+# When each day's course maps become visible to exhibitors (see public_course_map). Stored in UTC.
+map_release = Table(
+    'map_release', metadata,
+    Column('trial_date', Date, primary_key=True),
+    Column('release_at', DateTime(timezone=True)),          # None while on hold
+    Column('on_hold', Boolean, nullable=False, default=False),
+    Column('set_at', DateTime(timezone=True)),
+)
+
 # A-frame banners on the Gate: on for Agility classes, off for everything else, unless the
 # secretary switches a class (e.g. a Gamblers course with an A-frame). Only switched classes are stored.
 aframe_settings = Table(
@@ -349,3 +358,62 @@ def set_aframe(engine, trial_date: date, class_name: str, on: bool):
                                                      aframe_settings.c.class_name == class_name)))
         if on != default_aframe(class_name):
             c.execute(insert(aframe_settings).values(trial_date=trial_date, class_name=class_name, has_aframe=on))
+
+
+# ── Course map release ───────────────────────────────────────────────────────
+#
+# Maps can be uploaded ahead of time. Exhibitors only ever get a map through public_course_map(), which checks
+# the release rule in the database layer itself, so a page can't show a map early by mistake:
+#   - the day has a release time and it has passed, or
+#   - the day has NO release time and the trial day has started (local date), which covers day-of uploads.
+# A map for a future day with no release time set stays hidden, and a day put on hold stays hidden until a
+# new release time is saved or Release now is clicked.
+
+def _aware(dt):
+    return dt.replace(tzinfo=timezone.utc) if dt is not None and dt.tzinfo is None else dt
+
+
+def map_release_time(engine, trial_date: date):
+    """The day's release time (UTC), or None if it hasn't been set or the day is on hold."""
+    return map_release_status(engine, trial_date)['release_at']
+
+
+def map_release_status(engine, trial_date: date) -> dict:
+    with engine.connect() as c:
+        row = c.execute(select(map_release).where(map_release.c.trial_date == trial_date)).mappings().first()
+    return {'release_at': _aware(row['release_at']) if row else None, 'on_hold': bool(row and row['on_hold'])}
+
+
+def hold_maps(engine, trial_date: date):
+    """Hide the day's maps until a new release time is saved or they're released by hand."""
+    with _write(engine) as c:
+        c.execute(delete(map_release).where(map_release.c.trial_date == trial_date))
+        c.execute(insert(map_release).values(trial_date=trial_date, release_at=None, on_hold=True, set_at=_now()))
+
+
+def set_map_release_time(engine, trial_date: date, release_at):
+    """release_at: an aware datetime, or None to clear it."""
+    with _write(engine) as c:
+        c.execute(delete(map_release).where(map_release.c.trial_date == trial_date))
+        if release_at is not None:
+            if release_at.tzinfo is None:
+                raise ValueError('release_at must include a time zone')
+            c.execute(insert(map_release).values(trial_date=trial_date, release_at=release_at.astimezone(timezone.utc),
+                                                 on_hold=False, set_at=_now()))
+
+
+def maps_released(engine, trial_date: date, now, local_today: date) -> bool:
+    """now: aware datetime. local_today: today's date in the trial's time zone."""
+    status = map_release_status(engine, trial_date)
+    if status['on_hold']:
+        return False
+    if status['release_at'] is None:
+        return local_today >= trial_date
+    return now >= status['release_at']
+
+
+def public_course_map(engine, trial_date: date, class_name: str, now, local_today: date):
+    """The map exhibitors may see right now, or None. The only way the public pages get a map."""
+    if not maps_released(engine, trial_date, now, local_today):
+        return None
+    return latest_course_map(engine, trial_date, class_name)

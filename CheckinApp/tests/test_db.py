@@ -188,3 +188,56 @@ def test_aframe_defaults_and_switches(tmp_path):
     db.set_aframe(eng, day, 'Gamblers', False)         # back to the default: nothing stored
     with eng.connect() as c:
         assert [r.class_name for r in c.execute(db.aframe_settings.select())] == ['Masters Agility']
+
+
+def test_course_maps_stay_hidden_until_release(tmp_path):
+    from datetime import date, datetime, timedelta, timezone
+    from zoneinfo import ZoneInfo
+    import db
+    eng = db.get_engine(f'sqlite:///{tmp_path}/m.db')
+    et = ZoneInfo('America/New_York')
+    sat, sun = date(2026, 11, 7), date(2026, 11, 8)
+    db.save_course_map(eng, sat, 'Gamblers', 'g.png', 'image/png', b'SAT-MAP')
+    db.save_course_map(eng, sun, 'Agility', 'a.png', 'image/png', b'SUN-MAP')
+    wed = datetime(2026, 11, 4, 12, 0, tzinfo=et)
+
+    # Pre-loaded on Wednesday, no release time set: hidden (the trial day hasn't started)
+    assert db.public_course_map(eng, sat, 'Gamblers', wed, wed.date()) is None
+    # Release time 7:00 AM Saturday
+    db.set_map_release_time(eng, sat, datetime(2026, 11, 7, 7, 0, tzinfo=et))
+    six59 = datetime(2026, 11, 7, 6, 59, 59, tzinfo=et)
+    assert db.public_course_map(eng, sat, 'Gamblers', six59, sat) is None
+    assert db.public_course_map(eng, sat, 'Gamblers', datetime(2026, 11, 7, 7, 0, tzinfo=et), sat) == b'SAT-MAP'
+    # Saturday's release doesn't release Sunday; Sunday with no time set opens at midnight Sunday
+    sat_noon = datetime(2026, 11, 7, 12, 0, tzinfo=et)
+    assert db.public_course_map(eng, sun, 'Agility', sat_noon, sat) is None
+    assert db.public_course_map(eng, sun, 'Agility', datetime(2026, 11, 8, 0, 1, tzinfo=et), sun) == b'SUN-MAP'
+    # Release time stored and compared in UTC, whatever the server's clock zone
+    assert db.map_release_time(eng, sat) == datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    # Moving the release later hides it again
+    db.set_map_release_time(eng, sat, datetime(2026, 11, 7, 23, 59, tzinfo=et))
+    assert db.public_course_map(eng, sat, 'Gamblers', sat_noon, sat) is None
+    # Release now
+    db.set_map_release_time(eng, sat, sat_noon - timedelta(seconds=1))
+    assert db.public_course_map(eng, sat, 'Gamblers', sat_noon, sat) == b'SAT-MAP'
+    # Hide again: on hold, hidden even on the day and long after any time, until a new time or Release now
+    db.hold_maps(eng, sat)
+    assert db.map_release_status(eng, sat) == {'release_at': None, 'on_hold': True}
+    assert db.public_course_map(eng, sat, 'Gamblers', datetime(2026, 11, 7, 23, 0, tzinfo=et), sat) is None
+    db.set_map_release_time(eng, sat, sat_noon)
+    assert db.public_course_map(eng, sat, 'Gamblers', sat_noon, sat) == b'SAT-MAP'
+    import pytest
+    with pytest.raises(ValueError):
+        db.set_map_release_time(eng, sat, datetime(2026, 11, 7, 7, 0))   # a time without a time zone is refused
+
+
+def test_public_pages_only_get_maps_through_the_release_check():
+    """Guard: outside the PIN-protected Admin section, app.py must never read a map directly."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / 'app.py').read_text()
+    admin_start = src.index('def render_admin')
+    public = src[:admin_start]
+    assert "'latest_course_map'" not in public and 'latest_course_map(' not in public
+    assert "read('public_course_map'" in public
+    admin = src[admin_start:]
+    assert admin.count("'latest_course_map'") == 1 and 'Show me this class' in admin
