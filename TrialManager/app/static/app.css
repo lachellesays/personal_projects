@@ -210,3 +210,4 @@ ol.class-order .handle { cursor: grab; color: var(--muted); font-size: 18px; use
 ol.class-order .cname { min-width: 150px; }
 ol.class-order .mini-l { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
 ol.class-order li.sortable-ghost { background: var(--blue-bg); }
+a.clink { color: var(--navy); font-weight: 700; text-decoration: underline dotted; }

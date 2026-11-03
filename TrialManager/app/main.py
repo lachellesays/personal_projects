@@ -378,7 +378,7 @@ def entries(request: Request, slug: str, q: str = '', f: str = 'all'):
     rows = fmt.filter_rows(d.rows, q, f)
     if request.headers.get('HX-Target') == 'entry-table':  # live search: just the table
         return render(request, '_entry_rows.html', rows=rows, slug=slug)
-    return render(request, 'entries.html', rows=rows, q=q, f=f, **ctx)
+    return render(request, 'entries.html', rows=rows, q=q, f=f, flash=request.session.pop('entries_flash', ''), **ctx)
 
 
 @app.post('/shows/{slug}/scratch/{dog_number}', response_class=HTMLResponse)
@@ -814,3 +814,27 @@ async def show_setup_day(request: Request, slug: str):
     trial.save_day_setup(slug, day_, form.get('levels_first', ''), form.get('heights', ''), classes, user)
     request.session['setup_flash'] = f'{day(day_)} saved.'
     return back(f'/shows/{slug}/setup#day-{day_}')
+
+
+# ── Changing an entry's classes ─────────────────────────────────────────────
+
+@app.get('/shows/{slug}/entries/{submission_id}/classes', response_class=HTMLResponse)
+def entry_classes(request: Request, slug: str, submission_id: str):
+    require_user(request)
+    d, ws, ctx = _show_ctx(request, slug, 'entries')
+    original, current = fmt.entry_for(d, submission_id)
+    return render(request, 'entry_classes.html', original=original, current=current, options=fmt.class_options(d),
+                  changed=str(submission_id) in d.show.class_corrections, built=trial.is_built(slug), **ctx)
+
+
+@app.post('/shows/{slug}/entries/{submission_id}/classes')
+async def entry_classes_save(request: Request, slug: str, submission_id: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    if form.get('action') == 'reset':
+        fmt.reset_classes(slug, submission_id, user)
+    else:
+        fmt.set_classes(slug, submission_id, form.getlist('saturday'), form.getlist('sunday'), user)
+    note = ' Then click Update run order on the Run order page.' if trial.is_built(slug) else ''
+    request.session['entries_flash'] = 'Classes saved; fees and the workbook use them now.' + note
+    return back(f'/shows/{slug}/entries')

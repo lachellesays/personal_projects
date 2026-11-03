@@ -2,6 +2,7 @@
 {% block title %}Entries · {{ d.show.name }}{% endblock %}
 {% block main %}
 {% include "_show_head.html" %}
+{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
 <form class="toolbar" id="entry-filters" action="/shows/{{ slug }}/entries" method="get" onsubmit="return false">
   <input class="search" type="search" name="q" value="{{ q }}" placeholder="Search handler, dog, or number"
          hx-get="/shows/{{ slug }}/entries" hx-target="#entry-table" hx-swap="outerHTML" hx-include="#entry-filters"
@@ -12,5 +13,5 @@
   {% endfor %}
 </form>
 {% include "_entry_rows.html" %}
-<p class="muted" style="margin-top:8px">Scratches save the moment you toggle them. A handler with every dog scratched is left off all three tabs of the workbook.</p>
+<p class="muted" style="margin-top:8px">Click a Sat or Sun number to change that dog's classes (for example, move Sunday's entries to Saturday). Scratches save the moment you toggle them. A handler with every dog scratched is left off all three tabs of the workbook.</p>
 {% endblock %}

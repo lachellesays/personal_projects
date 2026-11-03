@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 from app import db
 from app.core import (
-    DOG_FIELDS, HANDLER_FIELDS, US_STATES, Show, apply_corrections, build_runs, dog_table, fetch_submissions,
+    CLASS_NAME_MAP, DOG_FIELDS, HANDLER_FIELDS, US_STATES, Show, apply_corrections, build_runs, dog_table, fetch_submissions,
     handler_table, parse_entries, to_xlsx_bytes, transform,
 )
 
@@ -144,6 +144,7 @@ def _build_rows(d: ShowData):
                 'paid': paid, 'balance': balance, 'scratched': scr,
                 'new': e['submission_id'] in d.new_ids,
                 'fixed': any(k == hid for k in d.show.handler_corrections) or e['dog_number'] in d.show.dog_corrections,
+                'classes_changed': str(e['submission_id']) in d.show.class_corrections,
             })
     d.rows = rows
     d.stats = {'handlers': handlers_live, 'dogs': dogs_live, 'runs': runs_live, 'scratched': scratched,
@@ -195,6 +196,65 @@ def toggle_scratch(slug: str, dog_number: str, user: dict) -> bool:
     db.save_show(show, slug)
     db.log(user, 'scratch' if now_scratched else 'unscratch', slug, f'd:{dog_number}', dog=entry['dog_name'])
     return now_scratched
+
+
+# ── Changing an entry's classes ─────────────────────────────────────────────
+
+DAY_FIELDS = {'saturday': 'saturday_classes', 'sunday': 'sunday_classes'}
+
+
+def class_options(d: ShowData) -> dict:
+    """Every class offered each day, as JotForm names them (from all entries), in the day's usual order."""
+    from app import trial
+    out = {}
+    for key, fld in DAY_FIELDS.items():
+        names = []
+        for e in d.entries:
+            for c in e[fld]:
+                if c not in names:
+                    names.append(c)
+        day_ = str(d.show.saturday_date if key == 'saturday' else d.show.sunday_date)
+        out[key] = sorted(names, key=lambda c: (trial._sort_index(CLASS_NAME_MAP.get(c, c), day_), c))
+    return out
+
+
+def entry_for(d: ShowData, submission_id: str) -> tuple:
+    original = next((e for e in d.entries if str(e['submission_id']) == str(submission_id)), None)
+    current = next((e for e in d.corrected if str(e['submission_id']) == str(submission_id)), None)
+    if original is None:
+        raise FormatterError('That entry isn’t in this show.')
+    return original, current
+
+
+def set_classes(slug: str, submission_id: str, saturday: list, sunday: list, user: dict):
+    """Change which classes an entry is in (e.g. move Sunday's classes to Saturday). Choosing exactly what
+    JotForm had removes the change."""
+    d = load(slug)
+    original, current = entry_for(d, submission_id)
+    options = class_options(d)
+    for day_key, picked in (('saturday', saturday), ('sunday', sunday)):
+        bad = [c for c in picked if c not in options[day_key]]
+        if bad:
+            raise FormatterError(f'{", ".join(bad)} isn’t offered on {day_key.title()}.')
+    show = db.get_show(slug)
+    new = {'saturday_classes': [c for c in options['saturday'] if c in saturday],
+           'sunday_classes': [c for c in options['sunday'] if c in sunday]}
+    key = str(submission_id)
+    if new['saturday_classes'] == original['saturday_classes'] and new['sunday_classes'] == original['sunday_classes']:
+        show.class_corrections.pop(key, None)
+    else:
+        show.class_corrections[key] = new
+    db.save_show(show, slug)
+    db.log(user, 'classes', slug, f's:{key}', dog=original['dog_name'],
+           before={'saturday': current['saturday_classes'], 'sunday': current['sunday_classes']},
+           after={'saturday': new['saturday_classes'], 'sunday': new['sunday_classes']})
+
+
+def reset_classes(slug: str, submission_id: str, user: dict):
+    show = db.get_show(slug)
+    show.class_corrections.pop(str(submission_id), None)
+    db.save_show(show, slug)
+    db.log(user, 'classes', slug, f's:{submission_id}', event='back to JotForm')
 
 
 # ── Typo fixes ──────────────────────────────────────────────────────────────

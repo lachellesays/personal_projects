@@ -152,3 +152,53 @@ def test_workbook_matches_formatter_on_real_june_data(admin, app_env):
     for name in ('Contact', 'Balances', 'Raw Results'):
         pd.testing.assert_frame_equal(ours[name], theirs[name])
     assert len(ours['Raw Results']) == 218
+
+
+def test_moving_an_entrys_classes_to_another_day(admin, app_env):
+    from app import db, formatter as fmt, trial
+    app_env['data'] = [
+        submission('1', 'Ann', 'Smith', '100', '500', 'Rex', sat=['Agility 1'], sun=['Agility 1', 'Jumping 1'], paid='45.00'),
+        submission('2', 'Bob', 'Jones', '200', '600', 'Max', sat=['Jumping 1', 'Agility 1'], sun=['Agility 1'], paid='45.00'),
+    ]
+    c, token = admin
+    c.post(f'/shows/{SLUG}/refresh', data={'csrf': token})
+    c.post(f'/shows/{SLUG}/runorder/build', data={'csrf': token})
+    page = c.get(f'/shows/{SLUG}/entries/1/classes').text
+    assert 'Change classes for Rex' in page and 'Move Sunday' in page
+    assert c.get(f'/shows/{SLUG}/entries').text.count('/entries/1/classes') == 2      # Sat and Sun counts are links
+
+    # Rex moves both Sunday classes to Saturday
+    r = c.post(f'/shows/{SLUG}/entries/1/classes', data={'csrf': token, 'action': 'save',
+                                                         'saturday': ['Agility 1', 'Jumping 1'], 'sunday': []},
+               follow_redirects=True)
+    assert 'Classes saved' in r.text and 'Update run order' in r.text and 'CLASSES CHANGED' in r.text
+    d = fmt.load(SLUG)
+    rex = next(x for x in d.rows if x['dog_name'] == 'Rex')
+    assert (rex['sat'], rex['sun'], rex['fee']) == (2, 0, 30.0)                      # 3 classes became 2, fee follows
+    assert db.get_show(SLUG).class_corrections == {'1': {'saturday_classes': ['Agility 1', 'Jumping 1'], 'sunday_classes': []}}
+
+    # The run order picks it up on "Update run order"
+    pending = trial.pending_changes(d)
+    assert len(pending['new']) == 1 and len(pending['gone']) == 2
+    c.post(f'/shows/{SLUG}/runorder/build', data={'csrf': token})
+    sat_jump = [x['dog_name'] for x in trial.event_view(SLUG, '2026-12-05', 'Jumping')['rows']]
+    assert 'Rex' in sat_jump and 'Rex' not in [x['dog_name'] for x in trial.event_view(SLUG, '2026-12-06', 'Agility')['rows']]
+
+    # A class that isn't offered that day is refused; choosing JotForm's classes (or Undo) removes the change
+    r = c.post(f'/shows/{SLUG}/entries/1/classes', data={'csrf': token, 'action': 'save', 'saturday': ['Snooker']})
+    assert 'isn’t offered on Saturday' in r.text
+    c.post(f'/shows/{SLUG}/entries/1/classes', data={'csrf': token, 'action': 'reset'})
+    assert db.get_show(SLUG).class_corrections == {}
+
+
+def test_class_changes_survive_the_streamlit_formatter():
+    """Both copies of core.py read and write class changes, so saving in either app keeps them."""
+    fmt_core = ROOT / 'FormattingTools' / 'trial_formatter' / 'core.py'
+    if not fmt_core.exists():
+        pytest.skip('formatter folder not present')
+    spec = importlib.util.spec_from_file_location('old_core', fmt_core)
+    old = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(old)
+    data = {'name': 'X', 'show_id': 1, 'form_id': '2', 'saturday_date': '2026-12-05', 'sunday_date': '2026-12-06',
+            'class_corrections': {'9': {'saturday_classes': ['Agility 1'], 'sunday_classes': []}}}
+    assert old.Show.from_dict(data).to_dict()['class_corrections'] == data['class_corrections']

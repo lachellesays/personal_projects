@@ -208,6 +208,9 @@ class Show:
     # Hand-made fixes for typos, keyed by handler/dog number: {'12349': {'state': 'VA'}}
     handler_corrections: dict = field(default_factory=dict)
     dog_corrections: dict = field(default_factory=dict)
+    # Classes changed by hand, keyed by JotForm submission ID:
+    # {'6123456789': {'saturday_classes': ['Agility 1'], 'sunday_classes': []}}
+    class_corrections: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict) -> 'Show':
@@ -223,6 +226,7 @@ class Show:
             field_names=dict(d.get('field_names') or {}),
             handler_corrections=_clean_corrections(d.get('handler_corrections'), HANDLER_FIELDS),
             dog_corrections=_clean_corrections(d.get('dog_corrections'), DOG_FIELDS),
+            class_corrections=_clean_class_corrections(d.get('class_corrections')),
         )
 
     def to_dict(self) -> dict:
@@ -240,6 +244,8 @@ class Show:
             d['handler_corrections'] = {_to_number(k): dict(v) for k, v in self.handler_corrections.items()}
         if self.dog_corrections:
             d['dog_corrections'] = {_to_number(k): dict(v) for k, v in self.dog_corrections.items()}
+        if self.class_corrections:
+            d['class_corrections'] = {str(k): {f: list(v) for f, v in c.items()} for k, c in self.class_corrections.items()}
         if self.field_names:
             d['field_names'] = dict(self.field_names)
         return d
@@ -255,15 +261,28 @@ def _clean_corrections(raw, allowed: list) -> dict:
     return out
 
 
+CLASS_FIELDS = ('saturday_classes', 'sunday_classes')
+
+
+def _clean_class_corrections(raw) -> dict:
+    out = {}
+    for sub, fields in (raw or {}).items():
+        fields = {k: [str(x) for x in (v or [])] for k, v in (fields or {}).items() if k in CLASS_FIELDS}
+        if fields:
+            out[str(sub)] = fields
+    return out
+
+
 def apply_corrections(entries: list, show: 'Show') -> list:
     """Return copies of the entries with the show's hand-made corrections applied."""
-    if not show.handler_corrections and not show.dog_corrections:
+    if not show.handler_corrections and not show.dog_corrections and not show.class_corrections:
         return entries
     fixed = []
     for e in entries:
         e = {**e,
              **show.handler_corrections.get(e['handler_number'], {}),
-             **show.dog_corrections.get(e['dog_number'], {})}
+             **show.dog_corrections.get(e['dog_number'], {}),
+             **show.class_corrections.get(str(e['submission_id']), {})}
         fixed.append(e)
     return fixed
 

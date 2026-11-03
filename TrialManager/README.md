@@ -9,6 +9,7 @@ show the same shows, scratches and typo fixes. You can run them side by side and
 ## What's in it
 - **Shows:** list of trials, plus New show / Edit details.
 - **Entries:** one row per dog, with fees, paid and balance. The scratch switch saves instantly. Search, and filters for New / Scratched / Owes money.
+- **Change classes:** click a dog's Sat or Sun number on Entries to change which classes it's in (for example, move Sunday's entries to Saturday, with one-click Move buttons). Saved like typo fixes: JotForm stays the original, the entry shows CLASSES CHANGED, fees and the workbook follow, Undo returns to the JotForm entry, and Run order picks it up on Update run order.
 - **Fix typos:** click a cell, type, press Enter. Fixed cells turn yellow and show the JotForm value. Every fix records who made it, with Undo.
 - **Warnings:** credits, addresses typed two ways (pick one), state/zip mismatches (one-click fix), plus anything else the formatter notices. Dismiss or Reopen.
 - **Download:** the same workbook as today, with a download history. "N new entries since your last download" appears on every page.

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Classes · {{ current.dog_name }} · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+<div class="panel" style="max-width:760px">
+  <h3>Change classes for {{ current.dog_name }} <span class="muted">· {{ current.first_name }} {{ current.last_name }} #{{ current.handler_number }}</span></h3>
+  {% if changed %}<div class="flash info">Changed from the JotForm entry, which had
+    Saturday: {{ original.saturday_classes|join(', ') or 'none' }} · Sunday: {{ original.sunday_classes|join(', ') or 'none' }}.</div>{% endif %}
+  <form method="post" action="/shows/{{ slug }}/entries/{{ original.submission_id }}/classes" id="classes-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dl-grid">
+      {% for key, label, date_ in [('saturday', 'Saturday', d.show.saturday_date), ('sunday', 'Sunday', d.show.sunday_date)] %}
+      <div class="dayset"><b>{{ label }} {{ date_|day }}</b>
+        {% for c in options[key] %}
+          <div><label class="chk"><input type="checkbox" name="{{ key }}" value="{{ c }}" data-day="{{ key }}"
+            {{ 'checked' if c in current[key ~ '_classes'] }}> {{ c }}</label></div>
+        {% else %}<div class="muted">No classes offered.</div>{% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    <p style="margin:10px 0">
+      <button type="button" class="btn small" onclick="moveAll('sunday','saturday')">Move Sunday's classes to Saturday</button>
+      <button type="button" class="btn small" onclick="moveAll('saturday','sunday')">Move Saturday's classes to Sunday</button></p>
+    <p class="hint">Moving ticks the class with the same name on the other day and unticks it here. Check the result before saving:
+      class names can differ between days. Fees update automatically.{% if built %} The run order isn't changed until you
+      click <b>Update run order</b> on the Run order page; the dog then goes to the end of its height group.{% endif %}</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <a class="btn" href="/shows/{{ slug }}/entries">Cancel</a>
+      {% if changed %}<button class="btn" name="action" value="reset">Undo: back to the JotForm entry</button>{% endif %}
+      <button class="btn primary" name="action" value="save">Save classes</button>
+    </div>
+  </form>
+</div>
+<script>
+function moveAll(from, to) {
+  var boxes = document.querySelectorAll('#classes-form input[data-day="' + from + '"]:checked');
+  var missing = [];
+  boxes.forEach(function (b) {
+    var target = document.querySelector('#classes-form input[data-day="' + to + '"][value="' + CSS.escape(b.value) + '"]');
+    if (target) { target.checked = true; b.checked = false; } else { missing.push(b.value); }
+  });
+  if (missing.length) {
+    var p = document.createElement('div'); p.className = 'flash error';
+    p.textContent = 'Not offered on the other day (left as is): ' + missing.join(', ');
+    document.getElementById('classes-form').prepend(p);
+  }
+}
+</script>
+{% endblock %}
