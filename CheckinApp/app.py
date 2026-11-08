@@ -95,6 +95,22 @@ st.markdown("""
     [class*="st-key-card-"] { background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 10px solid #94A3B8;
                               border-radius: 10px; padding: 10px 12px; gap: .6rem; box-sizing: border-box; }
     [class*="st-key-card-"] > *, [class*="st-key-card-"] .stButton { max-width: 100% !important; }
+    /* Streamlit sizes the card text to the full column, which the border + padding push past the screen edge,
+       so the page wobbled sideways on phones. Keep it inside the card and wrap long names. */
+    [class*="st-key-card-"] .stMarkdown { width: auto !important; max-width: 100% !important; }
+    .card-title, .card-sub { overflow-wrap: anywhere; }
+    /* Scroll lane: buttons stop short of the card's right edge, leaving a strip (marked with a faint dotted line)
+       where a thumb can scroll the list without landing on a button */
+    [class*="st-key-card-"] { position: relative; padding-right: 0 !important; }
+    [class*="st-key-card-"] > [data-testid="stElementContainer"]:has(.stButton),
+    [class*="st-key-card-"] > [data-testid="stHorizontalBlock"] { width: calc(100% - 52px) !important; }
+    [class*="st-key-card-"] > [data-testid="stElementContainer"]:has(.stMarkdown) { padding-right: 12px; }
+    [class*="st-key-card-"]::after { content: ""; position: absolute; top: 12px; bottom: 12px; right: 19px;
+                                     border-right: 3px dotted #CBD5E1; pointer-events: none; }
+    /* Safety net: the page itself never scrolls sideways (chip rows and the tab bar still scroll on their own) */
+    .stMain { overflow-x: hidden !important; }
+    /* No double-tap-to-zoom on buttons, which can zoom the page and make it pan sideways */
+    .stButton button { touch-action: manipulation; }
     [class*="st-key-card-"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
     [class*="st-key-card-ring-"]  { border-left-color: #F59E0B; background: #FFFBEB; }
     [class*="st-key-card-in-"]    { border-left-color: #16A34A; }
