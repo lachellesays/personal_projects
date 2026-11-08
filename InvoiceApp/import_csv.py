@@ -184,9 +184,9 @@ def import_into(engine, parsed: dict) -> dict:
             invoiced_ids.append(new_id)
 
     if invoiced_ids:
-        last = max(r['entry_date'] for r in rows if r['invoiced'] and r['entry_date'])
-        db.create_invoice(engine, through=last, invoice_date=last, title='April Invoice (imported)',
-                          status='paid', entry_ids=invoiced_ids)
+        dated = [r['entry_date'] for r in rows if r['invoiced'] and r['entry_date']]
+        db.create_invoice(engine, through=max(dated), invoice_date=max(dated), title='April Invoice (imported)',
+                          status='paid', entry_ids=invoiced_ids, period_start=min(dated))
     return db.totals(engine)
 
 

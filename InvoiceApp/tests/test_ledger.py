@@ -154,3 +154,35 @@ def test_pdf_builds(eng):
     inv = db.create_invoice(eng, date(2026, 3, 31), date(2026, 4, 1))
     pdf = build_pdf(db.invoice_detail(eng, inv), db.get_settings(eng))
     assert pdf.startswith(b'%PDF')
+
+
+def test_invoice_periods_follow_on(eng):
+    from invoice_pdf import period
+    db.add_entry(eng, 'sub', entry_date=date(2026, 3, 2), description='Sub', hours=1, rate_cents=2500)
+    first = db.create_invoice(eng, date(2026, 3, 31), date(2026, 4, 1))
+    inv1 = db.invoice_detail(eng, first)['invoice']
+    assert inv1['period_start'] == date(2026, 3, 2)                       # first invoice: its earliest row
+    assert db.default_period_start(eng, date(2026, 4, 30)) == date(2026, 4, 1)   # next: the day after
+    db.add_entry(eng, 'sub', entry_date=date(2026, 3, 20), description='Logged late', hours=1, rate_cents=2500)
+    second = db.create_invoice(eng, date(2026, 4, 30), date(2026, 5, 1))
+    det = db.invoice_detail(eng, second)
+    assert det['invoice']['period_start'] == date(2026, 4, 1)
+    assert [r['description'] for r in det['rows']] == ['Logged late']      # an older forgotten row is still included
+    assert period(det['invoice']) == 'April 1 – April 30, 2026'
+    assert period({'period_start': date(2026, 12, 1), 'period_end': date(2027, 1, 31)}) == 'December 1, 2026 – January 31, 2027'
+    with pytest.raises(ValueError):
+        db.create_invoice(eng, date(2026, 5, 31), date(2026, 6, 1), period_start=date(2026, 6, 2))
+
+
+def test_old_databases_get_a_period_start(tmp_path):
+    from sqlalchemy import create_engine, text
+    url = f'sqlite:///{tmp_path}/old.db'
+    old = create_engine(url)
+    with old.begin() as c:                                  # the invoices table as the first version made it
+        c.execute(text('CREATE TABLE inv_invoices (id INTEGER PRIMARY KEY, number INTEGER UNIQUE NOT NULL, title VARCHAR, '
+                       'invoice_date DATE NOT NULL, period_end DATE NOT NULL, status VARCHAR NOT NULL, created_at DATETIME)'))
+        c.execute(text("INSERT INTO inv_invoices VALUES (1, 1, '', '2026-03-08', '2026-03-08', 'paid', NULL), "
+                       "(2, 2, '', '2026-11-08', '2026-11-08', 'draft', NULL)"))
+    eng = db.get_engine(url)
+    starts = [i['period_start'] for i in sorted(db.all_invoices(eng), key=lambda i: i['number'])]
+    assert starts == [date(2026, 3, 8), date(2026, 3, 9)]  # #1 had no rows → its end date; #2 follows #1

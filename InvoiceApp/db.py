@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import (
     JSON, Column, Date, DateTime, Float, ForeignKey, Integer, MetaData, String, Table,
-    and_, create_engine, delete, func, insert, select, update,
+    and_, create_engine, delete, func, insert, inspect, select, text, update,
 )
 
 KINDS = {'class': 'Class', 'sub': 'Sub', 'trial': 'Trial secretary', 'credit_other': 'Other work',
@@ -62,6 +62,7 @@ invoices = Table(
     Column('number', Integer, nullable=False, unique=True),
     Column('title', String, default=''),                  # e.g. "April Invoice (imported)"
     Column('invoice_date', Date, nullable=False),
+    Column('period_start', Date),                         # the period the invoice covers, start to end
     Column('period_end', Date, nullable=False),           # work up to and including this date
     Column('status', String, nullable=False, default='draft'),
     Column('created_at', DateTime(timezone=True)),
@@ -107,7 +108,26 @@ def database_url() -> str:
 def get_engine(url: str = None):
     engine = create_engine(url or database_url(), pool_pre_ping=True)
     metadata.create_all(engine)
+    _upgrade(engine)
     return engine
+
+
+def _upgrade(engine):
+    """Bring a database made by an older version up to date (create_all only makes missing tables)."""
+    cols = {c['name'] for c in inspect(engine).get_columns('inv_invoices')}
+    if 'period_start' not in cols:
+        with engine.begin() as c:
+            c.execute(text('ALTER TABLE inv_invoices ADD COLUMN period_start DATE'))
+    # Invoices made before there was a start date: the day after the previous invoice, else its earliest row
+    with engine.begin() as c:
+        prev_end = None
+        for inv in c.execute(select(invoices).order_by(invoices.c.number)).mappings().all():
+            if inv['period_start'] is None:
+                first_row = c.execute(select(func.min(entries.c.entry_date))
+                                      .where(entries.c.invoice_id == inv['id'])).scalar()
+                start = prev_end + timedelta(days=1) if prev_end else (first_row or inv['period_end'])
+                c.execute(update(invoices).where(invoices.c.id == inv['id']).values(period_start=start))
+            prev_end = inv['period_end']
 
 
 # ── Money and hours ──────────────────────────────────────────────────────────
@@ -311,6 +331,17 @@ def next_invoice_number(engine) -> int:
         return int(c.execute(select(func.coalesce(func.max(invoices.c.number), 0))).scalar()) + 1
 
 
+def default_period_start(engine, through: date) -> date:
+    """The day after the last invoice's period ends, so periods don't overlap or leave gaps.
+    Before the first invoice: the earliest row that would go on it."""
+    with engine.connect() as c:
+        last_end = c.execute(select(invoices.c.period_end).order_by(invoices.c.number.desc()).limit(1)).scalar()
+    if last_end:
+        return last_end + timedelta(days=1)
+    rows = invoiceable(engine, through)
+    return rows[0]['entry_date'] if rows else through
+
+
 def invoiceable(engine, through: date) -> list:
     """Rows a new invoice through `through` would pick up: dated, not on an invoice, and not a class still
     marked Scheduled (it hasn't been taught yet, or still needs marking)."""
@@ -323,13 +354,18 @@ def invoiceable(engine, through: date) -> list:
 
 
 def create_invoice(engine, through: date, invoice_date: date, title: str = '', status: str = 'draft',
-                   entry_ids=None) -> int:
-    """Put the invoiceable rows (or exactly entry_ids) onto a new invoice. Returns its id."""
+                   entry_ids=None, period_start: date = None) -> int:
+    """Put the invoiceable rows (or exactly entry_ids) onto a new invoice. Returns its id.
+    Uninvoiced rows dated before period_start are still included, so nothing is ever left off."""
     ids = entry_ids if entry_ids is not None else [r['id'] for r in invoiceable(engine, through)]
+    if period_start is None:
+        period_start = default_period_start(engine, through)
+    if period_start > through:
+        raise ValueError('The period start is after its end.')
     number = next_invoice_number(engine)
     with engine.begin() as c:
         inv_id = c.execute(insert(invoices).values(number=number, title=title, invoice_date=invoice_date,
-                                                   period_end=through, status=status,
+                                                   period_start=period_start, period_end=through, status=status,
                                                    created_at=_now())).inserted_primary_key[0]
         if ids:
             c.execute(update(entries).where(and_(entries.c.id.in_(ids), entries.c.invoice_id.is_(None)))

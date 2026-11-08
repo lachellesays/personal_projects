@@ -22,7 +22,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import db
 import import_csv
-from invoice_pdf import build_pdf
+from invoice_pdf import build_pdf, period
 
 HERE = Path(__file__).parent
 
@@ -72,7 +72,7 @@ def num(v):
 
 
 templates.env.filters.update(money=db.money, d_short=d_short, num=num, dollars=lambda c: num((c or 0) / 100))
-templates.env.globals.update(KINDS=db.KINDS, CLASS_STATUSES=db.CLASS_STATUSES, LOCKED=db.LOCKED_STATUSES)
+templates.env.globals.update(KINDS=db.KINDS, CLASS_STATUSES=db.CLASS_STATUSES, LOCKED=db.LOCKED_STATUSES, period=period)
 
 
 def render(request: Request, name: str, status_code: int = 200, **ctx):
@@ -455,10 +455,12 @@ async def sessions_create(request: Request):
 
 # ── Invoices ─────────────────────────────────────────────────────────────────
 
-def _invoice_preview(through: date):
+def _invoice_preview(through: date, start: date = None):
     rows = db.invoiceable(engine(), through)
+    start = start or db.default_period_start(engine(), through)
     undated = [r for r in db.all_entries(engine()) if r['entry_date'] is None and r['invoice_id'] is None]
-    return {'through': through, 'rows': rows, 'unmarked': db.classes_to_mark(engine(), through), 'undated': undated,
+    return {'through': through, 'start': start, 'rows': rows, 'early': [r for r in rows if r['entry_date'] < start],
+            'unmarked': db.classes_to_mark(engine(), through), 'undated': undated,
             'undated_total': sum(r['amount_cents'] for r in undated),
             'work': sum(r['amount_cents'] for r in rows if r['amount_cents'] > 0),
             'paid': sum(r['amount_cents'] for r in rows if r['amount_cents'] < 0),
@@ -473,8 +475,8 @@ def invoices_page(request: Request):
 
 
 @app.get('/invoices/preview', response_class=HTMLResponse)
-def invoices_preview(request: Request, through: str = ''):
-    return render(request, '_invoice_preview.html', **_invoice_preview(_d(through) or date.today()))
+def invoices_preview(request: Request, through: str = '', start: str = ''):
+    return render(request, '_invoice_preview.html', **_invoice_preview(_d(through) or date.today(), _d(start)))
 
 
 @app.post('/invoices')
@@ -484,7 +486,11 @@ async def invoice_create(request: Request):
     if not db.invoiceable(engine(), through):
         flash(request, 'Nothing new to invoice up to that date.', 'error')
         return back('/invoices')
-    inv_id = db.create_invoice(engine(), through, _d(form.get('invoice_date')) or date.today())
+    start = _d(form.get('start')) or db.default_period_start(engine(), through)
+    if start > through:
+        flash(request, 'The period start is after the "work through" date.', 'error')
+        return back('/invoices')
+    inv_id = db.create_invoice(engine(), through, _d(form.get('invoice_date')) or date.today(), period_start=start)
     flash(request, 'Invoice created. Download the PDF, email it, then mark it Sent.')
     return back(f'/invoices#inv-{inv_id}')
 

@@ -3,6 +3,10 @@
 {% if undated %}<div class="flash warn">{{ undated|length }} row(s) have no date and won't be included:
   {% for r in undated %}{{ r.description }} ({{ r.amount_cents|money }}){{ ', ' if not loop.last }}{% endfor %}.
   Until they're dated, this invoice's balance is off by {{ (-undated_total)|money }}. Give them a date on the <a href="/ledger">Ledger</a>.</div>{% endif %}
+{% if start > through %}<div class="flash error">The period start is after the end date.</div>{% endif %}
+{% if early %}<div class="flash info">{{ early|length }} row(s) dated before {{ start.strftime('%-m/%-d') }} haven't been invoiced yet
+  ({% for r in early[:4] %}{{ r.description }} {{ r.entry_date.strftime('%-m/%-d') }}{{ ', ' if not loop.last }}{% endfor %}{{ ', …' if early|length > 4 }}).
+  They'll be on this invoice too; set the start to {{ early[0].entry_date.strftime('%-m/%-d/%Y') }} if you want the period to cover them.</div>{% endif %}
 {% if rows %}
   <p>{{ rows|length }} row(s): work {{ work|money }}, payments &amp; barter {{ paid|money }}.</p>
   <button class="btn primary big">Create invoice #{{ next_number }}</button>

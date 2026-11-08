@@ -30,6 +30,16 @@ RIGHT = ParagraphStyle('right', parent=BODY, alignment=TA_RIGHT)
 H2 = ParagraphStyle('h2', parent=_ss['Heading2'], fontSize=12, textColor=NAVY, spaceBefore=14, spaceAfter=6)
 
 
+def period(inv) -> str:
+    """'March 9 – November 8, 2026', or with both years when it crosses New Year."""
+    start, end = inv.get('period_start'), inv['period_end']
+    if not start or start == end:
+        return f"{end:%B %-d, %Y}"
+    if start.year == end.year:
+        return f"{start:%B %-d} – {end:%B %-d, %Y}"
+    return f"{start:%B %-d, %Y} – {end:%B %-d, %Y}"
+
+
 def _esc(s) -> str:
     return (str(s or '')).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
@@ -96,7 +106,7 @@ def build_pdf(detail: dict, settings: dict) -> bytes:
                  Paragraph(_lines(settings['instructor_contact']), SMALL)]
     head_right = [Paragraph(f"<b>Invoice #{inv['number']}</b>", RIGHT),
                   Paragraph(f"Date: {inv['invoice_date']:%B %-d, %Y}", RIGHT),
-                  Paragraph(f"Work through: {inv['period_end']:%B %-d, %Y}", RIGHT)]
+                  Paragraph(f"Period: {period(inv)}", RIGHT)]
     t = Table([[head_left, head_right]], colWidths=[full * 0.6, full * 0.4])
     t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 0),
                            ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))

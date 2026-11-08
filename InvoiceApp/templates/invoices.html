@@ -4,12 +4,16 @@
 <form class="panel" method="post" action="/invoices">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <h3>New invoice</h3>
-  <div class="row2">
-    <div><label class="l" for="th">Include work through</label>
+  <div class="row3 dates">
+    <div><label class="l" for="ps">Period start</label>
+      <input class="f" id="ps" type="date" name="start" value="{{ start.isoformat() }}"
+             hx-get="/invoices/preview" hx-trigger="change" hx-target="#inv-preview" hx-include="#ps, #th"></div>
+    <div><label class="l" for="th">Period end (work through)</label>
       <input class="f" id="th" type="date" name="through" value="{{ through.isoformat() }}"
-             hx-get="/invoices/preview" hx-trigger="change" hx-target="#inv-preview" hx-include="this"></div>
+             hx-get="/invoices/preview" hx-trigger="change" hx-target="#inv-preview" hx-include="#ps, #th"></div>
     <div><label class="l" for="idt">Invoice date</label><input class="f" id="idt" type="date" name="invoice_date" value="{{ today.isoformat() }}"></div>
   </div>
+  <p class="hint">The start fills in as the day after your last invoice's period ends, so no dates are skipped or doubled.</p>
   <div id="inv-preview">{% include "_invoice_preview.html" %}</div>
 </form>
 
@@ -17,7 +21,8 @@
 <div class="panel inv" id="inv-{{ inv.id }}">
   <div class="inv-head">
     <div><b>Invoice #{{ inv.number }}</b> <span class="pill p-{{ inv.status }}">{{ inv.status|title }}</span>
-      <div class="muted">{{ inv.invoice_date.strftime('%B %-d, %Y') }} · work through {{ inv.period_end.strftime('%-m/%-d/%Y') }}{% if inv.title %} · {{ inv.title }}{% endif %} · {{ det.rows|length }} rows</div></div>
+      <div class="period">{{ period(inv) }}</div>
+      <div class="muted">Invoiced {{ inv.invoice_date.strftime('%-m/%-d/%Y') }}{% if inv.title %} · {{ inv.title }}{% endif %} · {{ det.rows|length }} rows</div></div>
     <div class="inv-bal">{{ det.balance|money }}<span>balance owed</span></div>
   </div>
   <p class="muted">Previous balance {{ det.previous|money }} + work {{ det.credits|money }} − payments &amp; barter {{ (-det.debits)|money }} = <b>{{ det.balance|money }}</b></p>
