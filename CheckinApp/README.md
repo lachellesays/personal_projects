@@ -5,7 +5,7 @@ All data lives in a Railway **Postgres** database, so it doesn't use Supabase.
 
 | Who | Link | What they can do | PIN |
 |---|---|---|---|
-| Exhibitors | your app's address | Check in, see the running order and results | none |
+| Exhibitors | your app's address | Check in, see the running order, course maps and results | none |
 | Gate stewards | address + `?staff` | Also the Gate tab: check in, start/finish runs, scratch | `GATE_PIN` |
 | You (secretary) | address + `?staff` | Also Dash and Admin: upload run order, reorder, late entries, course maps, publish results | `ADMIN_PIN` |
 

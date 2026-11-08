@@ -417,3 +417,10 @@ def public_course_map(engine, trial_date: date, class_name: str, now, local_toda
     if not maps_released(engine, trial_date, now, local_today):
         return None
     return latest_course_map(engine, trial_date, class_name)
+
+
+def public_map_classes(engine, trial_date: date, now, local_today: date) -> set:
+    """Classes with a map exhibitors may see right now (empty before the release). Same rule as public_course_map."""
+    if not maps_released(engine, trial_date, now, local_today):
+        return set()
+    return classes_with_maps(engine, trial_date)

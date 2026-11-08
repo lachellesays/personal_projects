@@ -226,6 +226,10 @@ def test_course_maps_stay_hidden_until_release(tmp_path):
     assert db.public_course_map(eng, sat, 'Gamblers', datetime(2026, 11, 7, 23, 0, tzinfo=et), sat) is None
     db.set_map_release_time(eng, sat, sat_noon)
     assert db.public_course_map(eng, sat, 'Gamblers', sat_noon, sat) == b'SAT-MAP'
+    # The Course maps tab's class list follows the same rule, so class names don't show before the release
+    assert db.public_map_classes(eng, sat, sat_noon, sat) == {'Gamblers'}
+    assert db.public_map_classes(eng, sat, sat_noon - timedelta(minutes=1), sat) == set()
+    assert db.public_map_classes(eng, sun, sat_noon, sat) == set()
     import pytest
     with pytest.raises(ValueError):
         db.set_map_release_time(eng, sat, datetime(2026, 11, 7, 7, 0))   # a time without a time zone is refused
@@ -239,6 +243,7 @@ def test_public_pages_only_get_maps_through_the_release_check():
     public = src[:admin_start]
     assert "'latest_course_map'" not in public and 'latest_course_map(' not in public
     assert "read('public_course_map'" in public
+    assert "'classes_with_maps'" not in public and 'classes_with_maps(' not in public
     admin = src[admin_start:]
     assert admin.count("'latest_course_map'") == 1 and 'Show me this class' in admin
 

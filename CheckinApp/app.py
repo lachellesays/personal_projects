@@ -450,6 +450,23 @@ def running_order_html(class_df: pd.DataFrame, handler: str) -> str:
     return ''.join(parts)
 
 
+def map_now():
+    """(now rounded down to the minute, local date) for the release check.
+    Rounding down means a cached answer can only ever be later than the real release, never earlier."""
+    return datetime.now(timezone.utc).replace(second=0, microsecond=0), datetime.now(TZ).date()
+
+
+def map_wait_message():
+    """Why this day's maps aren't showing yet, or None if there's no time to announce."""
+    status = read('map_release_status', day)
+    rel = status['release_at']
+    if status['on_hold']:
+        return "Course maps will be posted soon."
+    if rel and datetime.now(timezone.utc) < rel:
+        return f"Course maps will be posted at {rel.astimezone(TZ).strftime('%-I:%M %p')}."
+    return None
+
+
 def render_order():
     if df.empty:
         st.info("The running order hasn't been posted yet.")
@@ -457,19 +474,14 @@ def render_order():
     sel_c = class_picker('ro_sel')
 
     # Exhibitors only get a map through public_course_map, which refuses before the day's release time.
-    # The minute is rounded down, so a cached answer can only ever be later than the real release, never earlier.
-    now_floor = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-    course_map = read('public_course_map', day, sel_c, now_floor, datetime.now(TZ).date())
+    course_map = read('public_course_map', day, sel_c, *map_now())
     if course_map:
         with st.expander("Course map"):
             st.image(course_map, use_container_width=True)
     else:
-        status = read('map_release_status', day)
-        rel = status['release_at']
-        if status['on_hold']:
-            st.caption("Course maps will be posted soon.")
-        elif rel and datetime.now(timezone.utc) < rel:
-            st.caption(f"Course maps will be posted at {rel.astimezone(TZ).strftime('%-I:%M %p')}.")
+        msg = map_wait_message()
+        if msg:
+            st.caption(msg)
 
     @st.fragment(run_every=10)
     def live_running_order_view(target_class, handler_num):
@@ -487,6 +499,37 @@ def render_order():
         st.caption(f"Updates automatically • {clock()}")
 
     live_running_order_view(sel_c, st.session_state.active_handler)
+
+
+# --- TAB: COURSE MAPS ---
+def render_maps():
+    if not day:
+        st.info("Course maps haven't been posted yet.")
+        return
+
+    # Same release rule as the Running order tab: both the class list and the images go through the release check.
+    released = read('public_map_classes', day, *map_now())
+    if not released:
+        # Only the waiting message refreshes, so the page flips over at the release time without a reload
+        @st.fragment(run_every=30)
+        def wait_for_release():
+            if read('public_map_classes', day, *map_now()):
+                st.rerun()
+            st.info(map_wait_message() or "Course maps haven't been posted yet.")
+            st.caption(f"This page checks again automatically • {clock()}")
+
+        wait_for_release()
+        return
+
+    ordered = [c for c in sorted_classes if c in released] + sorted(released - set(sorted_classes))
+    sticky_choice('map_view_sel', ordered, current_class())
+    st.pills("Class", ordered, key='map_view_sel', label_visibility="collapsed")
+    course_map = read('public_course_map', day, st.session_state.map_view_sel, *map_now())
+    if course_map:
+        st.image(course_map, use_container_width=True)
+    missing = [c for c in sorted_classes if c not in released]
+    if missing:
+        st.caption("Not posted yet: " + ', '.join(missing))
 
 
 # --- TAB: RESULTS ---
@@ -868,7 +911,7 @@ def render_admin():
                 with st.container(border=True):
                     if released:
                         when = f" (released {rel.astimezone(TZ).strftime('%a %-m/%-d at %-I:%M %p %Z')})" if rel else ""
-                        st.success(f"Exhibitors can see this day's course maps on the Running order tab{when}.")
+                        st.success(f"Exhibitors can see this day's course maps on the Course maps and Running order tabs{when}.")
                     elif status['on_hold']:
                         st.warning("On hold: hidden from exhibitors until you save a release time or click Release now.")
                     elif rel:
@@ -987,7 +1030,7 @@ def render_admin():
 
 # --- 5. TABS ---
 TABS = [("Check-in", render_checkin, 'checkin'), ("Running order", render_order, 'order'),
-        ("Results", render_results, 'results')]
+        ("Course maps", render_maps, 'maps'), ("Results", render_results, 'results')]
 if STAFF:
     TABS += [("Gate", render_gate, 'gate'), ("Dashboard", render_dash, 'dash'), ("Admin", render_admin, 'admin')]
 
