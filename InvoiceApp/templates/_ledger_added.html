@@ -1,0 +1,3 @@
+{% include "_ledger_row.html" %}
+{% with oob = true %}{% include "_totals.html" %}{% endwith %}
+<div id="toast" class="toast show" hx-swap-oob="true">Added “{{ r.description }}”.</div>

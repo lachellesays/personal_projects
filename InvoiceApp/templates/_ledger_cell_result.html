@@ -1,0 +1,6 @@
+{% if redraw and r %}{% include "_ledger_row.html" %}{% endif %}
+{% with oob = true %}
+{% include "_totals.html" %}
+{% if r and not redraw and r.kind in ('class', 'sub', 'trial') %}{% include "_ledger_amount.html" %}{% endif %}
+{% endwith %}
+{% if error %}<div id="toast" class="toast show error" hx-swap-oob="true">{{ error }}</div>{% endif %}

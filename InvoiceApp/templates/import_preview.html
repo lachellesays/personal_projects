@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Import check</h1>
+<div class="panel">
+  <p>{{ parsed.rows|length }} rows: credits {{ credits|money }}, debits {{ debits|money }}, balance owed <b>{{ (credits + debits)|money }}</b>.</p>
+  {% set sheet = parsed.sheet_totals.get('Total Owed') %}
+  {% if sheet is not none %}
+    {% if sheet == credits + debits %}<div class="flash ok">The sheet says Total Owed {{ sheet|money }} ✓ matches.</div>
+    {% else %}<div class="flash warn">The sheet says Total Owed {{ sheet|money }}. These don't match; check the rows below.</div>{% endif %}
+  {% endif %}
+  {% if parsed.review %}<h3>Worth a look after importing</h3><ul>{% for x in parsed.review %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+  <form method="post" action="/import">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <textarea name="text" hidden>{{ text }}</textarea>
+    {% if not empty %}<label class="check"><input type="checkbox" name="replace" value="1"> Replace everything currently in the app with this spreadsheet</label>{% endif %}
+    <button class="btn primary" style="margin-top:10px">Import</button> <a class="btn" href="/settings">Cancel</a>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,7 @@
+<label class="l">Weeks with no class (workshop weeks, holidays)</label>
+<div class="chips">{% for d in candidates %}
+  <label class="chip {{ 'on' if d in p.skips }}"><input type="checkbox" name="skip" value="{{ d.isoformat() }}" {{ 'checked' if d in p.skips }}>{{ d|d_short }}</label>
+{% endfor %}</div>
+<p class="muted">{{ p.first.strftime('%A') }}s{% if p.label %}, {{ p.label }} ({{ p.hours|num }} h × {{ (p.rate * 100)|money }} = {{ per_class|money }} per class){% endif %}</p>
+<p><b>Classes:</b> {% for d in classes %}Wk {{ loop.index }} {{ d|d_short }}{{ ', ' if not loop.last }}{% endfor %}
+{% if skipped %}<br><b>No class:</b> {% for d in skipped %}{{ d|d_short }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}</p>

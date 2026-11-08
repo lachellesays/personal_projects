@@ -1,0 +1,5 @@
+<div id="totals" class="stats"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <div class="stat"><span>Total credits</span><b>{{ totals.credits|money }}</b></div>
+  <div class="stat"><span>Total debits</span><b>{{ totals.debits|money }}</b></div>
+  <div class="stat main"><span>Balance owed</span><b>{{ totals.owed|money }}</b></div>
+</div>

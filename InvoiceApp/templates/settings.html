@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Settings</h1>
+<form class="panel" method="post" action="/settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h3>Invoice details</h3>
+  <div class="row2">
+    <div><label class="l" for="nm">Your name</label><input class="f" id="nm" name="instructor_name" value="{{ s.instructor_name }}">
+      <label class="l" for="ct">Your contact info (under your name)</label><textarea class="f" id="ct" name="instructor_contact" rows="3" placeholder="Email&#10;Phone">{{ s.instructor_contact }}</textarea></div>
+    <div><label class="l" for="cl">Bill to</label><input class="f" id="cl" name="client_name" value="{{ s.client_name }}">
+      <label class="l" for="ad">Their address / contact</label><textarea class="f" id="ad" name="client_address" rows="3">{{ s.client_address }}</textarea></div>
+  </div>
+  <div class="row2">
+    <div><label class="l" for="hr">Default $ per hour</label><input class="f" id="hr" type="number" step="any" min="0" name="hourly_rate" value="{{ s.hourly_rate_cents|int|dollars }}"></div>
+    <div><label class="l" for="tr">Default $ per trial run</label><input class="f" id="tr" type="number" step="any" min="0" name="trial_rate" value="{{ s.trial_rate_cents|int|dollars }}"></div>
+  </div>
+  <label class="l" for="pn">Note at the bottom of invoices</label>
+  <textarea class="f" id="pn" name="payment_note" rows="2" placeholder="e.g. Thank you! Venmo @...">{{ s.payment_note }}</textarea>
+  <button class="btn primary" style="margin-top:14px">Save</button>
+</form>
+
+<div class="panel">
+  <h3>Backup</h3>
+  {% if has_rows %}<a class="btn" href="/backup.csv">Download everything (CSV)</a>{% endif %}
+  <p class="hint">Railway doesn't back up the database on your plan, so download this now and then.</p>
+</div>
+
+<form class="panel" method="post" action="/import/preview" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h3>Import the old spreadsheet</h3>
+  <p class="hint">In Google Sheets: File → Download → Comma-separated values (.csv). You'll see a summary before anything is saved.</p>
+  <input class="f" type="file" name="file" accept=".csv,text/csv" required>
+  <button class="btn" style="margin-top:10px">Check file</button>
+</form>
+
+<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn small">Lock (sign out)</button></form>
+{% endblock %}

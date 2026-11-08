@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"useTemplateFragments": true}'>
+  <title>{% block title %}Level Up Invoicing{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
+{% block body %}
+  <header class="top">
+    <a class="brand" href="/">Level Up Invoicing</a>
+    <nav class="tabs">
+      {% for key, label, url in [('home','Home','/'), ('log','Log','/log'), ('ledger','Ledger','/ledger'),
+                                 ('sessions','Sessions','/sessions'), ('invoices','Invoices','/invoices'),
+                                 ('settings','Settings','/settings')] %}
+        <a href="{{ url }}" class="{{ 'on' if tab == key }}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+  </header>
+  <main class="{% block mainclass %}main{% endblock %}">
+    {% if flash %}<div class="flash {{ flash.kind }}">{{ flash.msg }}</div>{% endif %}
+    {% block main %}{% endblock %}
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+{% endblock %}
+</body>
+</html>

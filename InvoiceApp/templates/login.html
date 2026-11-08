@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="authwrap"><form class="authcard" method="post" action="/login">
+  <h1>Level Up Invoicing</h1>
+  {% if not pin_set %}<div class="flash error">APP_PIN is not set. Add it as a Railway variable (or to .env locally).</div>{% endif %}
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label class="l" for="pin">PIN</label>
+  <input class="f" id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" autofocus>
+  <button class="btn primary big" style="margin-top:14px">Enter</button>
+</form></div>
+{% endblock %}

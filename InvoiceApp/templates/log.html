@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Log</h1>
+<nav class="seg">{% for k, label in LOG_KINDS.items() %}<a href="/log?kind={{ k }}" class="{{ 'on' if kind == k }}">{{ label }}</a>{% endfor %}</nav>
+<form class="panel" method="post" action="/log/{{ kind }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% if kind == 'sub' %}
+    <div class="row2">
+      <div><label class="l" for="d">Date</label><input class="f" id="d" type="date" name="date" value="{{ today.isoformat() }}"></div>
+      <div><label class="l" for="who">Whose class?</label><input class="f" id="who" name="description" placeholder="e.g. James"></div>
+    </div>
+    <div class="row3">
+      <div><label class="l" for="st">Start</label><input class="f" id="st" type="time" name="start" value="18:00" step="900"></div>
+      <div><label class="l" for="en">End</label><input class="f" id="en" type="time" name="end" value="20:00" step="900"></div>
+      <div><label class="l" for="rt">$ per hour</label><input class="f" id="rt" type="number" name="rate" step="any" min="0" value="{{ rate|dollars }}" inputmode="decimal"></div>
+    </div>
+  {% elif kind == 'trial' %}
+    <div class="row2">
+      <div><label class="l" for="tn">Trial</label><input class="f" id="tn" name="description" placeholder="e.g. UKI Trial Nov 2026"></div>
+      <div><label class="l" for="d">Date (last day)</label><input class="f" id="d" type="date" name="date" value="{{ today.isoformat() }}"></div>
+    </div>
+    <div class="row2">
+      <div><label class="l" for="rn">Runs</label><input class="f" id="rn" type="number" name="runs" min="0" step="1" inputmode="numeric"></div>
+      <div><label class="l" for="rt">$ per run</label><input class="f" id="rt" type="number" name="rate" step="any" min="0" value="{{ trial_rate|dollars }}" inputmode="decimal"></div>
+    </div>
+  {% else %}
+    <div class="row2">
+      <div><label class="l" for="d">Date</label><input class="f" id="d" type="date" name="date" value="{{ today.isoformat() }}"></div>
+      <div><label class="l" for="v">{{ 'Value' if kind == 'barter' else 'Amount' }} ($)</label><input class="f" id="v" type="number" name="value" step="any" min="0" inputmode="decimal"></div>
+    </div>
+    <label class="l" for="ds">{{ {'barter': 'What did you get?', 'payment': 'Description', 'credit_other': 'What was the work?'}[kind] }}</label>
+    <input class="f" id="ds" name="description" placeholder="{{ {'barter': 'e.g. Wall jump, or Trial 4/17-4/19 entries', 'payment': 'e.g. Payment for Invoice #2', 'credit_other': 'e.g. Course building'}[kind] }}">
+    {% if kind == 'barter' %}<p class="hint">Barter counts like a payment: its value comes off what you're owed.</p>{% endif %}
+  {% endif %}
+  <label class="l" for="nt">Notes (optional)</label><input class="f" id="nt" name="notes">
+  <button class="btn primary big" style="margin-top:16px">Add {{ LOG_KINDS[kind].lower() }}</button>
+</form>
+{% endblock %}

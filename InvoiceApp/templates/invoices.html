@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Invoices</h1>
+<form class="panel" method="post" action="/invoices">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h3>New invoice</h3>
+  <div class="row2">
+    <div><label class="l" for="th">Include work through</label>
+      <input class="f" id="th" type="date" name="through" value="{{ through.isoformat() }}"
+             hx-get="/invoices/preview" hx-trigger="change" hx-target="#inv-preview" hx-include="this"></div>
+    <div><label class="l" for="idt">Invoice date</label><input class="f" id="idt" type="date" name="invoice_date" value="{{ today.isoformat() }}"></div>
+  </div>
+  <div id="inv-preview">{% include "_invoice_preview.html" %}</div>
+</form>
+
+{% for det in invoices %}{% set inv = det.invoice %}
+<div class="panel inv" id="inv-{{ inv.id }}">
+  <div class="inv-head">
+    <div><b>Invoice #{{ inv.number }}</b> <span class="pill p-{{ inv.status }}">{{ inv.status|title }}</span>
+      <div class="muted">{{ inv.invoice_date.strftime('%B %-d, %Y') }} · work through {{ inv.period_end.strftime('%-m/%-d/%Y') }}{% if inv.title %} · {{ inv.title }}{% endif %} · {{ det.rows|length }} rows</div></div>
+    <div class="inv-bal">{{ det.balance|money }}<span>balance owed</span></div>
+  </div>
+  <p class="muted">Previous balance {{ det.previous|money }} + work {{ det.credits|money }} − payments &amp; barter {{ (-det.debits)|money }} = <b>{{ det.balance|money }}</b></p>
+  <div class="inv-actions">
+    <a class="btn primary" href="/invoices/{{ inv.id }}/pdf" target="_blank" rel="noopener">Open PDF</a>
+    {% if inv.status == 'draft' %}
+      <form method="post" action="/invoices/{{ inv.id }}/sent"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">Mark sent</button></form>
+    {% endif %}
+    {% if inv.status != 'paid' %}
+      <details class="pop"><summary class="btn">Mark paid</summary>
+        <form class="popbody wide" method="post" action="/invoices/{{ inv.id }}/paid">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label class="check"><input type="checkbox" name="log_payment" value="1" checked> Also log the payment</label>
+          <div class="row2">
+            <div><label class="l">Amount received ($)</label><input class="f" type="number" name="amount" step="any" min="0" value="{{ (det.balance if det.balance > 0 else 0)|dollars }}"></div>
+            <div><label class="l">Date received</label><input class="f" type="date" name="paid_date" value="{{ today.isoformat() }}"></div>
+          </div>
+          <p class="hint">Paid in barter instead? Untick "Also log the payment" and add the barter on the Log tab.</p>
+          <button class="btn primary">Save</button>
+        </form></details>
+    {% endif %}
+    <details class="pop"><summary class="btn danger">Void</summary>
+      <form class="popbody" method="post" action="/invoices/{{ inv.id }}/void">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <p class="hint">Deletes this invoice and puts its rows back to not invoiced. Use this to fix a row on a sent invoice, then make a new one.</p>
+        <button class="btn danger">Void invoice #{{ inv.number }}</button>
+      </form></details>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

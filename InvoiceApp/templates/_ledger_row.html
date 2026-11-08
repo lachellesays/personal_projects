@@ -1,0 +1,41 @@
+{%- set locked = r.invoice_status in LOCKED -%}
+{%- set computed = r.kind in ('class', 'sub', 'trial') -%}
+{%- set billable = computed and r.status != 'no_class' -%}
+{%- macro cell(field, value, type='text', cls='', extra='') -%}
+  <input class="c {{ cls }}" type="{{ type }}" name="value" value="{{ value }}" {{ extra|safe }} aria-label="{{ field }}"
+         hx-post="/entries/{{ r.id }}/cell" hx-trigger="change" hx-swap="none" hx-vals='{"field": "{{ field }}"}'>
+{%- endmacro -%}
+<tr id="row-{{ r.id }}" class="{{ 'locked' if locked }} k-{{ r.kind }} {{ 's-' ~ r.status if r.status }}">
+{% if locked %}
+  <td>{{ r.entry_date.strftime('%-m/%-d/%Y') if r.entry_date else '' }}</td>
+  <td>{{ KINDS[r.kind] }}</td>
+  <td>{{ r.description }}</td>
+  <td>{{ CLASS_STATUSES.get(r.status, '') }}</td>
+  <td>{{ r.time_label or '' }}</td>
+  <td>{{ (r.quantity if r.kind == 'trial' else r.hours)|num }}</td>
+  <td>{{ r.rate_cents|money if computed and r.rate_cents else '' }}</td>
+  <td class="r amt">{{ r.amount_cents|money }}</td>
+  <td title="On invoice #{{ r.invoice_number }} ({{ r.invoice_status }})">🔒 #{{ r.invoice_number }}</td>
+  <td>{{ r.comments or '' }}</td>
+  <td></td>
+{% else %}
+  <td>{{ cell('entry_date', r.entry_date.isoformat() if r.entry_date else '', 'date', 'date ' ~ ('missing' if not r.entry_date)) }}</td>
+  <td><select class="c" name="value" aria-label="type" hx-post="/entries/{{ r.id }}/cell" hx-trigger="change" hx-swap="none" hx-vals='{"field": "kind"}'>
+    {% for k, label in KINDS.items() %}<option value="{{ k }}" {{ 'selected' if r.kind == k }}>{{ label }}</option>{% endfor %}</select></td>
+  <td>{{ cell('description', r.description, cls='wide') }}</td>
+  <td>{% if r.kind == 'class' %}<select class="c" name="value" aria-label="status" hx-post="/entries/{{ r.id }}/cell" hx-trigger="change" hx-swap="none" hx-vals='{"field": "status"}'>
+    {% for k, label in CLASS_STATUSES.items() %}<option value="{{ k }}" {{ 'selected' if r.status == k }}>{{ label }}</option>{% endfor %}</select>{% endif %}</td>
+  <td>{% if r.kind in ('class', 'sub') %}{{ cell('time_label', r.time_label or '', cls='time') }}{% endif %}</td>
+  <td>{% if billable %}{{ cell('qty', (r.quantity if r.kind == 'trial' else r.hours)|num, 'number', 'num', 'step="any" min="0" inputmode="decimal"') }}{% endif %}</td>
+  <td>{% if billable %}<span class="money-in"><span class="pre">$</span>{{ cell('rate', r.rate_cents|dollars, 'number', 'num', 'step="any" min="0" inputmode="decimal"') }}</span>{% endif %}</td>
+  {% if computed %}
+    <td class="r amt">{% include "_ledger_amount.html" %}</td>
+  {% else %}
+    <td class="r amt"><span class="money-in"><span class="pre">{{ '−' if r.kind in ('barter', 'payment') }}$</span>{{ cell('value', r.amount_cents|abs|dollars, 'number', 'num', 'step="any" min="0" inputmode="decimal"') }}</span></td>
+  {% endif %}
+  <td>{{ ('#' ~ r.invoice_number ~ ' draft') if r.invoice_number else '' }}</td>
+  <td>{{ cell('comments', r.comments or '', cls='wide') }}</td>
+  <td><button class="x" title="Delete row" aria-label="Delete row" hx-post="/entries/{{ r.id }}/delete" hx-target="closest tr" hx-swap="outerHTML"
+              hx-confirm="Delete “{{ r.description }}”?">×</button></td>
+{% endif %}
+</tr>

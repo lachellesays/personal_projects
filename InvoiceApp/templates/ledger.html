@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block mainclass %}main wide{% endblock %}
+{% block main %}
+{% include "_totals.html" %}
+
+<form class="filters" method="get" action="/ledger" onchange="this.submit()">
+  <select class="f" name="month" aria-label="Month"><option value="">All months</option>
+    {% for m in months %}<option value="{{ m }}" {{ 'selected' if f.month == m }}>{{ month_label(m) }}</option>{% endfor %}</select>
+  <select class="f" name="kind" aria-label="Type"><option value="">All types</option>
+    {% for k, label in KINDS.items() %}<option value="{{ k }}" {{ 'selected' if f.kind == k }}>{{ label }}</option>{% endfor %}</select>
+  <select class="f" name="inv" aria-label="Invoiced"><option value="">Invoiced or not</option>
+    <option value="no" {{ 'selected' if f.inv == 'no' }}>Not invoiced</option>
+    <option value="yes" {{ 'selected' if f.inv == 'yes' }}>Invoiced</option></select>
+</form>
+<p class="muted">Click any cell to change it; it saves when you press Enter or move to another cell. Esc undoes a cell you're typing in.
+  Rows on a sent or paid invoice are locked 🔒 (void the invoice to change them).</p>
+
+<div class="sheet-wrap">
+<table class="sheet">
+  <thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Status</th><th>Time</th><th>Hrs / runs</th><th>Rate</th>
+    <th class="r">Amount</th><th>Inv</th><th>Comments</th><th></th></tr></thead>
+  <tbody id="ledger-body">
+    {% for r in rows %}{% include "_ledger_row.html" %}{% endfor %}
+  </tbody>
+</table>
+</div>
+{% if not rows %}<p class="muted">No rows{% if f.month or f.kind or f.inv %} match these filters{% endif %}.</p>{% endif %}
+
+<form class="panel addrow" hx-post="/entries" hx-target="#ledger-body" hx-swap="beforeend"
+      hx-on::after-request="if (event.detail.successful) { this.reset(); }">
+  <h3>Add a row</h3>
+  <div class="addgrid">
+    <select class="f" name="kind" aria-label="Type">{% for k, label in KINDS.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select>
+    <input class="f" type="date" name="entry_date" value="{{ today.isoformat() }}" aria-label="Date">
+    <input class="f" name="description" placeholder="Description" aria-label="Description">
+    <input class="f" type="number" step="any" min="0" name="qty" placeholder="Hours or runs" aria-label="Hours or runs">
+    <input class="f" type="number" step="any" min="0" name="value" placeholder="$ (barter, payment, other)" aria-label="Dollar value">
+    <button class="btn primary">Add</button>
+  </div>
+  <p class="hint">Classes and subs use your default hourly rate, trials your default per-run rate. You can change anything in the row afterwards.</p>
+</form>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+<div class="stats">
+  <div class="stat main"><span>Balance owed</span><b>{{ totals.owed|money }}</b></div>
+  <div class="stat"><span>Work not yet invoiced</span><b>{{ totals.new_work|money }}</b></div>
+</div>
+{% if totals.new_debits %}<p class="muted">Payments &amp; barter since the last invoice: {{ totals.new_debits|money }}</p>{% endif %}
+
+<h2>Classes to mark</h2>
+{% if empty %}
+  <div class="flash info">No data yet. <a href="/settings">Import your 2026 spreadsheet</a> or <a href="/sessions">add a session</a>.</div>
+{% elif not to_mark %}
+  <p class="muted">Nothing to mark this week.{% if next_class %} Next class: {{ next_class.description }}, {{ next_class.entry_date|d_short }}.{% else %} Add your next session on the <a href="/sessions">Sessions</a> tab.{% endif %}</p>
+{% endif %}
+{% for r in to_mark %}
+  {% set late = r.entry_date < today %}
+  <form class="card {{ 'late' if late }}" hx-target="#home-body">
+    <div class="card-title">{{ r.description }}</div>
+    <div class="card-sub">{{ r.entry_date|d_short }}{% if r.time_label %} · {{ r.time_label }}{% endif %} ·
+      {{ 'Needs marking' if late else ('Today' if r.entry_date == today else 'Coming up') }}</div>
+    <label class="inline">Hours <input class="f hours" name="hours" type="number" step="0.5" min="0" max="12" value="{{ r.hours|num }}" inputmode="decimal"></label>
+    <div class="actions">
+      <button class="btn primary" hx-post="/classes/{{ r.id }}/taught">Taught</button>
+      <details class="pop"><summary class="btn">Subbed</summary>
+        <div class="popbody"><input class="f" name="who" placeholder="Who subbed?">
+          <button class="btn primary" hx-post="/classes/{{ r.id }}/subbed_out">Save</button></div></details>
+      <details class="pop"><summary class="btn">Cancelled</summary>
+        <div class="popbody"><input class="f" name="why" placeholder="Reason (optional)">
+          <button class="btn primary" hx-post="/classes/{{ r.id }}/cancelled">Save</button></div></details>
+    </div>
+  </form>
+{% endfor %}

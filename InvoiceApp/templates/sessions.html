@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Sessions</h1>
+<form class="panel" method="post" action="/sessions" hx-post="/sessions/preview" hx-trigger="change"
+      hx-target="#preview" hx-swap="innerHTML">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <h3>New session</h3>
+  <div class="row3">
+    <div><label class="l" for="nm">Name</label><input class="f" id="nm" name="name" value="{{ p.name }}"></div>
+    <div><label class="l" for="fd">First class</label><input class="f" id="fd" type="date" name="first_date" value="{{ p.first.isoformat() }}"></div>
+    <div><label class="l" for="wk">Weeks</label><input class="f" id="wk" type="number" name="weeks" min="1" max="20" value="{{ p.weeks }}"></div>
+  </div>
+  <div class="row3">
+    <div><label class="l" for="st">Start</label><input class="f" id="st" type="time" name="start" value="{{ p.start }}" step="900"></div>
+    <div><label class="l" for="en">End</label><input class="f" id="en" type="time" name="end" value="{{ p.end }}" step="900"></div>
+    <div><label class="l" for="rt">$ per hour</label><input class="f" id="rt" type="number" name="rate" step="any" min="0" value="{{ p.rate|num }}"></div>
+  </div>
+  <div id="preview">{% include "_session_preview.html" %}</div>
+  <button class="btn primary big" style="margin-top:14px">Create session</button>
+</form>
+
+{% if sessions %}
+<h2>Sessions</h2>
+<div class="sheet-wrap"><table class="list">
+  <thead><tr><th>Session</th><th>Starts</th><th>Weeks</th><th>Time</th><th class="r">Hours</th><th class="r">Rate</th></tr></thead>
+  <tbody>{% for s in sessions %}<tr><td>{{ s.name }}</td><td>{{ s.first_date.strftime('%-m/%-d/%Y') }}</td><td>{{ s.weeks }}</td>
+    <td>{{ s.time_label }}</td><td class="r">{{ s.hours|num }}</td><td class="r">{{ s.rate_cents|money }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endif %}
+{% endblock %}

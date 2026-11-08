@@ -8,7 +8,7 @@ and **Balance owed** is what's left (the sheet's Total Owed).
 |---|---|
 | Home | Balance owed, and this week's classes: tap **Taught**, **Subbed** or **Cancelled** |
 | Log | Add a sub, trial secretary work (runs × $/run), barter, a payment, or other work |
-| Ledger | Every row, like the spreadsheet. Tap a row to edit or delete it |
+| Ledger | Every row, like the spreadsheet, and you edit it right there: click a cell, type, press Enter or Tab. Add rows at the bottom, × deletes |
 | Sessions | Create the next 6-week session (skip workshop weeks; later weeks slide back) |
 | Invoices | Make an invoice, download the PDF, mark it Sent / Paid, or void it |
 | Settings | Your name and contact info, who you bill, rates, CSV backup, spreadsheet import |
@@ -30,6 +30,7 @@ Rows on a **sent** or **paid** invoice are locked. Void the invoice to change th
    |---|---|
    | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (pick the new database from the suggestions) |
    | `APP_PIN` | the PIN you'll type to open the app |
+   | `SECRET_KEY` | a long random string (keeps you signed in; changing it signs you out) |
 
 4. **Settings → Networking → Generate Domain.**
 5. Open the app, go to **Settings**, fill in your contact info and Level Up's address, then
@@ -44,8 +45,11 @@ Railway's Hobby plan doesn't back up the database, so use **Settings → Downloa
 cd ~/Documents/GitHub/personal_projects/InvoiceApp
 uv venv --python 3.12 .venv && uv pip install -p .venv/bin/python -r requirements.txt
 echo "APP_PIN=1234" > .env
-.venv/bin/streamlit run app.py
+.venv/bin/uvicorn main:app --reload
 ```
+Then open http://localhost:8000.
 Without `DATABASE_URL` it uses a local file, `invoice_local.db`.
 
-Tests: `uv pip install -p .venv/bin/python pytest && .venv/bin/python -m pytest`
+Tests: `uv pip install -p .venv/bin/python pytest httpx && .venv/bin/python -m pytest`
+
+Code: `main.py` (pages and routes), `templates/` (HTML, HTMX), `static/` (CSS, ledger keys), `db.py` (ledger and money rules), `import_csv.py`, `invoice_pdf.py`.
