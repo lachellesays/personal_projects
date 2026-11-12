@@ -1,0 +1,12 @@
+<div id="dayof-lookup">
+{% if q and not found %}<p class="muted">Nobody in the directory matches “{{ q }}”. Type their details below.</p>{% endif %}
+{% for h in found %}{% for g in h.dogs or [None] %}
+  <button type="button" class="pick" data-fill='{{ {"first_name": h.first_name, "last_name": h.last_name, "handler_number": h.handler_number,
+      "dog_number": g.dog_number if g else "", "dog_name": g.dog_name if g else "", "breed": g.breed if g else "",
+      "height": (g.height if g else 0)|string, "class_type": g.class_type if g else "Regular", "level": g.level if g else "",
+      "speedstakes_level": g.speedstakes_level if g else ""}|tojson }}' onclick="fillDayOf(this)">
+    <b>{{ h.first_name }} {{ h.last_name }}</b>{% if h.handler_number %} <span class="muted">#{{ h.handler_number }}</span>{% endif %}
+    {% if g %}— {{ g.dog_name }} <span class="muted">{{ g.height or '?' }}"{% if g.class_type == 'Select' %} S{% endif %} · {{ g.level or '?' }}</span>{% else %}<span class="muted">— no dogs on file</span>{% endif %}
+  </button>
+{% endfor %}{% endfor %}
+</div>

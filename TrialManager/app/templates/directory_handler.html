@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ h.first_name }} {{ h.last_name }} · Handlers & dogs{% endblock %}
+{% block main %}
+<div class="titlebar"><div><h1>{{ h.first_name }} {{ h.last_name }}</h1>
+  <div class="sub">{% if h.handler_number %}UKI #{{ h.handler_number }} · {% endif %}details from {{ h.info_date or 'unknown date' }} ({{ h.source }})</div></div>
+  <a class="btn" href="/directory">Back to search</a></div>
+{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+<form class="panel" method="post" action="/directory/h/{{ h.id }}" style="margin-top:14px"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <h3>Handler</h3>
+  <div class="row3"><div><label class="l">UKI #</label><input class="f" name="handler_number" value="{{ h.handler_number }}" inputmode="numeric"></div>
+    <div><label class="l">First name</label><input class="f" name="first_name" value="{{ h.first_name }}"></div>
+    <div><label class="l">Last name</label><input class="f" name="last_name" value="{{ h.last_name }}"></div></div>
+  <div class="row2"><div><label class="l">Email</label><input class="f" name="email" value="{{ h.email }}" type="email"></div>
+    <div><label class="l">Phone</label><input class="f" name="phone" value="{{ h.phone }}" inputmode="tel"></div></div>
+  <div class="row2"><div><label class="l">Address</label><input class="f" name="addr_line1" value="{{ h.addr_line1 }}"></div>
+    <div><label class="l">Address line 2</label><input class="f" name="addr_line2" value="{{ h.addr_line2 }}"></div></div>
+  <div class="row3"><div><label class="l">City</label><input class="f" name="city" value="{{ h.city }}"></div>
+    <div><label class="l">State</label><input class="f" name="state" value="{{ h.state }}"></div>
+    <div><label class="l">ZIP</label><input class="f" name="postal" value="{{ h.postal }}" inputmode="numeric"></div></div>
+  <button class="btn primary" style="margin-top:12px">Save handler</button>
+</form>
+
+<h3 style="margin-top:20px">Dogs</h3>
+{% for g in h.dogs + [None] %}
+<form class="panel" method="post" action="/directory/h/{{ h.id }}/dog"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="dog_id" value="{{ g.id if g else '' }}">
+  {% if not g %}<h3>Add a dog</h3>{% elif g.info_date %}<div class="muted">Details from {{ g.info_date }} ({{ g.source }})</div>{% endif %}
+  <div class="row3"><div><label class="l">Dog's name</label><input class="f" name="dog_name" value="{{ g.dog_name if g else '' }}"></div>
+    <div><label class="l">UKI #</label><input class="f" name="dog_number" value="{{ g.dog_number if g else '' }}" inputmode="numeric"></div>
+    <div><label class="l">Breed</label><input class="f" name="breed" value="{{ g.breed if g else '' }}"></div></div>
+  <div class="row3"><div><label class="l">Height · Regular/Select</label><div class="row2">
+      <select class="f" name="height"><option value="">?</option>{% for x in heights %}<option {{ 'selected' if g and g.height == x }}>{{ x }}</option>{% endfor %}</select>
+      <select class="f" name="class_type">{% for x in ['Regular', 'Select'] %}<option {{ 'selected' if g and g.class_type == x }}>{{ x }}</option>{% endfor %}</select></div></div>
+    <div><label class="l">Level</label><select class="f" name="level"><option value="">?</option>{% for x in levels %}<option {{ 'selected' if g and g.level == x }}>{{ x }}</option>{% endfor %}</select></div>
+    <div><label class="l">Speedstakes level</label><select class="f" name="speedstakes_level"><option value="">Same as level</option>{% for x in levels %}<option {{ 'selected' if g and g.speedstakes_level == x }}>{{ x }}</option>{% endfor %}</select></div></div>
+  <div class="toolbar" style="margin-top:12px"><button class="btn primary">{{ 'Save dog' if g else 'Add dog' }}</button>
+    {% if g %}<button class="btn danger" name="delete" value="1" onclick="return confirm('Remove {{ g.dog_name|e }} from the directory? Past entries are not affected.')">Remove</button>{% endif %}</div>
+</form>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Handlers & dogs{% endblock %}
+{% block main %}
+<div class="titlebar"><div><h1>Handlers &amp; dogs</h1>
+  <div class="sub">{{ counts.handlers }} handlers and {{ counts.dogs }} dogs from past entries, UKI Manager and results.</div></div>
+  <a class="btn" href="/directory/import">Import</a></div>
+{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+{% if not counts.handlers %}<div class="flash info">The directory is empty. Start on the <a href="/directory/import">Import</a> page.</div>{% endif %}
+<div class="search" style="margin-top:14px">
+  <input class="f" type="search" name="q" value="{{ q }}" placeholder="UKI # (handler or dog), name, dog's name or email" autofocus autocomplete="off"
+         hx-get="/directory" hx-trigger="input changed delay:250ms, search" hx-target="#dir-results" hx-swap="outerHTML" aria-label="Search">
+</div>
+{% include "_dir_results.html" %}
+{% endblock %}

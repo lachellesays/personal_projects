@@ -1,0 +1,9 @@
+<div id="paper-results">
+{% if q and not found %}<p class="muted">No one in the directory matches “{{ q }}”. Use “Someone new” below.</p>{% endif %}
+{% for h in found %}
+  <a class="pick" href="/shows/{{ slug }}/paper/new?h={{ h.id }}">
+    <b>{{ h.first_name }} {{ h.last_name }}</b> <span class="muted">{% if h.handler_number %}#{{ h.handler_number }}{% endif %}{% if h.city %} · {{ h.city }}{% if h.state %}, {{ h.state }}{% endif %}{% endif %}</span>
+    <span class="muted pick-dogs">{% for g in h.dogs %}{{ g.dog_name }}{% if g.dog_number %} #{{ g.dog_number }}{% endif %}{{ ', ' if not loop.last }}{% else %}no dogs on file{% endfor %}</span>
+  </a>
+{% endfor %}
+</div>

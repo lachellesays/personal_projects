@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Import · Handlers & dogs{% endblock %}
+{% block main %}
+<div class="titlebar"><div><h1>Fill the handler &amp; dog directory</h1>
+  <div class="sub">Now {{ counts.handlers }} handlers and {{ counts.dogs }} dogs. Importing again is safe: people are matched by UKI #, newer details win, and older details only fill blanks.</div></div>
+  <a class="btn" href="/directory">Back to search</a></div>
+{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+<div class="dl-grid" style="margin-top:14px">
+  <form class="panel" method="post" action="/directory/import/shows"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <h3>1. Every show's entries</h3>
+    <p class="hint">JotForm and paper entries from all the shows in Trial Manager, with your typo fixes. After this, each JotForm refresh and paper entry keeps the directory up to date by itself.</p>
+    <button class="btn primary">Read all shows</button>
+  </form>
+  <form class="panel" method="post" action="/directory/import/uki" enctype="multipart/form-data"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <h3>2. UKI Manager handlers</h3>
+    <p class="hint">The handlers grid export (e.g. grid_handlers_1.csv): UKI #, name, address, email, phone.</p>
+    <input class="f" type="file" name="file" accept=".csv,text/csv" required>
+    <label class="l">Exported on</label><input class="f" type="date" name="info_date" value="{{ today }}">
+    <p class="hint">Used to decide which details are newer, so an old export never overwrites a newer entry.</p>
+    <button class="btn primary">Import handlers</button>
+  </form>
+  <form class="panel" method="post" action="/directory/import/results" enctype="multipart/form-data"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <h3>3. Past results workbooks</h3>
+    <p class="hint">UKI results spreadsheets with a Raw Results sheet (ShowData_6898.xlsx, 6908_ResultsSpreadsheet.xlsx…): dog UKI #, breed, height, level and Speedstakes level. You can pick several at once.</p>
+    <input class="f" type="file" name="files" accept=".xlsx" multiple required>
+    <button class="btn primary" style="margin-top:10px">Import results</button>
+  </form>
+</div>
+{% endblock %}

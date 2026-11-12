@@ -6,7 +6,7 @@
   {% for r in rows %}
     <tr class="{{ 'scr' if r.scratched }}">
       <td>{% if r.first_of_handler %}<span class="hname">{{ r.handler_name }}</span>{% if r.new %}<span class="tag new">NEW</span>{% endif %}<div class="muted">#{{ r.handler_number }}</div>{% endif %}</td>
-      <td><span class="dname">{{ r.dog_name }}</span>{% if r.fixed %}<span class="tag fix">FIXED</span>{% endif %}{% if r.classes_changed %}<span class="tag fix">CLASSES CHANGED</span>{% endif %}
+      <td><span class="dname">{{ r.dog_name }}</span>{% if (r.submission_id|string).startswith('paper-') %}<a class="tag new" href="/shows/{{ slug }}/paper/{{ r.submission_id[6:] }}" title="Entered from a paper form. Click to edit it.">PAPER</a>{% endif %}{% if r.fixed %}<span class="tag fix">FIXED</span>{% endif %}{% if r.classes_changed %}<span class="tag fix">CLASSES CHANGED</span>{% endif %}
         <div class="muted">{{ r.breed }}{% if r.dog_number %} · #{{ r.dog_number }}{% endif %}</div></td>
       <td class="hide-sm">{{ r.height }}<div class="muted">{{ r.level }}</div></td>
       <td class="num"><a class="clink" href="/shows/{{ slug }}/entries/{{ r.submission_id }}/classes" title="Change {{ r.dog_name }}'s classes">{{ r.sat }}</a></td>

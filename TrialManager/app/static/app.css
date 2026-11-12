@@ -211,3 +211,14 @@ ol.class-order .cname { min-width: 150px; }
 ol.class-order .mini-l { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
 ol.class-order li.sortable-ghost { background: var(--blue-bg); }
 a.clink { color: var(--navy); font-weight: 700; text-decoration: underline dotted; }
+
+/* Directory lookups and paper entries */
+.pick { display: block; width: 100%; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 9px;
+        padding: 9px 12px; margin-top: 6px; color: var(--ink); text-decoration: none; font: inherit; cursor: pointer; }
+.pick:hover, .pick:focus { border-color: var(--navy); background: #F8FAFF; outline: none; }
+.pick .pick-dogs { display: block; font-size: 12.5px; margin-top: 2px; }
+.dogcard .dogfields { display: none; margin-top: 4px; }
+.dogcard.on .dogfields, .dogcard:has(input[type=hidden][name^=enter_]) .dogfields { display: block; }
+.dogcard.on { border-color: #93C5FD; }
+.chk.big { font-size: 15px; display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+.chk.big input { width: 18px; height: 18px; }

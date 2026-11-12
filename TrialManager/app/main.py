@@ -20,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import auth, db, formatter as fmt, results, trial
+from app import people as dirdb   # the handler & dog directory ('people' is the admin People page below)
 from app.core import Show
 
 HERE = Path(__file__).parent
@@ -71,6 +72,7 @@ def day(d):
 
 
 templates.env.filters.update(money=money, local=local, ago=ago, day=day)
+templates.env.filters['class_label'] = lambda c: dirdb.class_label(c)
 
 
 def render(request: Request, name: str, status_code: int = 200, **ctx):
@@ -838,3 +840,250 @@ async def entry_classes_save(request: Request, slug: str, submission_id: str):
     note = ' Then click Update run order on the Run order page.' if trial.is_built(slug) else ''
     request.session['entries_flash'] = 'Classes saved; fees and the workbook use them now.' + note
     return back(f'/shows/{slug}/entries')
+
+
+# ── Handler & dog directory ─────────────────────────────────────────────────
+
+@app.get('/directory', response_class=HTMLResponse)
+def directory(request: Request, q: str = ''):
+    require_user(request)
+    found = dirdb.search(q, limit=40)
+    if request.headers.get('HX-Target') == 'dir-results':
+        return render(request, '_dir_results.html', found=found, q=q)
+    return render(request, 'directory.html', found=found, q=q, counts=dirdb.counts(),
+                  flash=request.session.pop('dir_flash', ''))
+
+
+@app.get('/directory/h/{handler_id}', response_class=HTMLResponse)
+def directory_handler(request: Request, handler_id: int):
+    require_user(request)
+    h = dirdb.get_handler(handler_id)
+    if h is None:
+        return back('/directory')
+    return render(request, 'directory_handler.html', h=h, levels=dirdb.LEVELS, heights=dirdb.HEIGHTS, error=None,
+                  flash=request.session.pop('dir_flash', ''))
+
+
+@app.post('/directory/h/{handler_id}', response_class=HTMLResponse)
+async def directory_handler_save(request: Request, handler_id: int):
+    user = require_user(request)
+    form = await check_csrf(request)
+    try:
+        dirdb.edit_handler(handler_id, dict(form), user)
+    except dirdb.PeopleError as e:
+        h = dirdb.get_handler(handler_id)
+        return render(request, 'directory_handler.html', h=h, levels=dirdb.LEVELS, heights=dirdb.HEIGHTS,
+                      error=str(e), flash='', status_code=400)
+    request.session['dir_flash'] = 'Saved.'
+    return back(f'/directory/h/{handler_id}')
+
+
+@app.post('/directory/h/{handler_id}/dog', response_class=HTMLResponse)
+async def directory_dog_save(request: Request, handler_id: int):
+    user = require_user(request)
+    form = await check_csrf(request)
+    try:
+        if form.get('delete'):
+            dirdb.delete_dog(int(form['dog_id']), user)
+            request.session['dir_flash'] = 'Dog removed from the dirdb.'
+        else:
+            dirdb.edit_dog(handler_id, int(form['dog_id']) if form.get('dog_id') else None, dict(form), user)
+            request.session['dir_flash'] = f"Saved {form.get('dog_name', '').strip()}."
+    except dirdb.PeopleError as e:
+        h = dirdb.get_handler(handler_id)
+        return render(request, 'directory_handler.html', h=h, levels=dirdb.LEVELS, heights=dirdb.HEIGHTS,
+                      error=str(e), flash='', status_code=400)
+    return back(f'/directory/h/{handler_id}')
+
+
+@app.get('/directory/import', response_class=HTMLResponse)
+def directory_import_page(request: Request):
+    require_user(request)
+    return render(request, 'directory_import.html', counts=dirdb.counts(), today=date.today().isoformat(),
+                  flash=request.session.pop('dir_flash', ''), error=request.session.pop('dir_error', ''))
+
+
+@app.post('/directory/import/{kind}')
+async def directory_import(request: Request, kind: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    before = dirdb.counts()
+    try:
+        if kind == 'shows':
+            r = dirdb.import_all_shows()
+            msg = f"Read {r['entries']} entries from {r['shows']} show(s)."
+        elif kind == 'uki':
+            up = form.get('file')
+            if not up or not hasattr(up, 'read'):
+                raise dirdb.PeopleError('Choose the UKI Manager handlers CSV.')
+            n = dirdb.import_uki_handlers((await up.read()).decode('utf-8-sig', errors='replace'),
+                                           str(form.get('info_date') or date.today().isoformat()))
+            msg = f'Read {n} handlers from UKI Manager.'
+        elif kind == 'results':
+            files = [f for f in form.getlist('files') if hasattr(f, 'read')]
+            if not files:
+                raise dirdb.PeopleError('Choose one or more results workbooks.')
+            dogs_n = 0
+            for f in files:
+                dogs_n += dirdb.import_results(await f.read())['dogs']
+            msg = f'Read {dogs_n} dogs from {len(files)} results workbook(s).'
+        else:
+            return back('/directory/import')
+    except dirdb.PeopleError as e:
+        request.session['dir_error'] = str(e)
+        return back('/directory/import')
+    after = dirdb.counts()
+    db.log(user, 'directory_import', target=kind)
+    request.session['dir_flash'] = (f"{msg} The directory now has {after['handlers']} handlers "
+                                    f"(+{after['handlers'] - before['handlers']}) and {after['dogs']} dogs "
+                                    f"(+{after['dogs'] - before['dogs']}).")
+    return back('/directory/import')
+
+
+# ── Paper entries ───────────────────────────────────────────────────────────
+
+def _paper_ctx(request, slug, d=None):
+    d, ws, ctx = _show_ctx(request, slug, 'paper', d)
+    jotform = [e for e in d.entries if not str(e['submission_id']).startswith('paper-')]
+    return d, {**ctx, 'options': dirdb.class_options(d.show, jotform), 'levels': dirdb.LEVELS,
+               'heights': dirdb.HEIGHTS, 'class_label': dirdb.class_label}
+
+
+@app.get('/shows/{slug}/paper', response_class=HTMLResponse)
+def paper_page(request: Request, slug: str, q: str = ''):
+    require_user(request)
+    if request.headers.get('HX-Target') == 'paper-results':
+        return render(request, '_paper_results.html', found=dirdb.search(q), q=q, slug=slug)
+    d, ctx = _paper_ctx(request, slug)
+    return render(request, 'paper.html', rows=dirdb.paper_rows(slug), q=q, found=[],
+                  flash=request.session.pop('paper_flash', ''), counts=dirdb.counts(), **ctx)
+
+
+def _blank_dog():
+    return {'dog_id': '', 'dog_number': '', 'dog_name': '', 'breed': '', 'height': 0, 'class_type': 'Regular',
+            'level': '', 'speedstakes_level': '', 'saturday_classes': [], 'sunday_classes': [], 'enter': False}
+
+
+@app.get('/shows/{slug}/paper/new', response_class=HTMLResponse)
+def paper_new(request: Request, slug: str, h: int = 0):
+    require_user(request)
+    d, ctx = _paper_ctx(request, slug)
+    handler = dirdb.get_handler(h) if h else None
+    entered = {e['dog_number'] for e in d.entries if e['dog_number']}
+    dogs = [{**_blank_dog(), **{k: x[k] for k in ('dog_number', 'dog_name', 'breed', 'height', 'class_type', 'level',
+                                                  'speedstakes_level')},
+             'dog_id': x['id'], 'enter': len(handler['dogs']) == 1, 'already': x['dog_number'] in entered}
+            for x in (handler['dogs'] if handler else [])]
+    dogs += [_blank_dog() for _ in range(1 if dogs else 2)]
+    return render(request, 'paper_form.html', handler=handler or {}, dogs=dogs, edit=None, error=None,
+                  payment={'amount': '', 'method': 'Check', 'note': ''}, **ctx)
+
+
+def _form_dogs(form) -> list:
+    out = []
+    for i in range(int(form.get('dog_count') or 0)):
+        g = lambda k: str(form.get(f'{k}_{i}', '')).strip()
+        out.append({'dog_id': g('dog_id'), 'dog_number': g('dog_number'), 'dog_name': g('dog_name'), 'breed': g('breed'),
+                    'height': int(g('height') or 0) if g('height').isdigit() else 0, 'class_type': g('class_type') or 'Regular',
+                    'level': g('level'), 'speedstakes_level': g('speedstakes_level'),
+                    'saturday_classes': form.getlist(f'sat_{i}'), 'sunday_classes': form.getlist(f'sun_{i}'),
+                    'enter': bool(form.get(f'enter_{i}'))})
+    return out
+
+
+def _amount(v) -> float:
+    try:
+        return round(float(str(v).replace('$', '').replace(',', '').strip() or 0), 2)
+    except ValueError:
+        raise dirdb.PeopleError('Type the amount paid as a number, like 46 or 46.00.')
+
+
+@app.post('/shows/{slug}/paper/total', response_class=HTMLResponse)
+async def paper_total(request: Request, slug: str):
+    require_user(request)
+    form = await check_csrf(request)
+    d = fmt.load(slug)
+    dogs = [x for x in _form_dogs(form) if x['enter']]
+    fees = dirdb.fees_for(d.show, dogs) if dogs else 0.0
+    n = sum(len(x['saturday_classes']) + len(x['sunday_classes']) for x in dogs)
+    return HTMLResponse(f'<span id="paper-due">{n} class{"es" if n != 1 else ""} · fees <b>{fmt_money(fees)}</b></span>')
+
+
+def fmt_money(n):
+    return templates.env.filters['money'](n)
+
+
+@app.post('/shows/{slug}/paper', response_class=HTMLResponse)
+async def paper_save(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    handler = {k: str(form.get(k, '')).strip() for k in dirdb.HANDLER_INFO}
+    all_dogs = _form_dogs(form)
+    payment = {'amount': form.get('amount', ''), 'method': form.get('method', ''), 'note': form.get('note', '')}
+    try:
+        amount = _amount(payment['amount'])
+        ids = dirdb.add_paper(slug, user, handler, [x for x in all_dogs if x['enter']], amount,
+                               payment['method'], payment['note'])
+    except dirdb.PeopleError as e:
+        d, ctx = _paper_ctx(request, slug)
+        return render(request, 'paper_form.html', handler=handler, dogs=all_dogs, edit=None, error=str(e),
+                      payment=payment, status_code=400, **ctx)
+    d = fmt.load(slug)
+    fees = dirdb.fees_for(d.show, [x for x in all_dogs if x['enter']])
+    names = ', '.join(x['dog_name'] for x in all_dogs if x['enter'])
+    request.session['paper_flash'] = (f"Entered {handler['first_name']} {handler['last_name']}: {names}. "
+                                      f"Fees {fmt_money(fees)}, paid {fmt_money(amount)}"
+                                      + (f", still owes {fmt_money(fees - amount)}." if fees - amount > 0.005 else '.')
+                                      + (' The run order is built, so add them there with Update run order.'
+                                         if trial.is_built(slug) else ''))
+    return back(f'/shows/{slug}/paper')
+
+
+@app.get('/shows/{slug}/paper/{paper_id}', response_class=HTMLResponse)
+def paper_edit(request: Request, slug: str, paper_id: int):
+    require_user(request)
+    r = dirdb.get_paper(slug, paper_id)
+    if r is None:
+        return back(f'/shows/{slug}/paper')
+    d, ctx = _paper_ctx(request, slug)
+    h, ctype = dirdb.height(r['jump_height'])
+    dog = {**_blank_dog(), 'dog_number': r['dog_number'], 'dog_name': r['dog_name'], 'breed': r['breed'],
+           'height': h, 'class_type': ctype, 'level': dirdb.level(r['international_level']),
+           'speedstakes_level': dirdb.level(r['speedstakes_level']), 'saturday_classes': r['saturday_classes'] or [],
+           'sunday_classes': r['sunday_classes'] or [], 'enter': True}
+    return render(request, 'paper_form.html', handler=r, dogs=[dog], edit=r, error=None,
+                  payment={'amount': r['amount_paid'] or '', 'method': r['payment_method'], 'note': r['payment_note']},
+                  **ctx)
+
+
+@app.post('/shows/{slug}/paper/{paper_id}', response_class=HTMLResponse)
+async def paper_update(request: Request, slug: str, paper_id: int):
+    user = require_user(request)
+    form = await check_csrf(request)
+    if form.get('delete'):
+        dirdb.delete_paper(slug, paper_id, user)
+        request.session['paper_flash'] = ('Paper entry deleted.' + (' Update the run order to take its runs out.'
+                                                                    if trial.is_built(slug) else ''))
+        return back(f'/shows/{slug}/paper')
+    handler = {k: str(form.get(k, '')).strip() for k in dirdb.HANDLER_INFO}
+    dogs = _form_dogs(form)
+    for x in dogs:
+        x['enter'] = True
+    payment = {'amount': form.get('amount', ''), 'method': form.get('method', ''), 'note': form.get('note', '')}
+    try:
+        dirdb.update_paper(slug, paper_id, user, handler, dogs[0], _amount(payment['amount']), payment['method'],
+                            payment['note'])
+    except dirdb.PeopleError as e:
+        d, ctx = _paper_ctx(request, slug)
+        return render(request, 'paper_form.html', handler=handler, dogs=dogs, edit=dirdb.get_paper(slug, paper_id),
+                      error=str(e), payment=payment, status_code=400, **ctx)
+    request.session['paper_flash'] = 'Paper entry saved.' + (' Update the run order to pick up the change.'
+                                                             if trial.is_built(slug) else '')
+    return back(f'/shows/{slug}/paper')
+
+
+@app.get('/shows/{slug}/dayof/lookup', response_class=HTMLResponse)
+def dayof_lookup(request: Request, slug: str, q: str = ''):
+    """Directory search for the day-of 'new handler or dog' form; picking a dog fills the form."""
+    require_user(request)
+    return render(request, '_dayof_lookup.html', found=dirdb.search(q, limit=8), q=q)

@@ -190,6 +190,65 @@ day_payments = Table(
     Column('user_name', String, default=''),
 )
 
+# ── Handler & dog directory, paper entries — see people.py ──────────────────
+# info_date is the date the details came from (a trial date, an export date, or the day typed in). Newer details
+# overwrite older ones; older details only fill blanks. Dates are ISO strings like tm_runs.day.
+
+handlers = Table(
+    'tm_handlers', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('handler_number', String, default='', index=True),     # UKI #, blank for someone without one yet
+    Column('first_name', String, default=''),
+    Column('last_name', String, default=''),
+    Column('email', String, default=''),
+    Column('phone', String, default=''),
+    Column('addr_line1', String, default=''),
+    Column('addr_line2', String, default=''),
+    Column('city', String, default=''),
+    Column('state', String, default=''),
+    Column('postal', String, default=''),
+    Column('info_date', String, default=''),
+    Column('source', String, default=''),                          # jotform | paper | uki_manager | results | edited
+    Column('updated_at', DateTime(timezone=True)),
+)
+
+dogs = Table(
+    'tm_dogs', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('handler_id', Integer, index=True),                     # tm_handlers.id
+    Column('dog_number', String, default='', index=True),          # UKI #
+    Column('dog_name', String, default=''),
+    Column('breed', String, default=''),
+    Column('height', Integer, default=0),
+    Column('class_type', String, default='Regular'),               # Regular | Select
+    Column('level', String, default=''),                           # Nursery, Beginner, Novice, Senior, Champ
+    Column('speedstakes_level', String, default=''),
+    Column('info_date', String, default=''),
+    Column('source', String, default=''),
+    Column('updated_at', DateTime(timezone=True)),
+)
+
+paper_entries = Table(
+    'tm_paper_entries', metadata,                                  # one row per dog, like one JotForm submission
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('handler_id', Integer), Column('dog_id', Integer),      # directory rows it came from (may be empty)
+    Column('handler_number', String, default=''),
+    Column('first_name', String, default=''), Column('last_name', String, default=''),
+    Column('email', String, default=''), Column('phone', String, default=''),
+    Column('addr_line1', String, default=''), Column('addr_line2', String, default=''),
+    Column('city', String, default=''), Column('state', String, default=''), Column('postal', String, default=''),
+    Column('dog_number', String, default=''), Column('dog_name', String, default=''), Column('breed', String, default=''),
+    Column('jump_height', String, default=''),                    # worded like JotForm: '20 select', '12 regular'
+    Column('international_level', String, default=''),            # worded like JotForm: 'Champion', 'Novice'
+    Column('speedstakes_level', String, default=''),
+    Column('saturday_classes', JSON), Column('sunday_classes', JSON),   # JotForm's class wording
+    Column('amount_paid', JSON),                                  # number; the whole payment sits on the first dog
+    Column('payment_method', String, default=''), Column('payment_note', String, default=''),
+    Column('created_at', DateTime(timezone=True)), Column('created_by', String, default=''),
+    Column('updated_at', DateTime(timezone=True)),
+)
+
 _engine = None
 
 

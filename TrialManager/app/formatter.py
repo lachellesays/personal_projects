@@ -12,7 +12,7 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 
-from app import db
+from app import db, people
 from app.core import (
     CLASS_NAME_MAP, DOG_FIELDS, HANDLER_FIELDS, US_STATES, Show, apply_corrections, build_runs, dog_table, fetch_submissions,
     handler_table, parse_entries, to_xlsx_bytes, transform,
@@ -68,6 +68,10 @@ def refresh(show: Show):
     except Exception as e:  # noqa: BLE001 — network/API errors are shown on the page
         raise FormatterError(f'JotForm didn’t respond as expected: {e}')
     db.save_snapshot(show.form_id, subs)
+    try:   # keep the handler & dog directory current; never let it stop a refresh
+        people.add_from_entries(apply_corrections(parse_entries(subs, show.field_names), show), show.saturday_date)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 @dataclass
@@ -91,7 +95,8 @@ def load(slug: str, fetch_if_missing: bool = True) -> ShowData:
     if subs is None and fetch_if_missing:
         refresh(show)
         subs, fetched_at = db.get_snapshot(show.form_id)
-    entries = parse_entries(subs or [], show.field_names)
+    # Paper entries ride along as extra entries shaped like JotForm's (submission_id 'paper-<id>')
+    entries = parse_entries(subs or [], show.field_names) + people.paper_entries(slug)
     data = ShowData(slug, show, fetched_at, entries, apply_corrections(entries, show))
     history = db.download_history(slug, limit=1)
     data.last_download = history[0] if history else None

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Paper entry · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+<form method="post" action="/shows/{{ slug }}/paper{% if edit %}/{{ edit.id }}{% endif %}" style="margin-top:14px"
+      hx-post="/shows/{{ slug }}/paper/total" hx-trigger="change, load" hx-target="#paper-due" hx-swap="outerHTML">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="dog_count" value="{{ dogs|length }}">
+  <div class="titlebar"><div><h1>{{ 'Edit paper entry' if edit else 'Paper entry' }}</h1>
+    <div class="sub">{% if handler.get('id') and not edit %}Filled in from the directory. Change anything that's different on the form.{% elif not edit %}Someone new: they'll be added to the directory when you save.{% endif %}</div></div>
+    <a class="btn" href="/shows/{{ slug }}/paper">Cancel</a></div>
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <div class="panel">
+    <h3>Handler</h3>
+    <div class="row3"><div><label class="l">UKI #</label><input class="f" name="handler_number" value="{{ handler.get('handler_number', '') }}" inputmode="numeric"></div>
+      <div><label class="l">First name</label><input class="f" name="first_name" value="{{ handler.get('first_name', '') }}" required></div>
+      <div><label class="l">Last name</label><input class="f" name="last_name" value="{{ handler.get('last_name', '') }}" required></div></div>
+    <div class="row2"><div><label class="l">Email</label><input class="f" name="email" value="{{ handler.get('email', '') }}" type="email"></div>
+      <div><label class="l">Phone</label><input class="f" name="phone" value="{{ handler.get('phone', '') }}" inputmode="tel"></div></div>
+    <div class="row2"><div><label class="l">Address</label><input class="f" name="addr_line1" value="{{ handler.get('addr_line1', '') }}"></div>
+      <div><label class="l">Address line 2</label><input class="f" name="addr_line2" value="{{ handler.get('addr_line2', '') }}"></div></div>
+    <div class="row3"><div><label class="l">City</label><input class="f" name="city" value="{{ handler.get('city', '') }}"></div>
+      <div><label class="l">State</label><input class="f" name="state" value="{{ handler.get('state', '') }}"></div>
+      <div><label class="l">ZIP</label><input class="f" name="postal" value="{{ handler.get('postal', '') }}" inputmode="numeric"></div></div>
+  </div>
+
+  {% for g in dogs %}{% set i = loop.index0 %}
+  <div class="panel dogcard {{ 'on' if g.enter }}">
+    <input type="hidden" name="dog_id_{{ i }}" value="{{ g.dog_id }}">
+    {% if edit %}<input type="hidden" name="enter_{{ i }}" value="1"><h3>Dog</h3>
+    {% else %}<label class="chk big"><input type="checkbox" name="enter_{{ i }}" value="1" {{ 'checked' if g.enter }} onchange="this.closest('.dogcard').classList.toggle('on', this.checked)">
+      <b>{% if g.dog_id %}Enter {{ g.dog_name }}{% else %}Enter {{ 'another' if i else 'a' }} dog{% endif %}</b></label>
+      {% if g.get('already') %}<span class="tag fix">ALREADY ENTERED IN THIS SHOW</span>{% endif %}{% endif %}
+    <div class="dogfields">
+      <div class="row3"><div><label class="l">Dog's name</label><input class="f" name="dog_name_{{ i }}" value="{{ g.dog_name }}"></div>
+        <div><label class="l">UKI #</label><input class="f" name="dog_number_{{ i }}" value="{{ g.dog_number }}" inputmode="numeric"></div>
+        <div><label class="l">Breed</label><input class="f" name="breed_{{ i }}" value="{{ g.breed }}"></div></div>
+      <div class="row3"><div><label class="l">Jump height</label><div class="row2">
+          <select class="f" name="height_{{ i }}"><option value="">?</option>{% for x in heights %}<option {{ 'selected' if g.height == x }}>{{ x }}</option>{% endfor %}</select>
+          <select class="f" name="class_type_{{ i }}">{% for x in ['Regular', 'Select'] %}<option {{ 'selected' if g.class_type == x }}>{{ x }}</option>{% endfor %}</select></div></div>
+        <div><label class="l">Level</label><select class="f" name="level_{{ i }}"><option value="">?</option>{% for x in levels %}<option {{ 'selected' if g.level == x }}>{{ x }}</option>{% endfor %}</select></div>
+        <div><label class="l">Speedstakes level</label><select class="f" name="speedstakes_level_{{ i }}"><option value="">Same as level</option>{% for x in levels %}<option {{ 'selected' if g.speedstakes_level == x and g.speedstakes_level != g.level }}>{{ x }}</option>{% endfor %}</select></div></div>
+      <div class="row2">
+        <div class="classpick"><b class="muted">Saturday {{ d.show.saturday_date|day }}</b>
+          {% for c in options.saturday %}<label class="chk"><input type="checkbox" name="sat_{{ i }}" value="{{ c }}" {{ 'checked' if c in g.saturday_classes }}> {{ class_label(c) }}</label>{% endfor %}</div>
+        <div class="classpick"><b class="muted">Sunday {{ d.show.sunday_date|day }}</b>
+          {% for c in options.sunday %}<label class="chk"><input type="checkbox" name="sun_{{ i }}" value="{{ c }}" {{ 'checked' if c in g.sunday_classes }}> {{ class_label(c) }}</label>{% endfor %}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="panel">
+    <h3>Payment</h3>
+    <p class="muted"><span id="paper-due">…</span></p>
+    <div class="row3"><div><label class="l">Amount paid ($)</label><input class="f" name="amount" value="{{ payment.amount }}" inputmode="decimal" placeholder="0.00"></div>
+      <div><label class="l">How</label><select class="f" name="method">{% for x in ['Check', 'Cash', 'Square', 'Other'] %}<option {{ 'selected' if payment.method == x }}>{{ x }}</option>{% endfor %}</select></div>
+      <div><label class="l">Check # or note</label><input class="f" name="note" value="{{ payment.note }}"></div></div>
+  </div>
+  <div class="toolbar">
+    <button class="btn primary big" type="submit">{{ 'Save changes' if edit else 'Save paper entry' }}</button>
+    {% if edit %}<button class="btn danger" name="delete" value="1" type="submit" onclick="return confirm('Delete this paper entry?')">Delete entry</button>{% endif %}
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Paper entries · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+<div class="panel" style="margin-top:14px">
+  <h3>Enter a paper form</h3>
+  <p class="hint">Look the handler up by their UKI #, name or a dog's name or number. Their details and dogs fill in for you.</p>
+  <div class="search"><input class="f" type="search" name="q" value="{{ q }}" placeholder="UKI #, name, or dog's name" autofocus autocomplete="off"
+         hx-get="/shows/{{ slug }}/paper" hx-trigger="input changed delay:250ms, search" hx-target="#paper-results" hx-swap="outerHTML" aria-label="Find the handler"></div>
+  {% include "_paper_results.html" %}
+  <p style="margin:12px 0 0"><a class="btn" href="/shows/{{ slug }}/paper/new">Someone new (not in the directory)</a></p>
+  {% if not counts.handlers %}<p class="hint">The directory is empty, so nobody will come up yet. Fill it on <a href="/directory/import">Handlers &amp; dogs → Import</a>.</p>{% endif %}
+</div>
+
+<h3 style="margin-top:20px">Paper entries for this show ({{ rows|length }})</h3>
+{% if rows %}
+<div class="tscroll"><table class="t">
+  <thead><tr><th>Handler</th><th>Dog</th><th>Classes</th><th class="num">Paid</th><th class="hide-sm">Entered</th><th></th></tr></thead>
+  <tbody>{% for r in rows %}
+    <tr><td><span class="hname">{{ r.first_name }} {{ r.last_name }}</span><div class="muted">{% if r.handler_number %}#{{ r.handler_number }}{% else %}no UKI #{% endif %}</div></td>
+      <td><span class="dname">{{ r.dog_name }}</span><div class="muted">{{ r.jump_height }} · {{ r.international_level }}</div></td>
+      <td><div class="muted">Sat: {{ (r.saturday_classes or [])|map('class_label')|join(', ') or '—' }}</div><div class="muted">Sun: {{ (r.sunday_classes or [])|map('class_label')|join(', ') or '—' }}</div></td>
+      <td class="num">{% if r.amount_paid %}{{ r.amount_paid|money }}<div class="muted">{{ r.payment_method }}{% if r.payment_note %} · {{ r.payment_note }}{% endif %}</div>{% endif %}</td>
+      <td class="hide-sm muted">{{ r.created_at|local }}<div>{{ r.created_by }}</div></td>
+      <td><a class="btn small" href="/shows/{{ slug }}/paper/{{ r.id }}">Edit</a></td></tr>
+  {% endfor %}</tbody></table></div>
+<p class="hint">Paper entries are on the Entries page too (marked PAPER) and in the workbook download, just like JotForm entries.</p>
+{% else %}<p class="muted">None yet.</p>{% endif %}
+{% endblock %}

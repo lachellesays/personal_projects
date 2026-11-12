@@ -1,0 +1,13 @@
+<div id="dir-results">
+{% if q and not found %}<p class="muted">No one matches “{{ q }}”.</p>{% endif %}
+{% if found %}
+<div class="tscroll"><table class="t">
+  <thead><tr><th>Handler</th><th>Dogs</th><th class="hide-sm">Contact</th><th class="hide-sm">Details from</th></tr></thead>
+  <tbody>{% for h in found %}
+    <tr><td><a class="hname" href="/directory/h/{{ h.id }}">{{ h.last_name }}, {{ h.first_name }}</a><div class="muted">{% if h.handler_number %}#{{ h.handler_number }}{% else %}no UKI #{% endif %}</div></td>
+      <td>{% for g in h.dogs %}<div><span class="dname">{{ g.dog_name }}</span> <span class="muted">{% if g.dog_number %}#{{ g.dog_number }} · {% endif %}{{ g.height or '?' }}"{% if g.class_type == 'Select' %} S{% endif %} · {{ g.level or '?' }}</span></div>{% else %}<span class="muted">No dogs yet</span>{% endfor %}</td>
+      <td class="hide-sm">{{ h.email }}<div class="muted">{{ h.city }}{% if h.state %}, {{ h.state }}{% endif %}</div></td>
+      <td class="hide-sm muted">{{ h.info_date }}</td></tr>
+  {% endfor %}</tbody></table></div>
+{% elif not q %}<p class="muted">Type to search.</p>{% endif %}
+</div>

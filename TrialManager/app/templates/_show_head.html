@@ -18,6 +18,7 @@
 <nav class="tabs">
   <a class="{{ 'on' if tab == 'setup' }}" href="/shows/{{ slug }}/setup">Setup</a>
   <a class="{{ 'on' if tab == 'entries' }}" href="/shows/{{ slug }}/entries">Entries</a>
+  <a class="{{ 'on' if tab == 'paper' }}" href="/shows/{{ slug }}/paper">Paper entries</a>
   <a class="{{ 'on' if tab == 'typos' }}" href="/shows/{{ slug }}/typos">Fix typos</a>
   <a class="{{ 'on' if tab == 'warnings' }}" href="/shows/{{ slug }}/warnings">Warnings{% if open_warnings %}<span class="cnt">{{ open_warnings }}</span>{% endif %}</a>
   <a class="{{ 'on' if tab == 'download' }}" href="/shows/{{ slug }}/download">Download</a>
