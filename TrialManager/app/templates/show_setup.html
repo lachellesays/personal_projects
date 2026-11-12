@@ -39,14 +39,28 @@
         <label class="mini-l">Ring <input class="f mini" name="ring::{{ c.class_name }}" value="{{ c.ring }}" aria-label="Ring for {{ c.class_name }}"></label>
         <label class="chk"><input type="checkbox" name="select_first::{{ c.class_name }}" {{ 'checked' if c.select_first }}> Select before Regular</label>
         <label class="chk"><input type="checkbox" name="combine::{{ c.class_name }}" {{ 'checked' if c.combine_levels }}> All levels together</label>
+        {% if (dd, c.class_name) not in in_use %}<button class="linkbtn rm" form="rm-{{ dd }}" name="class_name" value="{{ c.class_name }}"
+          title="Nobody is entered in {{ c.class_name }} yet, so it can be taken off this day">Remove</button>{% endif %}
       </li>
       {% endfor %}
     </ol>
-    {% else %}<p class="muted">No classes entered for this day yet. They appear here once entries come in from JotForm.</p>{% endif %}
+    {% else %}<p class="muted">No classes on this day yet. They appear here once entries come in from JotForm, or add them below.</p>{% endif %}
     <p class="hint">{% if built %}Saving re-sorts each class into its groups; dogs keep their order inside each height.{% else %}These settings are used when you build the run order.{% endif %}
       Masters: whichever Masters class is higher in this list is treated as the first round.</p>
     <button class="btn primary small">Save {{ dd|day }}</button>
   </form>
+  {% if addable[dd] %}
+  <form class="addclass" method="post" action="/shows/{{ slug }}/setup/class"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="day" value="{{ dd }}">
+    <label class="l" for="add-{{ dd }}">Add a class to {{ dd|day }}</label>
+    <div class="addrow"><select class="f" id="add-{{ dd }}" name="class_name">{% for c in addable[dd] %}<option>{{ c }}</option>{% endfor %}</select>
+      <button class="btn small">Add class</button></div>
+    <p class="hint">For a class on the premium that nobody has entered online yet, so paper and day-of entries can use it.
+      Save any dragging above first; adding reloads the page.</p>
+  </form>
+  {% endif %}
+  <form id="rm-{{ dd }}" method="post" action="/shows/{{ slug }}/setup/class" onsubmit="return confirm('Remove this class from {{ dd|day }}?')">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="day" value="{{ dd }}"><input type="hidden" name="action" value="remove"></form>
 </div>
 {% endfor %}
 

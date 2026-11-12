@@ -811,8 +811,11 @@ def show_setup(request: Request, slug: str):
     d, ws, ctx = _show_ctx(request, slug, 'setup')
     trial.ensure_classes_from_entries(d)
     days = _days(d.show)
+    in_use = {(r['day'], r['class_name']) for r in trial._jotform_runs(d)} | {
+        (r['day'], r['class_name']) for r in trial.all_runs(slug)}
     return render(request, 'show_setup.html', days=days, day_sets={dd: trial.day_setting(slug, dd) for dd in days},
                   day_classes={dd: trial.class_list(slug, dd) for dd in days}, built=trial.is_built(slug),
+                  addable={dd: trial.addable_classes(slug, dd) for dd in days}, in_use=in_use,
                   level_groups=trial.LEVEL_GROUPS, height_orders=trial.HEIGHT_ORDERS,
                   flash=request.session.pop('setup_flash', ''),
                   form={'name': d.show.name, 'show_id': d.show.show_id, 'form_id': d.show.form_id,
@@ -829,6 +832,23 @@ async def show_setup_day(request: Request, slug: str):
                 'combine_levels': form.get(f'combine::{n}') == 'on'} for n in names]
     trial.save_day_setup(slug, day_, form.get('levels_first', ''), form.get('heights', ''), classes, user)
     request.session['setup_flash'] = f'{day(day_)} saved.'
+    return back(f'/shows/{slug}/setup#day-{day_}')
+
+
+@app.post('/shows/{slug}/setup/class')
+async def show_setup_class(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day_, cls = form.get('day', ''), form.get('class_name', '')
+    if day_ not in _days(fmt.load(slug).show):
+        raise trial.TrialError('Pick Saturday or Sunday.')
+    if form.get('action') == 'remove':
+        trial.remove_class(fmt.load(slug), day_, cls, user)
+        request.session['setup_flash'] = f'Removed {cls} from {day(day_)}.'
+    else:
+        names = trial.add_class(slug, day_, cls, user)
+        request.session['setup_flash'] = (f"Added {' and '.join(names)} to {day(day_)}. Drag to put "
+                                          f"{'them' if len(names) > 1 else 'it'} in schedule order, then save the day.")
     return back(f'/shows/{slug}/setup#day-{day_}')
 
 
@@ -959,7 +979,9 @@ async def directory_import(request: Request, kind: str):
 def _paper_ctx(request, slug, d=None):
     d, ws, ctx = _show_ctx(request, slug, 'paper', d)
     jotform = [e for e in d.entries if not str(e['submission_id']).startswith('paper-')]
-    return d, {**ctx, 'options': dirdb.class_options(d.show, jotform), 'levels': dirdb.LEVELS,
+    setup = {'saturday': [c['class_name'] for c in trial.class_list(slug, str(d.show.saturday_date))],
+             'sunday': [c['class_name'] for c in trial.class_list(slug, str(d.show.sunday_date))]}
+    return d, {**ctx, 'options': dirdb.class_options(d.show, jotform, setup), 'levels': dirdb.LEVELS,
                'heights': dirdb.HEIGHTS, 'class_label': dirdb.class_label}
 
 

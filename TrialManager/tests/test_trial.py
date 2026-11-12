@@ -386,3 +386,33 @@ def test_day_of_shows_what_a_dog_is_already_in(built):
     assert 'Already in 2 classes' in html and f'value="{SUN}|Jumping"' in html and 'Was scratched' in html
     page = c.get(f'/shows/{SLUG}/dayof').text
     assert "Choose a dog to see what it's already entered in" in page
+
+
+def test_add_and_remove_classes_on_setup(admin, app_env):
+    from app import formatter, people, trial
+    c, token = admin
+    c.post(f'/shows/{SLUG}/refresh', data={'csrf': token})
+    page = c.get(f'/shows/{SLUG}/setup').text
+    assert 'Add a class to' in page and '<option>Speedstakes</option>' in page and 'Masters Series (both rounds)' in page
+    # Nobody entered Speedstakes or Masters online; add them to Sunday
+    c.post(f'/shows/{SLUG}/setup/class', data={'csrf': token, 'day': SUN, 'class_name': 'Speedstakes'})
+    c.post(f'/shows/{SLUG}/setup/class', data={'csrf': token, 'day': SUN, 'class_name': 'Masters Series (both rounds)'})
+    sun = [x['class_name'] for x in trial.class_list(SLUG, SUN)]
+    assert {'Speedstakes', 'Masters Agility', 'Masters Jumping'} <= set(sun)
+    assert 'Masters Series (both rounds)' not in trial.addable_classes(SLUG, SUN)
+    # They're offered for day-of and paper entries (Masters as the form's single Masters Series choice)
+    d = formatter.load(SLUG)
+    opts = people.class_options(d.show, d.entries, {'sunday': sun})
+    assert 'Speedstakes' in opts['sunday'] and opts['sunday'].count('Masters Series') == 1
+    form = c.get(f'/shows/{SLUG}/paper/new').text
+    assert 'value="Speedstakes"' in form and 'value="Masters Series"' in form
+    # An empty class can be removed; one with entries can't
+    page = c.get(f'/shows/{SLUG}/setup').text
+    assert f'form="rm-{SUN}" name="class_name" value="Speedstakes"' in page          # empty: can be removed
+    assert f'form="rm-{SAT}" name="class_name" value="Agility"' not in page          # has entries: no Remove button
+    c.post(f'/shows/{SLUG}/setup/class', data={'csrf': token, 'day': SUN, 'class_name': 'Speedstakes', 'action': 'remove'})
+    assert 'Speedstakes' not in [x['class_name'] for x in trial.class_list(SLUG, SUN)]
+    r = c.post(f'/shows/{SLUG}/setup/class', data={'csrf': token, 'day': SAT, 'class_name': 'Agility', 'action': 'remove'})
+    assert r.status_code == 400 and 'People have entered Agility' in r.text
+    r = c.post(f'/shows/{SLUG}/setup/class', data={'csrf': token, 'day': SAT, 'class_name': 'Agility'})
+    assert 'already on that day' in r.text

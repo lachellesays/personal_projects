@@ -20,7 +20,7 @@ import re
 import uuid
 from datetime import date
 
-from sqlalchemy import and_, delete, insert, select, update
+from sqlalchemy import and_, delete, func, insert, select, update
 
 from app import db
 from app.core import CLASS_COST, CLASS_ORDER, MASTERS_CLASS_COST, build_runs
@@ -168,6 +168,46 @@ def ensure_classes(slug: str, also: set = frozenset()):
 def ensure_classes_from_entries(d):
     """Settings rows for every class people entered, even before the run order is built (for Show setup)."""
     ensure_classes(d.slug, {(r['day'], r['class_name']) for r in _jotform_runs(d)})
+
+
+MASTERS_SERIES = 'Masters Series (both rounds)'
+
+
+def addable_classes(slug: str, day: str) -> list:
+    """UKI classes this day doesn't have yet, in the day's default order (Masters as one choice for both rounds)."""
+    have = {c['class_name'] for c in class_list(slug, day)}
+    order = SATURDAY_ORDER if date.fromisoformat(day).weekday() == 5 else SUNDAY_ORDER
+    out = [c for c in order if c not in have and not c.startswith('Masters')]
+    if not {'Masters Agility', 'Masters Jumping'} <= have:
+        out.append(MASTERS_SERIES)
+    return out
+
+
+def add_class(slug: str, day: str, class_name: str, user: dict) -> list:
+    """Put a class on the day's schedule before anyone has entered it (so day-of and paper entries can use it).
+    It slots in where the day's default order puts it; drag it on Show setup to change that."""
+    names = ['Masters Agility', 'Masters Jumping'] if class_name == MASTERS_SERIES else [class_name]
+    if class_name not in addable_classes(slug, day):
+        raise TrialError(f'{class_name} is already on that day, or isn\'t a UKI class.')
+    ensure_classes(slug, {(day, n) for n in names})
+    db.log(user, 'add_class', slug, target=day, classes=names)
+    return names
+
+
+def remove_class(d, day: str, class_name: str, user: dict):
+    """Take a class off the day's schedule. Only while nobody is in it: no runs (scratched ones count) and, before
+    the run order is built, no entries for it."""
+    slug = d.slug
+    if any(r['day'] == day and r['class_name'] == class_name for r in _jotform_runs(d)):
+        raise TrialError(f'People have entered {class_name}, so it can\'t be removed.')
+    with db.engine().begin() as c:
+        n = c.execute(select(func.count()).select_from(db.runs).where(
+            db.runs.c.show_slug == slug, db.runs.c.day == day, db.runs.c.class_name == class_name)).scalar()
+        if n:
+            raise TrialError(f'{class_name} has {n} run(s) in it, so it can\'t be removed. Scratch the dogs instead.')
+        c.execute(delete(db.class_settings).where(db.class_settings.c.show_slug == slug, db.class_settings.c.day == day,
+                                                  db.class_settings.c.class_name == class_name))
+    db.log(user, 'remove_class', slug, target=day, classes=[class_name])
 
 
 def save_day_setup(slug: str, day: str, levels_first: str, heights: str, classes: list, user: dict):

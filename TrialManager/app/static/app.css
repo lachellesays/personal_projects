@@ -238,3 +238,8 @@ a.clink { color: var(--navy); font-weight: 700; text-decoration: underline dotte
 .cchip.done { background: var(--green-bg); border-color: #86EFAC; color: var(--green-ink); cursor: default; display: block; }
 .cchip.done small { color: var(--green-ink); opacity: .8; }
 .dogsum { background: #F8FAFF; border: 1px solid #C7D2FE; border-radius: 10px; padding: 9px 12px; font-size: 14px; }
+
+/* Show setup: add / remove a class */
+.addclass { border-top: 1px dashed var(--line); margin-top: 14px; padding-top: 4px; }
+.addclass .addrow { display: flex; gap: 8px; align-items: center; max-width: 420px; }
+.class-order .rm { margin-left: auto; color: var(--red-ink); font-size: 12.5px; }

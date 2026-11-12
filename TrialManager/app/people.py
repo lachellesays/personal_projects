@@ -370,14 +370,25 @@ def delete_dog(dog_id: int, user: dict):
 
 # ── Paper entries ────────────────────────────────────────────────────────────
 
-def class_options(show, jotform_entries: list) -> dict:
-    """The classes offered each day, worded like this show's JotForm form (so paper and online entries match)."""
+def class_options(show, jotform_entries: list, setup_classes: dict = None) -> dict:
+    """The classes offered each day, worded like this show's JotForm form (so paper and online entries match),
+    plus any class added on Show setup that nobody has entered online yet. `setup_classes`: {'saturday': [names]}."""
     seen = {'saturday': [], 'sunday': []}
     for e in jotform_entries:
         for day in seen:
             for cls in e.get(f'{day}_classes') or []:
                 if cls not in seen[day]:
                     seen[day].append(cls)
+    for day, names in (setup_classes or {}).items():
+        covered = {CLASS_NAME_MAP.get(c, c) for c in seen[day]}
+        if 'Masters Series' in covered:
+            covered |= {'Masters Agility', 'Masters Jumping'}
+        for name in names:
+            if name not in covered:
+                add = 'Masters Series' if name.startswith('Masters') else name   # the form enters both rounds at once
+                if add not in seen[day]:
+                    seen[day].append(add)
+                covered.add(name)
     key = lambda cls: (CLASS_SORT.index(CLASS_NAME_MAP.get(cls, cls)) if CLASS_NAME_MAP.get(cls, cls) in CLASS_SORT
                        else 99, cls)
     return {day: sorted(seen[day] or DEFAULT_CLASSES[day], key=key) for day in seen}
