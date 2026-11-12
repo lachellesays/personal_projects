@@ -212,3 +212,16 @@ def test_import_page(admin):
                files={'file': ('grid_handlers_1.csv', b'"999";"New";"Person";"1 Rd";"Town";"VA";"22222";"n@example.com";"";"1"\n', 'text/csv')})
     page = r.text
     assert 'Read 1 handlers from UKI Manager' in page and '5 handlers (+1)' in page
+
+
+def test_paper_classes_follow_the_running_order():
+    from app import people
+    from app.core import Show
+    show = Show(name='T', show_id=1, form_id='f', saturday_date='2026-12-12', sunday_date='2026-12-13')
+    entries = [{'saturday_classes': ['Snooker', 'Agility 1', 'Open Gamblers (all levels combined)', 'Jumping 2'],
+                'sunday_classes': ['Masters Series', 'Open Speedstakes 1 (all levels combined)', 'Agility']}]
+    setup = {'saturday': ['Gamblers', 'Agility', 'Jumping 2', 'Snooker'],
+             'sunday': ['Speedstakes', 'Masters Jumping', 'Agility', 'Masters Agility']}
+    opts = people.class_options(show, entries, setup)
+    assert [people.class_label(c) for c in opts['saturday']] == ['Gamblers', 'Agility', 'Jumping 2', 'Snooker']
+    assert [people.class_label(c) for c in opts['sunday']] == ['Speedstakes', 'Masters Series', 'Agility']

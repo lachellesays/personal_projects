@@ -41,11 +41,19 @@
           <select class="f" name="class_type_{{ i }}">{% for x in ['Regular', 'Select'] %}<option {{ 'selected' if g.class_type == x }}>{{ x }}</option>{% endfor %}</select></div></div>
         <div><label class="l">Level</label><select class="f" name="level_{{ i }}"><option value="">?</option>{% for x in levels %}<option {{ 'selected' if g.level == x }}>{{ x }}</option>{% endfor %}</select></div>
         <div><label class="l">Speedstakes level</label><select class="f" name="speedstakes_level_{{ i }}"><option value="">Same as level</option>{% for x in levels %}<option {{ 'selected' if g.speedstakes_level == x and g.speedstakes_level != g.level }}>{{ x }}</option>{% endfor %}</select></div></div>
-      <div class="row2">
-        <div class="classpick"><b class="muted">Saturday {{ d.show.saturday_date|day }}</b>
-          {% for c in options.saturday %}<label class="chk"><input type="checkbox" name="sat_{{ i }}" value="{{ c }}" {{ 'checked' if c in g.saturday_classes }}> {{ class_label(c) }}</label>{% endfor %}</div>
-        <div class="classpick"><b class="muted">Sunday {{ d.show.sunday_date|day }}</b>
-          {% for c in options.sunday %}<label class="chk"><input type="checkbox" name="sun_{{ i }}" value="{{ c }}" {{ 'checked' if c in g.sunday_classes }}> {{ class_label(c) }}</label>{% endfor %}</div>
+      <label class="l">Classes <span class="muted">— in running order</span></label>
+      <div class="daycols">
+        {% for field, key, when in [('sat', 'saturday', d.show.saturday_date), ('sun', 'sunday', d.show.sunday_date)] %}
+        <div class="daypick">
+          <div class="dayhead">{{ when|day }}</div>
+          <div class="clist">
+            {% for c in options[key] %}
+            <label class="cchip"><input type="checkbox" name="{{ field }}_{{ i }}" value="{{ c }}" {{ 'checked' if c in g[key ~ '_classes'] }}>
+              <span>{{ class_label(c) }}{% if class_label(c) == 'Masters Series' %}<small>Masters Agility + Masters Jumping</small>{% endif %}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
       </div>
     </div>
   </div>

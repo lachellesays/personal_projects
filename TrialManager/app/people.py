@@ -389,9 +389,18 @@ def class_options(show, jotform_entries: list, setup_classes: dict = None) -> di
                 if add not in seen[day]:
                     seen[day].append(add)
                 covered.add(name)
-    key = lambda cls: (CLASS_SORT.index(CLASS_NAME_MAP.get(cls, cls)) if CLASS_NAME_MAP.get(cls, cls) in CLASS_SORT
-                       else 99, cls)
-    return {day: sorted(seen[day] or DEFAULT_CLASSES[day], key=key) for day in seen}
+    def key(day):
+        # The day's running order from Show setup first (Masters Series where its first round runs), then the rest
+        running = list((setup_classes or {}).get(day) or [])
+        def k(cls):
+            name = CLASS_NAME_MAP.get(cls, cls)
+            spots = [running.index(n) for n in (('Masters Agility', 'Masters Jumping') if name == 'Masters Series'
+                                                 else (name,)) if n in running]
+            if spots:
+                return (0, min(spots), cls)
+            return (1, CLASS_SORT.index(name) if name in CLASS_SORT else 99, cls)
+        return k
+    return {day: sorted(seen[day] or DEFAULT_CLASSES[day], key=key(day)) for day in seen}
 
 
 def class_label(cls: str) -> str:
