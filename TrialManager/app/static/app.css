@@ -222,3 +222,19 @@ a.clink { color: var(--navy); font-weight: 700; text-decoration: underline dotte
 .dogcard.on { border-color: #93C5FD; }
 .chk.big { font-size: 15px; display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
 .chk.big input { width: 18px; height: 18px; }
+
+/* Day-of class picker: one card per day, even-sized class buttons */
+.daypicks { display: grid; gap: 10px; margin-top: 6px; }
+.daypick { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #FAFBFD; }
+.dayhead { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 8px; }
+.cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+.cchip { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 10px; border: 1px solid #CBD5E1;
+         border-radius: 8px; background: #fff; font-size: 13.5px; font-weight: 600; cursor: pointer; line-height: 1.2; }
+.cchip input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--navy); }
+.cchip:has(input:checked) { border-color: var(--navy); background: #EEF2FF; color: var(--navy); }
+.cchip:has(input:disabled) { opacity: .45; cursor: default; }
+.cchip small, .cchip span small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
+.cchip span { display: block; }
+.cchip.done { background: var(--green-bg); border-color: #86EFAC; color: var(--green-ink); cursor: default; display: block; }
+.cchip.done small { color: var(--green-ink); opacity: .8; }
+.dogsum { background: #F8FAFF; border: 1px solid #C7D2FE; border-radius: 10px; padding: 9px 12px; font-size: 14px; }

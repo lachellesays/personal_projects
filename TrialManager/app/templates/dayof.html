@@ -14,11 +14,12 @@
     <form method="post" action="/shows/{{ slug }}/dayof/add"><input type="hidden" name="csrf" value="{{ csrf }}">
       <input type="hidden" name="mode" value="existing">
       <label class="l" for="dog_key">Dog</label>
-      <select class="f" id="dog_key" name="dog_key" required>
+      <select class="f" id="dog_key" name="dog_key" required
+              hx-get="/shows/{{ slug }}/dayof/classes" hx-trigger="change" hx-target="#classes-a" hx-swap="outerHTML">
         <option value="">Choose a dog…</option>
         {% for g in dogs %}<option value="{{ g.key }}">{{ g.last_name }}, {{ g.first_name }} — {{ g.dog_name }} ({{ g.height }}" {{ g.class_type }}, {{ g.level }})</option>{% endfor %}
       </select>
-      {% include "_dayof_classes.html" %}
+      {% with picker_id = "classes-a" %}{% include "_dayof_classes.html" %}{% endwith %}
       <button class="btn primary">Add day-of classes</button>
     </form>
     <p class="hint">To drop a class, scratch it on the Run order page. To move a dog up a level, use UKI Manager's Move-Up page for now; move-ups take effect the next day.</p>

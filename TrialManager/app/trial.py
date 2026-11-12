@@ -528,6 +528,21 @@ def known_dogs(d) -> list:
     return sorted(dogs.values(), key=lambda x: (x['last_name'].lower(), x['first_name'].lower(), x['dog_name'].lower()))
 
 
+def dog_entries(slug: str, dog: dict) -> dict:
+    """What a dog is in already: {day: {class_name: 'entered' | 'scratched'}}. Matched by dog UKI #, or by name and
+    handler for a dog without one. A class it's entered in counts as entered even if another run was scratched."""
+    out = {}
+    for r in all_runs(slug):
+        same = (r['dog_number'] == dog['dog_number']) if dog.get('dog_number') else (
+            not r['dog_number'] and r['dog_name'].lower() == dog['dog_name'].lower()
+            and r['handler_number'] == dog.get('handler_number', ''))
+        if same:
+            day = out.setdefault(r['day'], {})
+            if day.get(r['class_name']) != 'entered':
+                day[r['class_name']] = 'scratched' if r['scratched'] else 'entered'
+    return out
+
+
 def _lvl(level: str) -> str:
     level = (level or '').strip()
     return 'Champ' if level == 'Champion' else level

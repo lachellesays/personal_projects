@@ -645,6 +645,20 @@ def dayof_page(request: Request, slug: str):
                   summary=trial.day_of_summary(slug), day_of_fee=trial.DAY_OF_FEE, msg=msg, error=None, form={}, **ctx)
 
 
+@app.get('/shows/{slug}/dayof/classes', response_class=HTMLResponse)
+def dayof_classes(request: Request, slug: str, dog_key: str = ''):
+    """Section A's class picker for the chosen dog, with what it's already entered in marked."""
+    require_user(request)
+    d = fmt.load(slug)
+    dog = next((x for x in trial.known_dogs(d) if x['key'] == dog_key), None)
+    days = _days(d.show)
+    classes = {day_: [c['class_name'] for c in trial.class_list(slug, day_)] for day_ in days}
+    entered = trial.dog_entries(slug, dog) if dog else {}
+    return render(request, '_dayof_classes.html', picker_id='classes-a', dog=dog, days=days, classes=classes,
+                  entered=entered, entered_count=sum(v == 'entered' for day_ in entered.values() for v in day_.values()),
+                  day_of_fee=trial.DAY_OF_FEE, slug=slug)
+
+
 @app.post('/shows/{slug}/dayof/add', response_class=HTMLResponse)
 async def dayof_add(request: Request, slug: str):
     user = require_user(request)

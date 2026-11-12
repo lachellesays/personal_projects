@@ -368,3 +368,21 @@ def test_show_setup_before_and_after_building(admin, app_env):
     r = c.post(f'/shows/{SLUG}/edit', data={'csrf': token, 'name': 'Renamed Trial', 'show_id': '7104', 'form_id': '261266312429152',
                                           'saturday_date': SAT, 'sunday_date': SUN}, follow_redirects=True)
     assert 'Trial details saved' in r.text and 'Renamed Trial' in r.text
+
+
+def test_day_of_shows_what_a_dog_is_already_in(built):
+    from app import formatter, trial
+    c, token = built
+    d = formatter.load(SLUG)
+    ace = next(x for x in trial.known_dogs(d) if x['dog_name'] == 'Ace')
+    assert trial.dog_entries(SLUG, ace) == {SAT: {'Agility': 'entered', 'Gamblers': 'entered'}, SUN: {'Jumping': 'entered'}}
+    html = c.get(f"/shows/{SLUG}/dayof/classes?dog_key={ace['key']}").text
+    assert 'Already in 3 classes' in html and '✓ Agility' in html and f'value="{SAT}|Agility"' not in html
+    assert f'value="{SUN}|Jumping"' not in html
+    # Scratch Ace's Sunday Jumping: it can be entered again
+    run = next(r for r in trial.all_runs(SLUG) if r['dog_name'] == 'Ace' and r['day'] == SUN)
+    trial.toggle_run_scratch(SLUG, run['id'], {'name': 'test'})
+    html = c.get(f"/shows/{SLUG}/dayof/classes?dog_key={ace['key']}").text
+    assert 'Already in 2 classes' in html and f'value="{SUN}|Jumping"' in html and 'Was scratched' in html
+    page = c.get(f'/shows/{SLUG}/dayof').text
+    assert "Choose a dog to see what it's already entered in" in page

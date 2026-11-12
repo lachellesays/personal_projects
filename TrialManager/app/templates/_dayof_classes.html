@@ -1,4 +1,26 @@
-<label class="l">Classes</label>
-{% for dd in days %}<div class="classpick"><b class="muted">{{ dd|day }}</b>
-  {% for c in classes[dd] %}<label class="chk"><input type="checkbox" name="classes" value="{{ dd }}|{{ c }}"> {{ c }}</label>{% endfor %}</div>{% endfor %}
-<p class="hint">Each class costs its normal fee plus {{ day_of_fee|money }}.</p>
+{#- Day-of class picker. `entered` ({day: {class: 'entered'|'scratched'}}) marks what the chosen dog is already in. -#}
+{%- set entered = entered or {} -%}
+<div class="daypicks" id="{{ picker_id or 'classes-new' }}">
+  {% if dog %}
+    <div class="dogsum"><b>{{ dog.dog_name }}</b> · {{ dog.height }}" {{ dog.class_type }} · {{ dog.level }}{% if dog.handler_number %} · handler #{{ dog.handler_number }}{% endif %}
+      <div class="muted">{% if entered_count %}Already in {{ entered_count }} class{{ 'es' if entered_count != 1 }}. Those are marked ✓ below.{% else %}Not in any classes yet.{% endif %}</div></div>
+  {% elif picker_id == 'classes-a' %}
+    <p class="muted">Choose a dog to see what it's already entered in.</p>
+  {% endif %}
+  {% for dd in days %}
+    <div class="daypick">
+      <div class="dayhead">{{ dd|day }}</div>
+      <div class="cgrid">
+        {% for c in classes[dd] %}{% set st = entered.get(dd, {}).get(c) %}
+          {% if st == 'entered' %}
+            <span class="cchip done" title="{{ dog.dog_name }} is already entered in {{ c }}">✓ {{ c }}<small>Entered</small></span>
+          {% else %}
+            <label class="cchip"><input type="checkbox" name="classes" value="{{ dd }}|{{ c }}" {{ 'disabled' if picker_id == 'classes-a' and not dog }}>
+              <span>{{ c }}{% if st == 'scratched' %}<small>Was scratched</small>{% endif %}</span></label>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+  <p class="hint">Each class costs its normal fee plus {{ day_of_fee|money }}.</p>
+</div>
