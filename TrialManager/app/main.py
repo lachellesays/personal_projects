@@ -815,7 +815,7 @@ def show_setup(request: Request, slug: str):
         (r['day'], r['class_name']) for r in trial.all_runs(slug)}
     return render(request, 'show_setup.html', days=days, day_sets={dd: trial.day_setting(slug, dd) for dd in days},
                   day_classes={dd: trial.class_list(slug, dd) for dd in days}, built=trial.is_built(slug),
-                  addable={dd: trial.addable_classes(slug, dd) for dd in days}, in_use=in_use,
+                  addable={dd: trial.addable_classes(slug, dd) for dd in days}, in_use=in_use, has_aframe=trial.has_aframe,
                   level_groups=trial.LEVEL_GROUPS, height_orders=trial.HEIGHT_ORDERS,
                   flash=request.session.pop('setup_flash', ''),
                   form={'name': d.show.name, 'show_id': d.show.show_id, 'form_id': d.show.form_id,
@@ -829,6 +829,7 @@ async def show_setup_day(request: Request, slug: str):
     day_ = form.get('day', '')
     names = form.getlist('class')
     classes = [{'class_name': n, 'ring': form.get(f'ring::{n}', '1'), 'select_first': form.get(f'select_first::{n}') == 'on',
+                'has_aframe': form.get(f'aframe::{n}') == 'on',
                 'combine_levels': form.get(f'combine::{n}') == 'on'} for n in names]
     trial.save_day_setup(slug, day_, form.get('levels_first', ''), form.get('heights', ''), classes, user)
     request.session['setup_flash'] = f'{day(day_)} saved.'

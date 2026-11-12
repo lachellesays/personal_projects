@@ -222,8 +222,9 @@ def save_day_setup(slug: str, day: str, levels_first: str, heights: str, classes
         with db.engine().begin() as conn:
             conn.execute(update(db.class_settings).where(db.class_settings.c.id == s['id']).values(
                 sort=n * 10, ring=(c.get('ring') or '1').strip()[:10], select_first=bool(c.get('select_first')),
-                combine_levels=bool(c.get('combine_levels'))))
-        if (s['select_first'], s['combine_levels']) != (bool(c.get('select_first')), bool(c.get('combine_levels'))):
+                combine_levels=bool(c.get('combine_levels')), has_aframe=bool(c.get('has_aframe'))))
+        if ((s['select_first'], s['combine_levels'], has_aframe(s))
+                != (bool(c.get('select_first')), bool(c.get('combine_levels')), bool(c.get('has_aframe')))):
             regroup_keep_order(slug, day, c['class_name'])
     db.log(user, 'setup', slug, target=day, classes=[c['class_name'] for c in classes])
 
@@ -289,12 +290,76 @@ def save_day(slug: str, day: str, levels_first: str, heights: str, user: dict, r
     db.log(user, 'runorder', slug, target=day, event='day order', levels_first=levels_first, heights=heights)
 
 
-def _group_key(run: dict, setting: dict, day: dict) -> tuple:
+def has_aframe(setting: dict) -> bool:
+    """Classes with an A-frame: chosen per class on Show setup, else any class with 'Agility' in the name
+    (the same default as the check-in app's A-frame banners)."""
+    if setting.get('has_aframe') is not None:
+        return bool(setting['has_aframe'])
+    return 'agility' in setting['class_name'].lower()
+
+
+def aframe_down(run: dict) -> bool:
+    """The A-frame is lowered for 12" and under and for Select dogs (as in the check-in app)."""
+    return (run['height'] or 0) <= 12 or run['class_type'] == 'Select'
+
+
+def _segment(run: dict, setting: dict, day: dict) -> tuple:
+    """(level group rank, height) — heights always run together inside each level group."""
     group = level_group(run['level'], setting['combine_levels'])
     level_rank = 0 if group in ('', day['levels_first']) else 1
     height = run['height'] or 0
-    type_rank = 0 if (run['class_type'] == 'Select') == setting['select_first'] else 1
-    return (level_rank, -height if day['heights'] == 'tall' else height, type_rank)
+    return (level_rank, -height if day['heights'] == 'tall' else height)
+
+
+def select_first_plan(runs_: list, setting: dict, day: dict) -> dict:
+    """For each (level group, height): does Select run before Regular?
+
+    Classes with an A-frame: chosen so the A-frame changes as few times as possible over the whole class (Select dogs
+    end up back to back across heights, e.g. 20 Regular, 20 Select, 16 Select, 16 Regular). Found exactly by trying
+    both orders at every height, carrying the A-frame position from one height to the next. When both orders tie,
+    the class's 'Select before Regular' setting decides. Other classes just follow that setting.
+    Scratched runs don't count, since those dogs won't run."""
+    pref = bool(setting['select_first'])
+    segs = {}
+    for r in runs_:
+        if not r.get('scratched'):
+            segs.setdefault(_segment(r, setting, day), {})[r['class_type'] == 'Select'] = aframe_down(r)
+    if not has_aframe(setting):
+        return {k: pref for k in segs}
+    # best[state] = (changes, ties broken against the setting, choices so far); state = is the A-frame down now
+    best = {None: (0, 0, {})}
+    for k in sorted(segs):
+        types = segs[k]
+        nxt = {}
+        for state, (cost, against, plan) in best.items():
+            for sel_first in ((pref, not pref) if len(types) == 2 else (pref,)):
+                seq = [types[t] for t in ((True, False) if sel_first else (False, True)) if t in types]
+                c = cost + sum(1 for a, b in zip([state] + seq, seq) if a is not None and a != b)
+                cand = (c, against + (len(types) == 2 and seq[0] != seq[-1] and sel_first != pref), {**plan, k: sel_first})
+                end = seq[-1]
+                if end not in nxt or cand[:2] < nxt[end][:2]:
+                    nxt[end] = cand
+        best = nxt
+    return min(best.values(), key=lambda v: v[:2])[2] if segs else {}
+
+
+def aframe_changes(runs_: list) -> int:
+    """How many times the A-frame goes up or down over this running order (scratched runs skipped)."""
+    states = [aframe_down(r) for r in runs_ if not r.get('scratched') and not r.get('out')]
+    return sum(1 for a, b in zip(states, states[1:]) if a != b)
+
+
+def _group_key(run: dict, setting: dict, day: dict, plan: dict = None) -> tuple:
+    seg = _segment(run, setting, day)
+    sel_first = (plan or {}).get(seg, setting['select_first'])
+    type_rank = 0 if (run['class_type'] == 'Select') == sel_first else 1
+    return seg + (type_rank,)
+
+
+def group_keys(runs_: list, setting: dict, day: dict) -> dict:
+    """{run id: sort key} for a whole class, using one A-frame plan for all of it."""
+    plan = select_first_plan(runs_, setting, day)
+    return {r['id']: _group_key(r, setting, day, plan) for r in runs_}
 
 
 def scratched_dogs(slug: str) -> tuple:
@@ -378,7 +443,7 @@ def generate(slug: str, day: str, class_name: str, seed=None, user: dict = None)
     rng = random.Random(seed)
     out = {r['id'] for r in runs_ if _is_out(r, scratched_dogs(slug))}
     dset = day_setting(slug, day)
-    keys = {r['id']: _group_key(r, setting, dset) for r in runs_}
+    keys = group_keys(runs_, setting, dset)
     rng.shuffle(runs_)
     runs_.sort(key=lambda r: keys[r['id']])
     runs_ = spread(runs_, keys, out, rng)
@@ -395,7 +460,8 @@ def regroup_keep_order(slug: str, day: str, class_name: str):
     setting = get_class(slug, day, class_name)
     runs_ = _event(slug, day, class_name)
     dset = day_setting(slug, day)
-    runs_.sort(key=lambda r: _group_key(r, setting, dset))   # stable sort keeps the order inside each group
+    keys = group_keys(runs_, setting, dset)
+    runs_.sort(key=lambda r: keys[r['id']])   # stable sort keeps the order inside each group
     _save_positions([r['id'] for r in runs_])
 
 
@@ -406,16 +472,25 @@ def _place_in_group(slug: str, run_key: str):
     if not new:
         return
     setting = get_class(slug, new['day'], new['class_name'])
-    others = [r for r in _event(slug, new['day'], new['class_name']) if r['id'] != new['id']]
+    everyone = _event(slug, new['day'], new['class_name'])
+    others = [r for r in everyone if r['id'] != new['id']]
     dset = day_setting(slug, new['day'])
-    key = _group_key(dict(new), setting, dset)
+    # Keep the class's current Select/Regular order at each height (dogs already placed don't move); a height
+    # that's new to the class gets whichever order adds the fewest A-frame changes.
+    current = {}
+    for r in others:
+        current.setdefault(_segment(r, setting, dset), []).append(r['class_type'] == 'Select')
+    plan = select_first_plan(everyone, setting, dset)
+    plan.update({k: v[0] for k, v in current.items() if len(set(v)) == 2})
+    keyf = lambda r: _group_key(r, setting, dset, plan)
+    key = keyf(dict(new))
     at = 0
     if new['source'] == 'day_of' and masters_order(slug, new['day']).get(new['class_name']) == 'first':
         # Masters rule: day-of entries run first within the first Masters class
-        at = next((i for i, r in enumerate(others) if _group_key(r, setting, dset) >= key), len(others))
+        at = next((i for i, r in enumerate(others) if keyf(r) >= key), len(others))
     else:
         for i, r in enumerate(others):
-            if _group_key(r, setting, dset) <= key:
+            if keyf(r) <= key:
                 at = i + 1
     ids = [r['id'] for r in others]
     ids.insert(at, new['id'])
@@ -446,9 +521,10 @@ def order_masters_from_first_round(slug: str, day: str, class_name: str, user: d
     setting, dset = get_class(slug, day, class_name), day_setting(slug, day)
     runs_ = _event(slug, day, class_name)
     before = [r['id'] for r in runs_]
+    keys = group_keys(runs_, setting, dset)
     def worst_first(r):
         s_ = score.get(results._dog_key(r))
-        return (_group_key(r, setting, dset), 0 if s_ is None else 1, -(s_ or 0))
+        return (keys[r['id']], 0 if s_ is None else 1, -(s_ or 0))
     runs_.sort(key=worst_first)
     _save_positions([r['id'] for r in runs_])
     db.log(user, 'reorder', slug, target=f'{day}|{class_name}', event=f'reverse order of {first} results', before=before)
@@ -526,7 +602,8 @@ def event_view(slug: str, day: str, class_name: str) -> dict:
                      'group': group, 'new_group': group != prev_group, 'new_block': block != prev_block,
                      'block_label': f"{r['height']}\" {r['class_type']}"})
         prev_group, prev_block = group, block
-    return {'setting': setting, 'rows': rows, 'active': seq, 'conflicts': sum(1 for r in rows if r['conflict'] and not r['out'])}
+    return {'setting': setting, 'rows': rows, 'active': seq, 'conflicts': sum(1 for r in rows if r['conflict'] and not r['out']),
+            'has_aframe': has_aframe(setting), 'aframe_changes': aframe_changes(rows)}
 
 
 def overview(slug: str) -> list:

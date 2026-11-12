@@ -37,7 +37,8 @@
       <li><span class="handle" title="Drag to move">&#8801;</span><input type="hidden" name="class" value="{{ c.class_name }}">
         <b class="cname">{{ c.class_name }}</b>
         <label class="mini-l">Ring <input class="f mini" name="ring::{{ c.class_name }}" value="{{ c.ring }}" aria-label="Ring for {{ c.class_name }}"></label>
-        <label class="chk"><input type="checkbox" name="select_first::{{ c.class_name }}" {{ 'checked' if c.select_first }}> Select before Regular</label>
+        <label class="chk" title="Groups Select dogs back to back so the A-frame changes as few times as possible"><input type="checkbox" name="aframe::{{ c.class_name }}" {{ 'checked' if has_aframe(c) }}> A-frame</label>
+        <label class="chk" title="With an A-frame, this only decides ties"><input type="checkbox" name="select_first::{{ c.class_name }}" {{ 'checked' if c.select_first }}> Select before Regular</label>
         <label class="chk"><input type="checkbox" name="combine::{{ c.class_name }}" {{ 'checked' if c.combine_levels }}> All levels together</label>
         {% if (dd, c.class_name) not in in_use %}<button class="linkbtn rm" form="rm-{{ dd }}" name="class_name" value="{{ c.class_name }}"
           title="Nobody is entered in {{ c.class_name }} yet, so it can be taken off this day">Remove</button>{% endif %}
@@ -46,7 +47,8 @@
     </ol>
     {% else %}<p class="muted">No classes on this day yet. They appear here once entries come in from JotForm, or add them below.</p>{% endif %}
     <p class="hint">{% if built %}Saving re-sorts each class into its groups; dogs keep their order inside each height.{% else %}These settings are used when you build the run order.{% endif %}
-      Masters: whichever Masters class is higher in this list is treated as the first round.</p>
+      Masters: whichever Masters class is higher in this list is treated as the first round.
+      <b>A-frame</b> classes order Select and Regular at each height for the fewest A-frame changes (Select dogs back to back); "Select before Regular" then only breaks ties. Heights always stay together.</p>
     <button class="btn primary small">Save {{ dd|day }}</button>
   </form>
   {% if addable[dd] %}

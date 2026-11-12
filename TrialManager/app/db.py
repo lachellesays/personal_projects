@@ -146,6 +146,7 @@ class_settings = Table(
     Column('ring', String, default='1'),
     Column('select_first', Boolean, nullable=False, default=True),
     Column('combine_levels', Boolean, nullable=False, default=False),
+    Column('has_aframe', Boolean),                         # None = default (classes with 'Agility' in the name)
     Column('generated_at', DateTime(timezone=True)),
     # Course details for scoring (see scoring.py)
     Column('yards_bn', Integer), Column('yards_senior', Integer), Column('yards_champ', Integer),

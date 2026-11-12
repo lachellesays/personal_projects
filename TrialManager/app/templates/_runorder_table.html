@@ -3,7 +3,7 @@
 <div id="ro-msg"></div>
 <div class="ro-head">
   <div><h2 style="margin:0">{{ cls }} <span class="muted">{{ day|day }}</span></h2>
-    <div class="muted">{{ ev.active }} dogs · {% if ev.conflicts %}<span class="owes">{{ ev.conflicts }} conflict{{ 's' if ev.conflicts != 1 }}</span>{% else %}no conflicts{% endif %}
+    <div class="muted">{{ ev.active }} dogs · {% if ev.conflicts %}<span class="owes">{{ ev.conflicts }} conflict{{ 's' if ev.conflicts != 1 }}</span>{% else %}no conflicts{% endif %}{% if ev.has_aframe %} · {{ ev.aframe_changes }} A-frame change{{ 's' if ev.aframe_changes != 1 }}{% endif %}
       (fewer than {{ gap_target }} dogs between a handler's runs). Drag a row by its handle to move it.</div></div>
   <div class="ro-actions">
     <a class="btn small" href="/shows/{{ slug }}/scribe.pdf?day={{ day }}&cls={{ cls|urlencode }}" target="_blank">Scribe sheets, this class</a>

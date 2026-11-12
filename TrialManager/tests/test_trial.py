@@ -416,3 +416,59 @@ def test_add_and_remove_classes_on_setup(admin, app_env):
     assert r.status_code == 400 and 'People have entered Agility' in r.text
     r = c.post(f'/shows/{SLUG}/setup/class', data={'csrf': token, 'day': SAT, 'class_name': 'Agility'})
     assert 'already on that day' in r.text
+
+
+def _r(i, height, ctype, level='Champ', scratched=False):
+    return {'id': i, 'height': height, 'class_type': ctype, 'level': level, 'scratched': scratched, 'handler_number': str(i)}
+
+
+def _order(runs_, setting, day):
+    from app import trial
+    keys = trial.group_keys(runs_, setting, day)
+    return [(r['height'], r['class_type'][0]) for r in sorted(runs_, key=lambda r: keys[r['id']])]
+
+
+def test_fewest_aframe_changes():
+    from app import trial
+    tall = {'levels_first': 'Senior/Champ', 'heights': 'tall'}
+    setting = {'class_name': 'Agility', 'select_first': True, 'combine_levels': False, 'has_aframe': None}
+    runs_ = [_r(1, 24, 'Regular'), _r(2, 20, 'Regular'), _r(3, 20, 'Select'), _r(4, 16, 'Select'), _r(5, 16, 'Regular'),
+             _r(6, 12, 'Regular'), _r(7, 12, 'Select'), _r(8, 8, 'Select')]
+    order = _order(runs_, setting, tall)
+    # Select dogs back to back across 20/16, and heights stay together
+    assert order == [(24, 'R'), (20, 'R'), (20, 'S'), (16, 'S'), (16, 'R'), (12, 'S'), (12, 'R'), (8, 'S')]
+    ordered = lambda st: sorted(runs_, key=lambda r: trial.group_keys(runs_, st, tall)[r['id']])
+    assert trial.aframe_changes(ordered(setting)) == 3          # the fewest possible: three 'up' stretches
+    # The old fixed "Select first" order: 24R | 20S 20R | 16S 16R | 12S ... = 5 changes
+    fixed = {**setting, 'has_aframe': False}
+    assert _order(runs_, fixed, tall)[:5] == [(24, 'R'), (20, 'S'), (20, 'R'), (16, 'S'), (16, 'R')]
+    assert trial.aframe_changes(ordered(fixed)) == 5
+    # Small to tall: 8 and 12 are all down, 16 Select joins them, then up; ties go to "Select before Regular"
+    small = {'levels_first': 'Beginner/Novice', 'heights': 'small'}
+    assert _order(runs_, setting, small)[:5] == [(8, 'S'), (12, 'S'), (12, 'R'), (16, 'S'), (16, 'R')]
+    assert trial.aframe_changes(sorted(runs_, key=lambda r: trial.group_keys(runs_, setting, small)[r['id']])) == 3
+    # Across level groups the A-frame position carries over: Senior/Champ ends on Select 20 → Beginner/Novice starts Select
+    two = [_r(1, 20, 'Regular'), _r(2, 20, 'Select'), _r(3, 20, 'Select', 'Novice'), _r(4, 20, 'Regular', 'Novice')]
+    assert _order(two, setting, tall) == [(20, 'R'), (20, 'S'), (20, 'S'), (20, 'R')]
+    # Jumping (no A-frame) keeps the plain setting; scratched dogs don't count
+    jump = {**setting, 'class_name': 'Jumping'}
+    assert _order(runs_, jump, tall)[1:3] == [(20, 'S'), (20, 'R')]
+    assert trial.has_aframe({'class_name': 'Masters Agility', 'has_aframe': None}) and not trial.has_aframe(jump)
+    assert trial.has_aframe({'class_name': 'Gamblers', 'has_aframe': True})
+
+
+def test_aframe_setting_on_setup_and_run_order(built):
+    from app import trial
+    c, token = built
+    ev = event(SAT, 'Agility')
+    assert ev['has_aframe'] and 'A-frame change' in c.get(f'/shows/{SLUG}/runorder?day={SAT}&cls=Agility').text
+    rows = [r for r in ev['rows'] if not r['out']]
+    # Heights never split, and within each level group Select and Regular each sit in one block per height
+    seen = []
+    for r in rows:
+        k = (r['group'], r['height'])
+        assert k not in seen or seen[-1] == k
+        if not seen or seen[-1] != k:
+            seen.append(k)
+    page = c.get(f'/shows/{SLUG}/setup').text
+    assert 'name="aframe::Agility" checked' in page and 'name="aframe::Gamblers" checked' not in page
