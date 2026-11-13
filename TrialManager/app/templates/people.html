@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}People · Trial Manager{% endblock %}
+{% block title %}Users &amp; access · Trial Manager{% endblock %}
 {% block main %}
-<div class="titlebar"><div><h1>People</h1><div class="sub">Everyone here is a full admin. There's no public sign-up; new people join by invite only.</div></div></div>
+<div class="titlebar"><div><h1>Users &amp; access</h1><div class="sub">Everyone here is a full admin. There's no public sign-up; new people join by invite only.</div></div></div>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 {% if link %}
 <div class="flash ok">Invite created for <b>{{ invited }}</b>. Send them this link. It works once and expires in 48 hours.

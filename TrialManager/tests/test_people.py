@@ -128,8 +128,10 @@ def test_paper_entry_end_to_end(admin):
     r = post(c, f'/shows/{SLUG}/paper', paper_form(token, handler, dogs, amount='30', note='Check 1042'),
                follow_redirects=False)
     assert r.status_code == 303
-    page = c.get(f'/shows/{SLUG}/paper').text
-    assert 'Entered Bob Jones: Nova. Fees $30.00, paid $30.00.' in page and 'Check' in page
+    page = r.headers['location']
+    assert page.endswith('/entries?f=paper')
+    page = c.get(page).text
+    assert 'Entered Bob Jones: Nova. Fees $30.00, paid $30.00.' in page and 'Nova' in page and 'PAPER' in page
 
     d = formatter.load(SLUG)
     (paper,) = [e for e in d.entries if e['submission_id'].startswith('paper-')]

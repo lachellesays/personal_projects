@@ -1,15 +1,6 @@
-{% extends "base.html" %}
-{% block title %}Results · {{ cls }} · {{ d.show.name }}{% endblock %}
-{% block main %}
-{% include "_show_head.html" %}
-{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
-{% include "_scoring_top.html" %}
-<div class="ro-grid">
-  {% include "_scoring_classes.html" %}
-  <div>
     <div class="ro-head"><h2 style="margin:0">{{ cls }} results <span class="muted">{{ day|day }}</span></h2>
-      <a class="btn small" href="/shows/{{ slug }}/scoring?day={{ day }}&cls={{ cls|urlencode }}">Back to scores</a></div>
-    {% if not ev.calculated %}<div class="flash info">Not calculated yet (or scores changed since). Go back and click Calculate.</div>
+      <a class="btn small" href="/shows/{{ slug }}/scoring?day={{ day }}&cls={{ cls|urlencode }}">Edit scores</a></div>
+    {% if not ev.calculated %}<div class="flash info">Not calculated yet (or scores changed since). On the Scores tab, click Calculate.</div>
     {% else %}
     <div class="panel" style="margin-bottom:12px"><h3>Publish to the check-in app</h3>
       <p class="muted">In Trial Secretary: Admin → Publish results → pick the class → paste → Preview → Publish.</p>
@@ -35,6 +26,3 @@
         {% endfor %}</tbody></table></div>
     {% endfor %}
     {% endif %}
-  </div>
-</div>
-{% endblock %}

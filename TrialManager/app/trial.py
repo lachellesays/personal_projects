@@ -223,6 +223,10 @@ def save_day_setup(slug: str, day: str, levels_first: str, heights: str, classes
             conn.execute(update(db.class_settings).where(db.class_settings.c.id == s['id']).values(
                 sort=n * 10, ring=(c.get('ring') or '1').strip()[:10], select_first=bool(c.get('select_first')),
                 combine_levels=bool(c.get('combine_levels')), has_aframe=bool(c.get('has_aframe'))))
+        if s['combine_levels'] != bool(c.get('combine_levels')):
+            # Scored together or by level changed: places need recalculating (Scoring shows "not calculated")
+            with db.engine().begin() as conn:
+                conn.execute(update(db.class_settings).where(db.class_settings.c.id == s['id']).values(calculated_at=None))
         if ((s['select_first'], s['combine_levels'], has_aframe(s))
                 != (bool(c.get('select_first')), bool(c.get('combine_levels')), bool(c.get('has_aframe')))):
             regroup_keep_order(slug, day, c['class_name'])
@@ -741,20 +745,36 @@ CSV_COLUMNS = ['Run_Order', 'Date', 'Day', 'Event', 'Event_Num', 'Level', 'Class
                'Combined Class Name', 'Ring']
 
 
-def ordered_for_export(slug: str, day: str = None) -> list:
-    """Active runs in running order, one dict per run, with the class's combined name and running number."""
+def ordered_for_export(slug: str, day: str = None, include_out: bool = False) -> list:
+    """Runs in running order, one dict per run, with the class's combined name and running number.
+    Scratched runs are left out unless include_out (then they keep their place, marked out=True, with no seq)."""
     scr = scratched_dogs(slug)
     out = []
     for n, s in enumerate(class_list(slug, day), start=1):
         seq = 0
         for r in _event(slug, s['day'], s['class_name']):
-            if _is_out(r, scr):
+            is_out = _is_out(r, scr)
+            if is_out and not include_out:
                 continue
-            seq += 1
+            if not is_out:
+                seq += 1
             group = level_group(r['level'], s['combine_levels'])
-            out.append({**r, 'seq': seq, 'event_index': n, 'ring': s['ring'], 'group': group,
-                        'combined': combined_name(s['class_name'], group)})
+            out.append({**r, 'seq': None if is_out else seq, 'out': is_out, 'event_index': n, 'ring': s['ring'],
+                        'group': group, 'combined': combined_name(s['class_name'], group),
+                        'has_aframe': has_aframe(s)})
     return out
+
+
+def export_row(r: dict) -> dict:
+    """One run in the check-in app's terms (grid_run_order_export.csv columns). Shared by the CSV and the live push."""
+    d_ = date.fromisoformat(r['day'])
+    event, num = event_parts(r['class_name'])
+    return {'Run_Order': r['event_index'] * 100000 + (r['seq'] or 0) * 10, 'Date': d_.strftime('%m/%d/%Y'),
+            'Day': d_.strftime('%A'), 'Event': event, 'Event_Num': num, 'Level': r['level'], 'Class_Type': r['class_type'],
+            'Intl_Jump_Ht': r['height'], 'Name': r['dog_name'], 'Breed': r['breed'], 'First_Name': r['first_name'],
+            'Last_Name': r['last_name'], 'Handler_Name': f"{r['first_name']} {r['last_name']}".strip(),
+            'UKI_Number': r['handler_number'], 'UKI_Dog_Number': r['dog_number'], 'Run Group': ' ', 'Team Name': '',
+            'Combined Class Name': r['combined'], 'Ring': r['ring']}
 
 
 def run_order_csv(slug: str, day: str = None) -> bytes:
@@ -763,12 +783,8 @@ def run_order_csv(slug: str, day: str = None) -> bytes:
     w = csv.writer(buf)
     w.writerow(CSV_COLUMNS)
     for r in ordered_for_export(slug, day):
-        d_ = date.fromisoformat(r['day'])
-        event, num = event_parts(r['class_name'])
-        w.writerow([r['event_index'] * 100000 + r['seq'] * 10, d_.strftime('%m/%d/%Y'), d_.strftime('%A'), event, num,
-                    r['level'], r['class_type'], r['height'], r['dog_name'], r['breed'], r['first_name'], r['last_name'],
-                    f"{r['first_name']} {r['last_name']}".strip(), r['handler_number'], r['dog_number'], ' ', '',
-                    r['combined'], r['ring']])
+        row = export_row(r)
+        w.writerow([row[c] for c in CSV_COLUMNS])
     return buf.getvalue().encode('utf-8')
 
 

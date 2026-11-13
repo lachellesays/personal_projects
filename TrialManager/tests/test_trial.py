@@ -212,6 +212,36 @@ def test_pages_and_scribe_sheets(built):
     assert sc20 == sorted(sc20, key=lambda t: t != 'Regular')
 
 
+def test_menu_follows_the_trial_and_old_pages_redirect(built):
+    c, token = built
+    page = c.get(f'/shows/{SLUG}/entries').text
+    for label in ('Before the trial', 'Trial day', 'Entries', 'Review', 'Send to UKI', 'Run order', 'Day-of entries',
+                  'Scoring &amp; results', 'Handlers &amp; dogs', 'Users &amp; access'):
+        assert label in page
+    assert 'Paper entries' not in page and 'Fix typos' not in page    # folded into Entries and Review
+    assert '+ Paper entry' in page and 'f=paper' in page
+    # The JotForm banner is only on before-the-trial pages
+    assert 'Refresh from JotForm' in page
+    assert 'Refresh from JotForm' not in c.get(f'/shows/{SLUG}/scoring').text
+    # Old addresses still work
+    moved = {f'/shows/{SLUG}/paper': f'/shows/{SLUG}/entries?f=paper',
+             f'/shows/{SLUG}/typos?kind=dogs': f'/shows/{SLUG}/review?t=typos&kind=dogs',
+             f'/shows/{SLUG}/warnings': f'/shows/{SLUG}/review?t=warnings',
+             f'/shows/{SLUG}/scoring/results?day={SAT}&cls=Agility': f'/shows/{SLUG}/scoring?view=results&day={SAT}&cls=Agility',
+             f'/shows/{SLUG}/scoring/masters?day={SAT}': f'/shows/{SLUG}/scoring?view=masters&day={SAT}'}
+    for old, new in moved.items():
+        r = c.get(old, follow_redirects=False)
+        assert r.status_code == 303 and r.headers['location'] == new, old
+    # Review's two tabs
+    assert 'Corrections (' in c.get(f'/shows/{SLUG}/review?t=typos').text
+    assert 'before you send the workbook to UKI' in c.get(f'/shows/{SLUG}/review?t=warnings').text
+    # Scoring & results tabs; no Masters classes this day, so that tab isn't offered and falls back to Scores
+    page = c.get(f'/shows/{SLUG}/scoring?day={SAT}&cls=Agility').text
+    assert 'Course details for Agility' in page and 'view=results' in page and 'Results file for UKI' in page
+    assert 'Not calculated yet' in c.get(f'/shows/{SLUG}/scoring?view=results&day={SAT}&cls=Agility').text
+    assert 'Course details' in c.get(f'/shows/{SLUG}/scoring?view=masters&day={SAT}').text
+
+
 def test_scribe_sheets_are_collated_for_cutting():
     from app import trial
     runs = [{'event_index': 1, 'class_name': 'Agility', 'seq': i} for i in range(1, 20)]   # 19 dogs -> 5 pages
@@ -289,7 +319,8 @@ def test_scoring_games(built):
     assert res['Ace']['points'] == 28 and res['Cody']['points'] == 29
     page = c.get(f'/shows/{SLUG}/scoring?day={SAT}&cls=Gamblers').text
     assert 'value="11531151"' in page and '= 18' in page
-    assert res['Ace']['place'] == 1 and res['Cody']['place'] == 1          # Champ and Senior are placed separately
+    # Open Gamblers places all levels together by height (as UKI Manager did in November 2026): Cody's 29 beats Ace's 28
+    assert res['Cody']['place'] == 1 and res['Ace']['place'] == 2
 
 
 def test_masters_series_end_to_end(admin, app_env):
@@ -321,13 +352,14 @@ def test_masters_series_end_to_end(admin, app_env):
     assert order == ['Ace', 'Bolt', 'Cody', 'Dot']          # 30, 29, 28, 27 (Dot fastest runs last)
     enter('Masters Agility', {'Ace': {'time': '40'}, 'Bolt': {'time': '38', 'course_faults': '5'},
                               'Cody': {'status': 'E'}, 'Dot': {'status': 'ABS'}, 'Elf': {'time': '45'}})
-    page = c.get(f'/shows/{SLUG}/scoring/masters?day={SUN}').text
+    page = c.get(f'/shows/{SLUG}/scoring?view=masters&day={SUN}').text
     assert 'Masters Series overall' in page and 'Qualified' in page
     mv = results.masters_view(SLUG, SUN)
     rows = {d['dog_name']: d for g in mv['groups'] for d in g['rows']}
     assert (rows['Ace']['place'], rows['Ace']['overall'], rows['Ace']['prize']) == (1, 70.0, 16.0)   # 4 entered at 20"
     assert (rows['Bolt']['place'], rows['Bolt']['overall']) == (2, 72.0)
-    assert rows['Cody']['place'] == 3 and rows['Dot']['place'] == 0 and 'forfeits' in rows['Dot']['note']
+    assert rows['Cody']['place'] == 0 and rows['Cody']['note'].startswith('Finished 3rd')   # only 1st and 2nd are placed
+    assert rows['Dot']['place'] == 0 and 'forfeits' in rows['Dot']['note']
     assert rows['Elf']['place'] == 1 and rows['Elf']['prize'] == 4.0                                  # 16" Select on its own
     assert not rows['Dot']['bye']                # fastest Jumping, but absent in Agility forfeits it
     jump = {r['dog_name']: r['result'] for r in results.entry_view(SLUG, SUN, 'Masters Jumping')['rows']}
@@ -339,7 +371,7 @@ def test_masters_series_end_to_end(admin, app_env):
 
     cert = c.get(f'/shows/{SLUG}/scoring/masters/certificates.pdf?day={SUN}')
     assert cert.content[:4] == b'%PDF' and cert.content.count(b'/Type /Page\n') + cert.content.count(b'/Type /Page ') >= 1
-    assert 'Print Final certificates (4)' in c.get(f'/shows/{SLUG}/scoring/masters?day={SUN}').text
+    assert 'Print Final certificates (4)' in c.get(f'/shows/{SLUG}/scoring?view=masters&day={SUN}').text
 
 
 def test_show_setup_before_and_after_building(admin, app_env):
@@ -472,3 +504,32 @@ def test_aframe_setting_on_setup_and_run_order(built):
             seen.append(k)
     page = c.get(f'/shows/{SLUG}/setup').text
     assert 'name="aframe::Agility" checked' in page and 'name="aframe::Gamblers" checked' not in page
+
+
+def test_all_levels_together_is_scored_together(built):
+    from app import results, scoring, trial
+    c, token = built
+    c.post(f'/shows/{SLUG}/scoring/course', data={'csrf': token, 'day': SAT, 'cls': 'Agility', 'yards_bn': '150', 'yards_champ': '170'})
+    rows = {r['dog_name']: r for r in results.entry_view(SLUG, SAT, 'Agility')['rows']}
+    by_level = rows['Lux']['sct']                                    # Novice 20": Beginner/Novice yardage and rates
+    assert by_level == scoring.sct('Agility', 'Novice', 20, 'Regular', {'yards_bn': 150, 'yards_champ': 170})
+    for dog, t in [('Ace', '40'), ('Lux', '35'), ('Ivy', '38')]:     # Champ, Novice, Senior at 20" Regular, all clean
+        c.post(f'/shows/{SLUG}/scoring/score/{rows[dog]["id"]}', data={'csrf': token, 'day': SAT, 'cls': 'Agility', 'time': t,
+               'course_faults': '0'}, headers={'HX-Request': 'true'})
+    c.post(f'/shows/{SLUG}/scoring/calculate', data={'csrf': token, 'day': SAT, 'cls': 'Agility'})
+    res = lambda: {x['dog_name']: (x['score'] or {}).get('result') for x in results.class_runs(SLUG, SAT, 'Agility')}
+    assert res()['Ace']['place'] == 1 and res()['Lux']['place'] == 1 and res()['Ivy']['place'] == 1   # each wins its level
+
+    # Tick "All levels together" on Show setup for Agility
+    names = [x['class_name'] for x in trial.class_list(SLUG, SAT)]
+    form = {'csrf': token, 'day': SAT, 'levels_first': 'Senior/Champ', 'heights': 'tall', 'class': names}
+    form.update({f'ring::{n}': '1' for n in names})
+    form.update({f'combine::{n}': 'on' for n in names if n in ('Agility', 'Gamblers')})
+    c.post(f'/shows/{SLUG}/setup/day', data=form)
+    assert not results.entry_view(SLUG, SAT, 'Agility')['calculated']   # places need recalculating
+    rows = {r['dog_name']: r for r in results.entry_view(SLUG, SAT, 'Agility')['rows']}
+    assert rows['Lux']['sct'] == rows['Ace']['sct'] == scoring.sct('Agility', 'Champ', 20, 'Regular', {'yards_champ': 170})
+    c.post(f'/shows/{SLUG}/scoring/calculate', data={'csrf': token, 'day': SAT, 'cls': 'Agility'})
+    r = res()
+    assert (r['Lux']['place'], r['Ivy']['place'], r['Ace']['place']) == (1, 2, 3)   # one 20" Regular group, fastest first
+    assert 'scored together' in c.get(f'/shows/{SLUG}/scoring?day={SAT}&cls=Agility').text

@@ -254,3 +254,21 @@ def test_conflict_gaps_skip_scratched_runs():
     got = conflict_gaps(rows)
     assert [r['gap'] for r in got] == [None, None, None, 1, None]       # one dog (B) ran between A's runs
     assert got[3]['conflict'] and got[0]['conflict_partner'] and not got[2]['conflict']
+
+
+def test_managed_days_lock_and_unlock(engine):
+    assert db.managed_day(engine, SAT_DATE) is None and not db.is_locked(engine, SAT_DATE)
+    with engine.begin() as c:   # what Trial Manager writes on each push
+        c.execute(db.insert(db.managed_days).values(trial_date=SAT_DATE, source='Trial Manager', updated_at=db._now()))
+    m = db.managed_day(engine, SAT_DATE)
+    assert m['source'] == 'Trial Manager' and m['updated_at'].tzinfo is not None and db.is_locked(engine, SAT_DATE)
+    db.set_day_unlocked(engine, SAT_DATE, True)
+    assert not db.is_locked(engine, SAT_DATE) and db.managed_day(engine, SAT_DATE)['unlocked']
+    db.set_day_unlocked(engine, SAT_DATE, False)
+    assert db.is_locked(engine, SAT_DATE)
+
+
+def test_admin_locks_trial_manager_days():
+    src = (Path(__file__).resolve().parent.parent / 'app.py').read_text()
+    assert 'MANAGED_SECTIONS = {"Upload run order", "Reorder", "Late entry", "A-frame", "Publish results"}' in src
+    assert 'db.is_locked(ENGINE, d)' in src   # an uploaded CSV can't replace a managed day

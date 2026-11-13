@@ -19,7 +19,8 @@ REFUSAL_CHOICES = [0, 5, 10, 15, 20]
 GAMBLE_CHOICES = [0, 10, 15, 20]
 EMPTY_SCORE = {'status': '', 'time': None, 'course_faults': None, 'refusals': None, 'opening_points': None, 'opening_path': '',
                'gamble_points': None, 'points': None, 'result': None}
-COURSE_FIELDS = ('yards_bn', 'yards_senior', 'yards_champ', 'sct_extra', 'opening_time', 'closing_time', 'course_time')
+COURSE_FIELDS = ('yards_bn', 'yards_senior', 'yards_champ', 'sct_extra', 'opening_time', 'closing_time', 'course_time',
+                 'small_extra', 'select_extra')
 
 
 class ResultsError(Exception):
@@ -27,7 +28,8 @@ class ResultsError(Exception):
 
 
 def course_of(setting: dict) -> dict:
-    return {k: setting.get(k) for k in COURSE_FIELDS + ('rate',)}
+    # combine_levels is Show setup's "All levels together": scored together too (see scoring.is_open_class)
+    return {k: setting.get(k) for k in COURSE_FIELDS + ('rate', 'combine_levels')}
 
 
 def _int_or_none(v, lo=0, hi=999):
@@ -45,6 +47,10 @@ def save_course(slug: str, day: str, class_name: str, form: dict, user: dict):
     values['sct_extra'] = values['sct_extra'] or 0
     if values['sct_extra'] > 3:
         raise ResultsError('The judge can add at most 3 seconds.')
+    for k in ('small_extra', 'select_extra'):
+        values[k] = values[k] or 0
+        if values[k] > 10:
+            raise ResultsError('Extra seconds for small dogs or Select should be 10 or less.')
     values['rate'] = 'slow' if form.get('rate') == 'slow' else 'fast'
     with db.engine().begin() as c:
         c.execute(update(db.class_settings).where(db.class_settings.c.id == setting['id']).values(calculated_at=None, **values))

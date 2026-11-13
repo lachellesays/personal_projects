@@ -13,5 +13,5 @@
 {% endif %}
 {% if oob_log is defined %}
   {% set log = oob_log %}{% set oob = True %}{% include "_fix_log.html" %}
-  <span class="n" id="side-fixes" hx-swap-oob="true">{{ fix_count }}</span>
+  <span class="cnt soft" id="side-fixes" hx-swap-oob="true">{{ fix_count or '' }}</span>
 {% endif %}

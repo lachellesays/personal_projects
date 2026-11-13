@@ -5,7 +5,7 @@
   <a class="btn primary" href="/shows/new">+ New show</a></div>
 <div class="shows">
   {% for c in cards %}
-  <a class="showcard" href="/shows/{{ c.slug }}/entries">
+  <a class="showcard" href="/shows/{{ c.slug }}/{{ 'scoring' if c.started else 'entries' }}">
     <span class="status {{ 'past' if c.past else 'open' }}">{{ 'DONE' if c.past else 'UPCOMING' }}</span>
     <h4>{{ c.show.name }}</h4>
     <div class="meta">{{ c.show.saturday_date|day }} – {{ c.show.sunday_date|day }} · Show ID {{ c.show.show_id }}</div>

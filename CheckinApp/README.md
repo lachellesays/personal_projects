@@ -43,6 +43,13 @@ If the app shows a red warning about `DATABASE_URL`, step 3 isn't right yet.
 ---
 
 ## Each trial
+**If Trial Manager is connected** (its `CHECKIN_DATABASE_URL` points at this app's database and the show is
+switched "Live on check-in"), it fills in the run order, late entries, A-frame and results by itself. Those
+Admin sections then say "managed by Trial Manager"; only Course maps and Reset statuses are used here. If
+Trial Manager is down, **Unlock for manual edits** on that Admin page lets you work by hand. Click **Hand back
+to Trial Manager** afterwards so it takes over again.
+
+Without Trial Manager:
 1. **Admin → Upload run order:** choose the CSV from the run order app, check the preview, then click **Load**.
    Upload Saturday and Sunday separately. Each upload only replaces its own day.
    If you re-upload later, statuses (checked in, scratched, etc.) are kept for dogs still in the same class.

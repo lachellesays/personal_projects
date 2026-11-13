@@ -3,7 +3,7 @@
     hx-post="/shows/{{ slug }}/scoring/score/{{ r.id }}" hx-trigger="change" hx-include="#sr-{{ r.id }}" hx-swap="none"
     hx-vals='{"day": "{{ day }}", "cls": "{{ cls }}"}'>
   <td class="num"><b>{{ r.seq }}</b></td>
-  <td><span class="dname">{{ r.dog_name }}</span>{% if r.source == 'day_of' %}<span class="tag dayof">DAY OF</span>{% endif %}
+  <td><span class="dname">{{ r.dog_name }}</span>{% if r.source == 'day_of' %}<span class="tag dayof">DAY OF</span>{% endif %}{% set g = (gate or {}).get(r.id) %}{% if g and g not in ('Not Checked In', 'Checked In', 'In Ring', 'Run Completed') %}<span class="tag gate {{ 'scr' if g == 'Scratch' }}" title="Status at the gate (check-in app)">{{ 'SCRATCHED AT GATE' if g == 'Scratch' else g|upper }}</span>{% endif %}
     <div class="muted">{{ r.first_name }} {{ r.last_name }}</div></td>
   <td class="hide-sm">{{ r.level }}<div class="muted">{{ r.height }}" {{ r.class_type }}</div></td>
   <td class="num">{{ r.sct if r.sct is not none else '–' }}</td>

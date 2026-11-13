@@ -1,10 +1,13 @@
+{% set before_trial = tab in BEFORE_TRIAL_TABS %}
 <div class="titlebar">
   <div><h1>{{ d.show.name }}</h1>
-    <div class="sub">Show ID {{ d.show.show_id }} · {{ d.show.saturday_date|day }} – {{ d.show.sunday_date|day }} · JotForm {{ d.show.form_id }} ·
-      <a href="/shows/{{ slug }}/setup">Show setup</a></div></div>
+    <div class="sub">Show ID {{ d.show.show_id }} · {{ d.show.saturday_date|day }} – {{ d.show.sunday_date|day }}{% if before_trial %} · JotForm {{ d.show.form_id }}{% endif %}</div></div>
+  {% if before_trial %}
   <form method="post" action="/shows/{{ slug }}/refresh"><input type="hidden" name="csrf" value="{{ csrf }}">
     <input type="hidden" name="back" value="{{ request.url.path }}"><button class="btn">Refresh from JotForm</button></form>
+  {% endif %}
 </div>
+{% if before_trial %}
 <div class="banner">
   <span>{% if d.last_download %}
       {% if d.new_ids %}<b>{{ d.new_ids|length }} new entr{{ 'y' if d.new_ids|length == 1 else 'ies' }}</b> since your last download
@@ -15,14 +18,4 @@
   {% if d.new_ids %}<a class="btn small" href="/shows/{{ slug }}/entries?f=new">Show them</a>{% endif %}
 </div>
 {% include "_stats.html" %}
-<nav class="tabs">
-  <a class="{{ 'on' if tab == 'setup' }}" href="/shows/{{ slug }}/setup">Setup</a>
-  <a class="{{ 'on' if tab == 'entries' }}" href="/shows/{{ slug }}/entries">Entries</a>
-  <a class="{{ 'on' if tab == 'paper' }}" href="/shows/{{ slug }}/paper">Paper entries</a>
-  <a class="{{ 'on' if tab == 'typos' }}" href="/shows/{{ slug }}/typos">Fix typos</a>
-  <a class="{{ 'on' if tab == 'warnings' }}" href="/shows/{{ slug }}/warnings">Warnings{% if open_warnings %}<span class="cnt">{{ open_warnings }}</span>{% endif %}</a>
-  <a class="{{ 'on' if tab == 'download' }}" href="/shows/{{ slug }}/download">Download</a>
-  <a class="{{ 'on' if tab == 'runorder' }}" href="/shows/{{ slug }}/runorder">Run order</a>
-  <a class="{{ 'on' if tab == 'dayof' }}" href="/shows/{{ slug }}/dayof">Day-of entries</a>
-  <a class="{{ 'on' if tab == 'scoring' }}" href="/shows/{{ slug }}/scoring">Scoring</a>
-</nav>
+{% endif %}

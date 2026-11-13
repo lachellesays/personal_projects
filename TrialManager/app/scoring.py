@@ -52,10 +52,12 @@ def is_game(class_name: str) -> bool:
 
 
 def is_open_class(class_name: str, course: dict) -> bool:
-    """All levels judged as Champ: Masters, or a standard class with no Beginner/Novice yardage."""
+    """All levels judged as Champ: Masters, a class set to "All levels together" on Show setup, or a standard class
+    with no Beginner/Novice yardage. (Games have no yardage; see placement_group for how they're placed.)"""
     if is_game(class_name):
         return False
-    return class_name.lower().startswith('masters') or not course.get('yards_bn')
+    return (class_name.lower().startswith('masters') or bool(course.get('combine_levels'))
+            or not course.get('yards_bn'))
 
 
 def _round(x: float) -> int:
@@ -71,12 +73,20 @@ def sct(class_name: str, level: str, height: int, class_type: str, course: dict)
     kind = class_kind(class_name)
     select = class_type == 'Select'
     extra = int(course.get('sct_extra') or 0)
-    if kind == 'gamblers':
-        if not (course.get('opening_time') and course.get('closing_time')):
-            return None
-        return int(course['opening_time']) + int(course['closing_time']) + extra
-    if kind == 'snooker':
-        return int(course['course_time']) + extra if course.get('course_time') else None
+    if kind in ('gamblers', 'snooker'):
+        # The judge sets the time and may give small dogs and Select heights extra seconds (rulebook 3.2a, 3.2b).
+        # Matches UKI Manager: June 2026 = +2 small dogs; November 2026 = +3 small dogs and +3 Select.
+        if kind == 'gamblers':
+            if not (course.get('opening_time') and course.get('closing_time')):
+                return None
+            base = int(course['opening_time']) + int(course['closing_time'])
+        else:
+            if not course.get('course_time'):
+                return None
+            base = int(course['course_time'])
+        small = ((height or 0) + 4 if select else (height or 0)) <= 16
+        return (base + extra + (int(course.get('small_extra') or 0) if small else 0)
+                + (int(course.get('select_extra') or 0) if select else 0))
 
     level = _level(level)
     if is_open_class(class_name, course):
@@ -131,7 +141,11 @@ def score_run(class_name: str, s: dict, sct_: int, course: dict, yards=None) -> 
         opening, gamble = int(s.get('opening_points') or 0), int(s.get('gamble_points') or 0)
         out['points'] = opening + gamble
         need = gamblers_minimum(course.get('opening_time'))
-        out['q'] = time > 0 and ((opening >= need and gamble >= 10) or (opening >= need - 5 and gamble >= 15))
+        # Gamble points only count if the dog finishes within the time (rulebook 3.2a), so over time = no Q.
+        # The points stay as the scribe wrote them, like UKI Manager's results sheet.
+        out['over_time'] = bool(sct_ and time > sct_)
+        out['q'] = (time > 0 and not out['over_time']
+                    and ((opening >= need and gamble >= 10) or (opening >= need - 5 and gamble >= 15)))
         return out
     if kind == 'snooker':
         out['points'] = int(s.get('points') or 0)
@@ -158,7 +172,9 @@ def points_for(place: int, entered: int) -> int:
 
 
 def placement_group(class_name: str, level: str, height: int, class_type: str, course: dict) -> tuple:
-    if is_open_class(class_name, course):
+    # Open Gamblers is all levels combined: placed by height (matches UKI Manager, November 2026). Snooker is by level.
+    if (is_open_class(class_name, course) or class_kind(class_name) == 'gamblers'
+            or (is_game(class_name) and course.get('combine_levels'))):
         return (height, class_type)
     return (_level(level), height, class_type)
 
@@ -197,6 +213,7 @@ def place_class(class_name: str, runs: list, course: dict) -> list:
 MASTERS_E = 100 + 60
 MASTERS_ABSENT = 1000 + 60
 MASTERS_PRIZE_PER_DOG = 4.00
+MASTERS_PLACES = 2
 
 
 def masters_round_score(result: dict):
@@ -241,7 +258,11 @@ def masters_series(dogs: list) -> list:
                 ranked.append(d)
         ranked.sort(key=lambda d: (d['overall'], d['agility_score'], d['jumping_score']))
         for i, d in enumerate(ranked, start=1):
-            d['place'] = i
+            # Only 1st and 2nd are placed: they're the ones the premium awards (prize money, Final). UKI Manager's
+            # Masters Scoring sheet leaves everyone else at 0 (checked on June and November 2026).
+            d['place'] = i if i <= MASTERS_PLACES else 0
+            if i > MASTERS_PLACES:
+                d['note'] = d['note'] or f'Finished {i}{"rd" if i == 3 else "th"} overall (only 1st and 2nd are placed)'
             if i > 1:
                 prev = ranked[i - 2]
                 if (prev['overall'], prev['agility_score'], prev['jumping_score']) == (d['overall'], d['agility_score'], d['jumping_score']):

@@ -8,7 +8,7 @@
   <input type="hidden" name="dog_count" value="{{ dogs|length }}">
   <div class="titlebar"><div><h1>{{ 'Edit paper entry' if edit else 'Paper entry' }}</h1>
     <div class="sub">{% if handler.get('id') and not edit %}Filled in from the directory. Change anything that's different on the form.{% elif not edit %}Someone new: they'll be added to the directory when you save.{% endif %}</div></div>
-    <a class="btn" href="/shows/{{ slug }}/paper">Cancel</a></div>
+    <a class="btn" href="/shows/{{ slug }}/entries?f=paper">Cancel</a></div>
   {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
   <div class="panel">

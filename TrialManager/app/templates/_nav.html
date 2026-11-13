@@ -1,0 +1,14 @@
+<a class="nav {{ 'on' if not slug and request.url.path.startswith('/shows') }}" href="/shows">All shows</a>
+{% if slug and d %}
+  <div class="lbl show">{{ d.show.name }}</div>
+  {% set badges = {'entries': d.stats.submissions, 'review': open_warnings or ''} %}
+  {% for group, key, label, path in SHOW_NAV %}
+    {% if group and (loop.first or SHOW_NAV[loop.index0 - 1][0] != group) %}<div class="lbl sub">{{ group }}</div>{% endif %}
+    <a class="nav {{ 'on' if tab == key }}" href="/shows/{{ slug }}/{{ path }}"><span><span class="step">{{ loop.index }}</span>{{ label }}</span>
+      {% if badges.get(key) %}<span class="n {{ 'alert' if key == 'review' }}" {% if key == 'review' %}title="Open warnings"{% else %}title="Entries received"{% endif %}>{{ badges[key] }}</span>{% endif %}</a>
+  {% endfor %}
+{% endif %}
+<div class="lbl">Directory</div>
+<a class="nav {{ 'on' if request.url.path.startswith('/directory') }}" href="/directory">Handlers &amp; dogs</a>
+<div class="lbl">Admin</div>
+<a class="nav {{ 'on' if request.url.path.startswith('/people') }}" href="/people">Users &amp; access</a>

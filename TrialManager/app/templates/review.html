@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Review · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% with current = t, items = [
+    {'key': 'warnings', 'label': 'Warnings', 'href': '/shows/' ~ slug ~ '/review?t=warnings', 'count': open_warnings},
+    {'key': 'typos', 'label': 'Fix typos', 'href': '/shows/' ~ slug ~ '/review?t=typos', 'count': fix_count, 'count_id': 'side-fixes', 'count_style': 'soft'}] %}
+  {% include "_subtabs.html" %}{% endwith %}
+{% if t == 'typos' %}{% include "_typos_body.html" %}{% else %}{% include "_warnings_body.html" %}{% endif %}
+{% endblock %}

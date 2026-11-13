@@ -17,9 +17,10 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.background import BackgroundTask
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import auth, db, formatter as fmt, results, trial
+from app import auth, checkin, db, formatter as fmt, results, trial
 from app import people as dirdb   # the handler & dog directory ('people' is the admin People page below)
 from app.core import Show
 
@@ -37,6 +38,31 @@ app = FastAPI(title='Trial Manager', docs_url=None, redoc_url=None, openapi_url=
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie='tm_session', max_age=30 * 24 * 3600,
                    same_site='lax', https_only=ON_RAILWAY)
 app.mount('/static', StaticFiles(directory=HERE / 'static'), name='static')
+
+# Changes that can't touch the run order, so they don't need a check-in sync afterwards
+_NO_SYNC = ('/scoring/', '/paper/total', '/typos/', '/checkin/', '/warnings', '/download', '/refresh')
+
+
+@app.middleware('http')
+async def sync_checkin_after_changes(request: Request, call_next):
+    """After any successful change to a show, bring the check-in app up to date in the background
+    (checkin.sync_show does nothing unless the show is Live on check-in, and skips days that didn't change)."""
+    response = await call_next(request)
+    path = request.url.path
+    if (request.method == 'POST' and path.startswith('/shows/') and response.status_code < 400
+            and not any(x in path for x in _NO_SYNC)):
+        slug = path.split('/')[2]
+        if slug != 'new':
+            task = BackgroundTask(checkin.sync_show, slug)
+            if response.background is None:
+                response.background = task
+            else:
+                first = response.background
+                async def both():
+                    await first()
+                    await task()
+                response.background = BackgroundTask(both)
+    return response
 templates = Jinja2Templates(directory=HERE / 'templates')
 
 
@@ -73,6 +99,19 @@ def day(d):
 
 templates.env.filters.update(money=money, local=local, ago=ago, day=day)
 templates.env.filters['class_label'] = lambda c: dirdb.class_label(c)
+
+# The show menu, in the order a trial happens. base.html draws it in the sidebar and the phone menu.
+SHOW_NAV = [
+    ('', 'setup', 'Setup', 'setup'),
+    ('Before the trial', 'entries', 'Entries', 'entries'),
+    ('Before the trial', 'review', 'Review', 'review'),
+    ('Before the trial', 'download', 'Send to UKI', 'download'),
+    ('Trial day', 'runorder', 'Run order', 'runorder'),
+    ('Trial day', 'dayof', 'Day-of entries', 'dayof'),
+    ('Trial day', 'scoring', 'Scoring & results', 'scoring'),
+]
+BEFORE_TRIAL_TABS = ('setup', 'entries', 'review', 'download')
+templates.env.globals.update(SHOW_NAV=SHOW_NAV, BEFORE_TRIAL_TABS=BEFORE_TRIAL_TABS)
 
 
 def render(request: Request, name: str, status_code: int = 200, **ctx):
@@ -289,7 +328,8 @@ def shows_page(request: Request):
         last = db.download_history(slug, limit=1)
         cards.append({'slug': slug, 'show': show, 'submissions': len(subs) if subs is not None else None,
                       'fetched': fetched, 'last_download': last[0] if last else None,
-                      'past': str(show.sunday_date) < date.today().isoformat()})
+                      'past': str(show.sunday_date) < date.today().isoformat(),
+                      'started': str(show.saturday_date) <= date.today().isoformat()})
     return render(request, 'shows.html', cards=cards)
 
 
@@ -380,7 +420,8 @@ def entries(request: Request, slug: str, q: str = '', f: str = 'all'):
     rows = fmt.filter_rows(d.rows, q, f)
     if request.headers.get('HX-Target') == 'entry-table':  # live search: just the table
         return render(request, '_entry_rows.html', rows=rows, slug=slug)
-    return render(request, 'entries.html', rows=rows, q=q, f=f, flash=request.session.pop('entries_flash', ''), **ctx)
+    return render(request, 'entries.html', rows=rows, q=q, f=f, flash=request.session.pop('entries_flash', ''),
+                  directory_size=dirdb.counts()['handlers'], **ctx)
 
 
 @app.post('/shows/{slug}/scratch/{dog_number}', response_class=HTMLResponse)
@@ -393,17 +434,32 @@ async def scratch(request: Request, slug: str, dog_number: str):
     return render(request, '_entry_rows.html', rows=rows, oob=True, **ctx)
 
 
-@app.get('/shows/{slug}/typos', response_class=HTMLResponse)
-def typos(request: Request, slug: str, kind: str = 'handlers', q: str = ''):
+@app.get('/shows/{slug}/review', response_class=HTMLResponse)
+def review(request: Request, slug: str, t: str = '', kind: str = 'handlers', q: str = ''):
+    """Warnings and typo fixes: everything to tidy before sending the workbook to UKI."""
     require_user(request)
+    d, ws, ctx = _show_ctx(request, slug, 'review')
+    if t not in ('warnings', 'typos'):
+        t = 'warnings' if ctx['open_warnings'] else 'typos'
+    if t == 'warnings':
+        return render(request, 'review.html', t=t, warnings=ws, **ctx)
     kind = 'dogs' if kind == 'dogs' else 'handlers'
-    d, ws, ctx = _show_ctx(request, slug, 'typos')
     rows, fields = fmt.typo_tables(d, kind)
     if q:
         ql = q.lower()
         rows = [r for r in rows if ql in (r['num'] + ' ' + r['label'] + ' ' + ' '.join(c['value'] for c in r['cells'])).lower()]
-    return render(request, 'typos.html', rows=rows, fields=fields, labels=fmt.FIELD_LABELS, kind=kind, q=q,
+    return render(request, 'review.html', t=t, rows=rows, fields=fields, labels=fmt.FIELD_LABELS, kind=kind, q=q,
                   log=fmt.corrections_log(d), **ctx)
+
+
+@app.get('/shows/{slug}/typos', include_in_schema=False)
+def typos_moved(slug: str, kind: str = 'handlers'):
+    return back(f'/shows/{slug}/review?t=typos&kind={quote(kind)}')
+
+
+@app.get('/shows/{slug}/warnings', include_in_schema=False)
+def warnings_moved(slug: str):
+    return back(f'/shows/{slug}/review?t=warnings')
 
 
 def _cell(d, kind, num, field):
@@ -428,7 +484,7 @@ async def typo_save(request: Request, slug: str):
     form = await check_csrf(request)
     kind, num, field = form['kind'], form['num'], form['field']
     fmt.set_fix(slug, kind, num, field, form.get('value', ''), user)
-    d, ws, ctx = _show_ctx(request, slug, 'typos')
+    d, ws, ctx = _show_ctx(request, slug, 'review')
     return render(request, '_typo_cell.html', kind=kind, num=num, cell=_cell(d, kind, num, field), edit=False,
                   oob_log=fmt.corrections_log(d), **ctx)
 
@@ -438,14 +494,7 @@ async def typo_undo(request: Request, slug: str):
     user = require_user(request)
     form = await check_csrf(request)
     fmt.undo_fix(slug, form['key'], user)
-    return back(f'/shows/{slug}/typos?kind={form.get("kind", "handlers")}')
-
-
-@app.get('/shows/{slug}/warnings', response_class=HTMLResponse)
-def warnings_page(request: Request, slug: str):
-    require_user(request)
-    d, ws, ctx = _show_ctx(request, slug, 'warnings')
-    return render(request, 'warnings.html', warnings=ws, **ctx)
+    return back(f'/shows/{slug}/review?t=typos&kind={form.get("kind", "handlers")}')
 
 
 @app.post('/shows/{slug}/warnings')
@@ -463,7 +512,7 @@ async def warning_action(request: Request, slug: str):
         fmt.fix_state(slug, key.split(':', 1)[1], action.split(':', 1)[1], user)
     elif action == 'show':
         return back(f'/shows/{slug}/entries?q={quote(key.split(":", 1)[1])}')
-    return back(f'/shows/{slug}/warnings')
+    return back(f'/shows/{slug}/review?t=warnings')
 
 
 @app.get('/shows/{slug}/download', response_class=HTMLResponse)
@@ -512,7 +561,44 @@ def _runorder_ctx(request, slug, day=None, cls=None):
             'day_classes': day_classes, 'pending': pending, 'gap_target': trial.GAP_TARGET,
             'day_sets': {dd: trial.day_setting(slug, dd) for dd in days},
             'level_groups': trial.LEVEL_GROUPS, 'height_orders': trial.HEIGHT_ORDERS,
-            'masters_role': trial.masters_order(slug, day).get(cls) if built else None}
+            'masters_role': trial.masters_order(slug, day).get(cls) if built else None,
+            'link': checkin.status(slug, days), 'link_flash': request.session.pop('checkin_flash', '')}
+
+
+def _sync_message(out: dict) -> str:
+    sent = {d: r for d, r in out.items() if r.get('sent')}
+    failed = [r['reason'] for r in out.values() if not r.get('sent') and r.get('reason') not in ('', 'unchanged')]
+    if failed:
+        return 'Couldn’t update the check-in app: ' + failed[0]
+    if not sent:
+        return 'The check-in app is already up to date.'
+    parts = []
+    for d, r in sent.items():
+        bits = [f"{r[k]} {label}" for k, label in (('added', 'added'), ('updated', 'updated'), ('removed', 'removed'),
+                                                   ('scratched', 'scratched')) if r.get(k)]
+        parts.append(f"{date.fromisoformat(d):%a %-m/%-d}: " + (', '.join(bits) or 'no run changes'))
+    return 'Sent to the check-in app. ' + '; '.join(parts) + '.'
+
+
+@app.post('/shows/{slug}/checkin/live')
+async def checkin_live(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    on = form.get('live') == '1'
+    if on and not checkin.configured():
+        raise trial.TrialError('The check-in link isn’t set up yet: add CHECKIN_DATABASE_URL on Railway (see README).')
+    checkin.set_live(slug, on, user)
+    request.session['checkin_flash'] = (_sync_message(checkin.sync_show(slug, force=True)) if on else
+                                        'Check-in updates are off. The check-in app keeps what it has; use the CSV if needed.')
+    return back(f'/shows/{slug}/runorder?day={form.get("day", "")}')
+
+
+@app.post('/shows/{slug}/checkin/send')
+async def checkin_send(request: Request, slug: str):
+    require_user(request)
+    form = await check_csrf(request)
+    request.session['checkin_flash'] = _sync_message(checkin.sync_show(slug, force=True))
+    return back(f'/shows/{slug}/runorder?day={form.get("day", "")}')
 
 
 @app.get('/shows/{slug}/runorder', response_class=HTMLResponse)
@@ -709,15 +795,37 @@ def _scoring_ctx(request, slug, day, cls, tab='scoring'):
     if classes and cls not in [c['class_name'] for c in classes]:
         cls = classes[0]['class_name']
     ev = results.entry_view(slug, day, cls) if classes else None
-    return {**ctx, 'built': built, 'days': days, 'day': day, 'cls': cls, 'score_classes': classes, 'ev': ev,
+    gate, gate_error = {}, ''
+    if ev:
+        try:
+            gate = checkin.gate_statuses(slug, day, cls)
+        except Exception as e:  # noqa: BLE001 - scoring works without it
+            gate_error = checkin.friendly(e)
+    return {**ctx, 'built': built, 'gate': gate, 'gate_error': gate_error,
+            'gate_fill': {k: sum(1 for r in ev['rows'] if gate.get(r['id']) == g and not results.has_score(r['score']))
+                          for k, g in (('ABS', checkin.SCRATCH), ('NFC', 'NFC'))} if ev and gate else {}, 'days': days, 'day': day, 'cls': cls, 'score_classes': classes, 'ev': ev,
             'fault_choices': results.FAULT_CHOICES, 'refusal_choices': results.REFUSAL_CHOICES,
             'gamble_choices': results.GAMBLE_CHOICES, 'flash': request.session.pop('scoring_flash', '')}
 
 
 @app.get('/shows/{slug}/scoring', response_class=HTMLResponse)
-def scoring_page(request: Request, slug: str, day: str = '', cls: str = ''):
+def scoring_page(request: Request, slug: str, day: str = '', cls: str = '', view: str = 'scores'):
+    """Scores, results and the Masters Series overall, as tabs on one page."""
     require_user(request)
-    return render(request, 'scoring.html', **_scoring_ctx(request, slug, day, cls))
+    ctx = _scoring_ctx(request, slug, day, cls)
+    has_masters = any(c['class_name'] == 'Masters Agility' for c in ctx['score_classes'])
+    view = view if view in ('results', 'masters') else 'scores'
+    if view == 'masters' and not has_masters:
+        view = 'scores'
+    extra = {}
+    if view == 'results' and ctx['ev'] and ctx['ev']['calculated']:
+        import json as _json
+        extra['groups'] = results.results_view(slug, ctx['day'], ctx['cls'])
+        extra['exports'] = [{'name': combined, 'json': _json.dumps(results.results_json(slug, ctx['day'], ctx['cls'], combined))}
+                            for combined in sorted({r['combined'] for r in ctx['ev']['rows']})]
+    elif view == 'masters':
+        extra['mv'] = results.masters_view(slug, ctx['day'])
+    return render(request, 'scoring.html', view=view, has_masters=has_masters, **extra, **ctx)
 
 
 @app.post('/shows/{slug}/scoring/course')
@@ -750,21 +858,34 @@ async def scoring_calculate(request: Request, slug: str):
     msg = f"Calculated: {out['qs']} qualifying run{'s' if out['qs'] != 1 else ''}."
     if out['unscored']:
         msg += f" {out['unscored']} dog{'s have' if out['unscored'] != 1 else ' has'} no score yet."
+    try:
+        published = checkin.publish_results(slug, day_, cls)
+        if cls in results.MASTERS_CLASSES:   # calculating one Masters round recalculates the other
+            other = results.MASTERS_CLASSES[1 - results.MASTERS_CLASSES.index(cls)]
+            if other in [s_['class_name'] for s_ in trial.class_list(slug, day_)]:
+                checkin.publish_results(slug, day_, other)
+        if published:
+            msg += ' Published to the check-in app’s Results tab.'
+    except Exception as e:  # noqa: BLE001 - the scores are saved; the JSON copy on Results still works
+        msg += f' Not sent to the check-in app: {checkin.friendly(e)}'
     request.session['scoring_flash'] = msg
-    return back(f'/shows/{slug}/scoring/results?day={day_}&cls={quote(cls)}')
+    return back(f'/shows/{slug}/scoring?view=results&day={day_}&cls={quote(cls)}')
 
 
-@app.get('/shows/{slug}/scoring/results', response_class=HTMLResponse)
-def scoring_results(request: Request, slug: str, day: str = '', cls: str = ''):
-    require_user(request)
-    ctx = _scoring_ctx(request, slug, day, cls)
-    groups, exports = [], []
-    if ctx['ev'] and ctx['ev']['calculated']:
-        import json as _json
-        groups = results.results_view(slug, ctx['day'], ctx['cls'])
-        for combined in sorted({r['combined'] for r in ctx['ev']['rows']}):
-            exports.append({'name': combined, 'json': _json.dumps(results.results_json(slug, ctx['day'], ctx['cls'], combined))})
-    return render(request, 'scoring_results.html', groups=groups, exports=exports, **ctx)
+@app.post('/shows/{slug}/scoring/gate-fill')
+async def scoring_gate_fill(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    day_, cls = form.get('day', ''), form.get('cls', '')
+    n = checkin.fill_from_gate(slug, day_, cls, user)
+    request.session['scoring_flash'] = (f"Filled from the gate: {n['ABS']} ABS (scratched), {n['NFC']} NFC."
+                                        if n['ABS'] or n['NFC'] else 'Nothing to fill: no unscored dogs are scratched or NFC at the gate.')
+    return back(f'/shows/{slug}/scoring?day={day_}&cls={quote(cls)}')
+
+
+@app.get('/shows/{slug}/scoring/results', include_in_schema=False)
+def scoring_results_moved(slug: str, day: str = '', cls: str = ''):
+    return back(f'/shows/{slug}/scoring?view=results&day={quote(day)}&cls={quote(cls)}')
 
 
 @app.get('/shows/{slug}/results.xlsx')
@@ -777,11 +898,9 @@ def results_xlsx(request: Request, slug: str):
                     headers={'Content-Disposition': f'attachment; filename="Results_{slug}.xlsx"'})
 
 
-@app.get('/shows/{slug}/scoring/masters', response_class=HTMLResponse)
-def scoring_masters(request: Request, slug: str, day: str = ''):
-    require_user(request)
-    ctx = _scoring_ctx(request, slug, day, '')
-    return render(request, 'masters.html', mv=results.masters_view(slug, ctx['day']), **ctx)
+@app.get('/shows/{slug}/scoring/masters', include_in_schema=False)
+def scoring_masters_moved(slug: str, day: str = ''):
+    return back(f'/shows/{slug}/scoring?view=masters&day={quote(day)}')
 
 
 @app.post('/shows/{slug}/runorder/masters')
@@ -978,7 +1097,7 @@ async def directory_import(request: Request, kind: str):
 # ── Paper entries ───────────────────────────────────────────────────────────
 
 def _paper_ctx(request, slug, d=None):
-    d, ws, ctx = _show_ctx(request, slug, 'paper', d)
+    d, ws, ctx = _show_ctx(request, slug, 'entries', d)
     jotform = [e for e in d.entries if not str(e['submission_id']).startswith('paper-')]
     setup = {'saturday': [c['class_name'] for c in trial.class_list(slug, str(d.show.saturday_date))],
              'sunday': [c['class_name'] for c in trial.class_list(slug, str(d.show.sunday_date))]}
@@ -988,12 +1107,11 @@ def _paper_ctx(request, slug, d=None):
 
 @app.get('/shows/{slug}/paper', response_class=HTMLResponse)
 def paper_page(request: Request, slug: str, q: str = ''):
+    """The directory lookup on Entries' paper-entry panel. Opened directly, it goes to Entries' paper filter."""
     require_user(request)
     if request.headers.get('HX-Target') == 'paper-results':
         return render(request, '_paper_results.html', found=dirdb.search(q), q=q, slug=slug)
-    d, ctx = _paper_ctx(request, slug)
-    return render(request, 'paper.html', rows=dirdb.paper_rows(slug), q=q, found=[],
-                  flash=request.session.pop('paper_flash', ''), counts=dirdb.counts(), **ctx)
+    return back(f'/shows/{slug}/entries?f=paper')
 
 
 def _blank_dog():
@@ -1068,12 +1186,12 @@ async def paper_save(request: Request, slug: str):
     d = fmt.load(slug)
     fees = dirdb.fees_for(d.show, [x for x in all_dogs if x['enter']])
     names = ', '.join(x['dog_name'] for x in all_dogs if x['enter'])
-    request.session['paper_flash'] = (f"Entered {handler['first_name']} {handler['last_name']}: {names}. "
+    request.session['entries_flash'] = (f"Entered {handler['first_name']} {handler['last_name']}: {names}. "
                                       f"Fees {fmt_money(fees)}, paid {fmt_money(amount)}"
                                       + (f", still owes {fmt_money(fees - amount)}." if fees - amount > 0.005 else '.')
                                       + (' The run order is built, so add them there with Update run order.'
                                          if trial.is_built(slug) else ''))
-    return back(f'/shows/{slug}/paper')
+    return back(f'/shows/{slug}/entries?f=paper')
 
 
 @app.get('/shows/{slug}/paper/{paper_id}', response_class=HTMLResponse)
@@ -1081,7 +1199,7 @@ def paper_edit(request: Request, slug: str, paper_id: int):
     require_user(request)
     r = dirdb.get_paper(slug, paper_id)
     if r is None:
-        return back(f'/shows/{slug}/paper')
+        return back(f'/shows/{slug}/entries?f=paper')
     d, ctx = _paper_ctx(request, slug)
     h, ctype = dirdb.height(r['jump_height'])
     dog = {**_blank_dog(), 'dog_number': r['dog_number'], 'dog_name': r['dog_name'], 'breed': r['breed'],
@@ -1099,9 +1217,9 @@ async def paper_update(request: Request, slug: str, paper_id: int):
     form = await check_csrf(request)
     if form.get('delete'):
         dirdb.delete_paper(slug, paper_id, user)
-        request.session['paper_flash'] = ('Paper entry deleted.' + (' Update the run order to take its runs out.'
+        request.session['entries_flash'] = ('Paper entry deleted.' + (' Update the run order to take its runs out.'
                                                                     if trial.is_built(slug) else ''))
-        return back(f'/shows/{slug}/paper')
+        return back(f'/shows/{slug}/entries?f=paper')
     handler = {k: str(form.get(k, '')).strip() for k in dirdb.HANDLER_INFO}
     dogs = _form_dogs(form)
     for x in dogs:
@@ -1114,9 +1232,9 @@ async def paper_update(request: Request, slug: str, paper_id: int):
         d, ctx = _paper_ctx(request, slug)
         return render(request, 'paper_form.html', handler=handler, dogs=dogs, edit=dirdb.get_paper(slug, paper_id),
                       error=str(e), payment=payment, status_code=400, **ctx)
-    request.session['paper_flash'] = 'Paper entry saved.' + (' Update the run order to pick up the change.'
+    request.session['entries_flash'] = 'Paper entry saved.' + (' Update the run order to pick up the change.'
                                                              if trial.is_built(slug) else '')
-    return back(f'/shows/{slug}/paper')
+    return back(f'/shows/{slug}/entries?f=paper')
 
 
 @app.get('/shows/{slug}/dayof/lookup', response_class=HTMLResponse)

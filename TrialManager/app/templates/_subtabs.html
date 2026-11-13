@@ -1,0 +1,6 @@
+{# tabs inside one page. items: dicts with key, label, href, and optional count / count_id / count_style #}
+<nav class="tabs subtabs">
+  {% for t in items %}
+  <a class="{{ 'on' if t.key == current }}" href="{{ t.href }}">{{ t.label }}{% if t.count_id or t.count %}<span class="cnt {{ t.count_style or '' }}"{% if t.count_id %} id="{{ t.count_id }}"{% endif %}>{{ t.count or '' }}</span>{% endif %}</a>
+  {% endfor %}
+</nav>

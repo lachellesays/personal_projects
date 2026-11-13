@@ -168,6 +168,8 @@ def filter_rows(rows: list, q: str = '', f: str = 'all') -> list:
             continue
         if f == 'owes' and r['balance'] <= 0:
             continue
+        if f == 'paper' and not str(r.get('submission_id', '')).startswith('paper-'):
+            continue
         out.append(r)
     # When filtering, every row shows its handler (not just the first row of each handler)
     if q or f != 'all':

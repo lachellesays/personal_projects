@@ -1,0 +1,35 @@
+{% if link_flash %}<div class="flash {{ 'error' if link_flash.startswith('Couldn') else 'ok' }}">{{ link_flash }}</div>{% endif %}
+<div class="panel linkbar">
+  {% if not link.configured %}
+    <span class="muted"><b>Check-in app:</b> not connected. Send the run order with the CSV buttons below, or set
+      <code>CHECKIN_DATABASE_URL</code> on Railway to update it automatically (see README).</span>
+  {% else %}
+    <div class="linkrow">
+      <form method="post" action="/shows/{{ slug }}/checkin/live" class="linkswitch">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="day" value="{{ day }}">
+        <input type="hidden" name="live" value="{{ '0' if link.live else '1' }}">
+        <label class="sw go" title="Live on check-in"><input type="checkbox" aria-label="Live on check-in" {{ 'checked' if link.live }}
+          onchange="if (this.checked || confirm('Stop sending changes to the check-in app? It keeps what it has now.')) this.form.submit(); else this.checked = true;"><span></span></label>
+        <span><b>Live on check-in</b>
+          <span class="muted">{% if link.live %}Changes here reach the gate within seconds.{% else %}Off: nothing is sent. Turn on when the run order is ready for the gate.{% endif %}</span></span>
+      </form>
+      {% if link.live %}
+      <form method="post" action="/shows/{{ slug }}/checkin/send"><input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="day" value="{{ day }}"><button class="btn small">Send now</button></form>
+      {% endif %}
+    </div>
+    {% if link.live %}
+    <div class="linkdays">
+      {% for dd, st in link.days.items() %}
+        <span class="{{ 'bad' if st.error else '' }}"><b>{{ dd|day }}:</b>
+          {% if st.error %}not updated ({{ st.error_at|local }}): {{ st.error }}
+          {% elif st.pushed_at %}up to date · sent {{ st.pushed_at|local }}
+          {% else %}not sent yet{% endif %}</span>
+      {% endfor %}
+    </div>
+    <p class="hint">Run order changes, scratches, day-of entries and A-frame settings go to the gate automatically, and
+      Calculate publishes results. In the check-in app these days are locked to Trial Manager (Admin can unlock one if
+      this app is ever down).</p>
+    {% endif %}
+  {% endif %}
+</div>

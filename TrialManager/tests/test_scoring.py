@@ -163,7 +163,7 @@ def test_masters_ties_go_to_agility_then_runoff():
             {'id': 2, 'height': 12, 'class_type': 'Regular', 'agility': _round(time=35), 'jumping': _round(time=35)},
             {'id': 3, 'height': 12, 'class_type': 'Regular', 'agility': _round(time=35), 'jumping': _round(time=35)}]
     out = {d['id']: d for d in sc.masters_series(dogs)}
-    assert out[1]['place'] == 3                       # same 70 total, but the slower Agility
+    assert out[1]['place'] == 0 and out[1]['note'].startswith('Finished 3rd')   # same 70 total, slower Agility; only 1st/2nd placed
     assert out[2]['runoff'] and out[3]['runoff'] and not out[1]['runoff']
 
 
@@ -200,3 +200,83 @@ def test_masters_matches_uki_manager_on_june_2026():
         assert (out[dog]['place'], out[dog]['prize']) == (int(row[16] or 0), float(row[17] or 0)), dog
     byes = set(pd.read_excel(JUNE_RESULTS, sheet_name='Masters Byes')['Dog #'].dropna().astype(int))
     assert {d for d, v in out.items() if v['bye']} == byes
+
+
+NOV_RESULTS = Path.home() / 'Documents' / 'Trial Archive' / 'data' / 'nov2026_ukimgr' / 'nov2026_results.xlsx'
+NOV_UKI_SLIPS = {('Masters Jumping', 'Lola')}   # the only clean dog at 20" Select, given 1st-place points but recorded as "2"
+
+
+def _nov():
+    import pandas as pd
+    df = pd.read_excel(NOV_RESULTS, sheet_name='Raw Results')
+    df['Class'] = df['Class'].str.strip()
+    df['Height'] = df['Height'].astype(str).str.strip()
+    df['day'] = df['Date'].astype(str).map(lambda d: 'Saturday' if '11/7' in d else 'Sunday')
+    df['h'] = df['Height'].map(lambda s: int(s.split()[0]))
+    df['t'] = df['Height'].map(lambda s: 'Select' if '(s)' in s else 'Regular')
+    course = {(c['day'], c['class']): c for c in json.loads((FIXTURES / 'nov2026_course_details.json').read_text())['classes']}
+    return df, course
+
+
+@pytest.mark.skipif(not NOV_RESULTS.exists(), reason='November 2026 results not on this computer')
+def test_matches_uki_manager_on_november_2026():
+    """Every SCT (games too), Q, place and level point in all 12 classes, from what the scribes recorded."""
+    df, course = _nov()
+    checked = 0
+    by_class = {}
+    for r in df.itertuples():
+        c = course[(r.day, r.Class)]
+        if r.SCT:   # 0 = UKI Manager had no yardage for that level (Saturday Agility Senior/Champ, one absent dog)
+            assert sc.sct(r.Class, r.Level, r.h, r.t, c) == r.SCT, (r.day, r.Class, r.Level, r.Height)
+            checked += 1
+        f = str(r.Faults)
+        st = f if f in sc.STATUSES else ''
+        if r.Class == 'Gamblers':
+            # The workbook has total games points only; give Q'd dogs a passing opening/gamble split. Over-time dogs
+            # (Kwik 36 points at 40.17 > 37, Fizz 33 at 40.01 > 40) must still lose the Q.
+            q_split = (r._13 - 10, 10) if r.Place or r.Time > r.SCT else (0, 0)
+            res = sc.score_run(r.Class, {'status': st, 'time': r.Time, 'opening_points': q_split[0],
+                                         'gamble_points': q_split[1]}, int(r.SCT), {**c, 'opening_time': 0})
+            res['points'] = int(r._13)
+        elif r.Class == 'Snooker':
+            res = sc.score_run(r.Class, {'status': st, 'time': r.Time, 'points': r._13}, int(r.SCT), c)
+        else:
+            res = sc.score_run(r.Class, {'status': st, 'time': r.Time, 'course_faults': 0 if st else float(f)}, int(r.SCT), c)
+        by_class.setdefault((r.day, r.Class), []).append(
+            {'id': r.Index, 'level': r.Level, 'height': r.h, 'class_type': r.t, 'result': res, 'name': r._9,
+             'want': (int(r.Place), int(r._16))})
+    placed = 0
+    for (day, cls), runs in by_class.items():
+        for r in sc.place_class(cls, runs, course[(day, cls)]):
+            if (cls, r['name']) in NOV_UKI_SLIPS:
+                assert (r['place'], r['level_points']) == (1, 6)
+                continue
+            assert (r['place'], r['level_points']) == r['want'], (day, cls, r['name'], r['level'], r['height'], r['class_type'])
+            placed += 1
+    assert checked > 360 and placed == 385
+
+
+@pytest.mark.skipif(not NOV_RESULTS.exists(), reason='November 2026 results not on this computer')
+def test_masters_matches_uki_manager_on_november_2026():
+    import pandas as pd
+    raw, _ = _nov()
+    dogs = {}
+    for cls, key in (('Masters Agility', 'agility'), ('Masters Jumping', 'jumping')):
+        runs = []
+        for r in raw[raw['Class'] == cls].itertuples():
+            f = str(r.Faults)
+            res = sc.score_run(cls, {'status': f if f in sc.STATUSES else '', 'time': r.Time,
+                                     'course_faults': 0 if f in sc.STATUSES else float(f)}, int(r.SCT), {})
+            res['scored'] = True
+            runs.append({'id': int(r._8), 'level': r.Level, 'height': r.h, 'class_type': r.t, 'result': res})
+        for r in sc.place_class(cls, runs, {'yards_champ': 1}):
+            d = dogs.setdefault(r['id'], {'id': r['id'], 'height': r['height'], 'class_type': r['class_type']})
+            d[key] = {**r['result'], 'place': r['place']}
+    out = {d['id']: d for d in sc.masters_series(list(dogs.values()))}
+    sheet = pd.read_excel(NOV_RESULTS, sheet_name='Masters Scoring', header=None, skiprows=8).dropna(subset=[3])
+    for row in sheet.itertuples(index=False):
+        dog = int(row[3])
+        assert (out[dog]['place'], out[dog]['prize']) == (int(row[16] or 0), float(row[17] or 0)), (dog, row[4])
+    byes = set(pd.read_excel(NOV_RESULTS, sheet_name='Masters Byes')['Dog #'].dropna().astype(int))
+    assert {d for d, v in out.items() if v['bye']} == byes and len(byes) == 13
+    assert sum(v['prize'] for v in out.values()) == 100.0

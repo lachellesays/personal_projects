@@ -735,6 +735,10 @@ def render_gate():
 
 
 # --- TAB: ADMIN ---
+# Admin sections that change what Trial Manager sends; locked on days it manages
+MANAGED_SECTIONS = {"Upload run order", "Reorder", "Late entry", "A-frame", "Publish results"}
+
+
 def render_admin():
     st.header("Secretary Admin")
     if pin_unlocked('admin', 'ADMIN_PIN', 'Admin PIN'):
@@ -745,8 +749,35 @@ def render_admin():
         )
         st.divider()
 
+        # Days Trial Manager sends: its run order, A-frame and results are the master copy, so the tools that
+        # would change them here are locked (with an emergency unlock if Trial Manager is down).
+        managed = db.managed_day(ENGINE, day) if day else None
+        when = managed['updated_at'].astimezone(TZ).strftime('%-I:%M %p') if managed and managed['updated_at'] else ''
+        locked_here = bool(managed and not managed['unlocked'] and section in MANAGED_SECTIONS)
+        if managed and managed['unlocked']:
+            st.warning(f"{_day_label(day)} is unlocked for hand edits, so {managed['source']} has stopped "
+                       "updating it. Hand it back when you're done; the next change in "
+                       f"{managed['source']} then replaces the run order here.")
+            if st.button(f"Hand {_day_label(day)} back to {managed['source']}", key=f"relock_{day}"):
+                db.set_day_unlocked(ENGINE, day, False)
+                st.session_state.admin_flash = f"{_day_label(day)} is managed by {managed['source']} again."
+                st.rerun()
+
+        if locked_here:
+            st.info(f"**{_day_label(day)} is managed by {managed['source']}**"
+                    + (f" (last update {when})" if when else "") + ". The run order, late entries, A-frame and "
+                    f"results come from there automatically. Make changes in {managed['source']}.")
+            with st.expander("Unlock for manual edits (only if Trial Manager is down)"):
+                st.caption(f"While unlocked, {managed['source']} stops updating {_day_label(day)}, "
+                           "so changes made there won't show here until you hand the day back.")
+                ok = st.checkbox(f"Yes, unlock {_day_label(day)}", key=f"unlock_ok_{day}")
+                if st.button("Unlock", disabled=not ok, key=f"unlock_{day}"):
+                    db.set_day_unlocked(ENGINE, day, True)
+                    st.session_state.admin_flash = f"{_day_label(day)} unlocked for hand edits."
+                    st.rerun()
+
         # ── Upload run order ──
-        if section == "Upload run order":
+        elif section == "Upload run order":
             st.caption("Upload the CSV exported from the run order app. It replaces the runs for the day(s) in the "
                        "file only. Anyone already checked in, scratched, or finished keeps that status "
                        "(matched by class + dog number).")
@@ -759,28 +790,35 @@ def render_admin():
                     st.error(str(e))
                 else:
                     pv = db.preview_import(ENGINE, new_runs)
-                    days_txt = ', '.join(_day_label(d) for d in pv['dates'])
-                    st.markdown(f"**{pv['new']} runs** for **{days_txt}**")
-                    summary = summarize(new_runs)
-                    summary['trial_date'] = summary['trial_date'].map(_day_label)
-                    st.dataframe(summary.rename(columns={'trial_date': 'Day', 'class_name': 'Class', 'runs': 'Runs'}),
-                                 hide_index=True, use_container_width=True)
-                    if pv['replacing']:
-                        st.info(f"This replaces the {pv['replacing']} runs currently loaded for {days_txt}. "
-                                f"{pv['statuses_kept']} status(es) will carry over.")
-                    if pv['statuses_lost']:
-                        st.warning("These runs have a status but are **not in the new file**, so they'll be removed:\n\n"
-                                   + "\n".join(f"- {x}" for x in pv['statuses_lost']))
-                    if st.button(f"Load this run order for {days_txt}", type="primary"):
-                        db.import_runs(ENGINE, new_runs)
-                        st.session_state.upload_ver = up_ver + 1
-                        st.session_state.pending_day = pv['dates'][0]
-                        st.session_state.admin_flash = f"Run order loaded: {pv['new']} runs for {days_txt}."
-                        st.rerun()
+                    blocked = [d for d in pv['dates'] if db.is_locked(ENGINE, d)]
+                    if blocked:
+                        st.error(f"{', '.join(_day_label(d) for d in blocked)} "
+                                 f"{'is' if len(blocked) == 1 else 'are'} managed by Trial Manager, so this file "
+                                 "can't replace it. Make the change in Trial Manager, or unlock the day first.")
+                    else:
+                        days_txt = ', '.join(_day_label(d) for d in pv['dates'])
+                        st.markdown(f"**{pv['new']} runs** for **{days_txt}**")
+                        summary = summarize(new_runs)
+                        summary['trial_date'] = summary['trial_date'].map(_day_label)
+                        st.dataframe(summary.rename(columns={'trial_date': 'Day', 'class_name': 'Class', 'runs': 'Runs'}),
+                                     hide_index=True, use_container_width=True)
+                        if pv['replacing']:
+                            st.info(f"This replaces the {pv['replacing']} runs currently loaded for {days_txt}. "
+                                    f"{pv['statuses_kept']} status(es) will carry over.")
+                        if pv['statuses_lost']:
+                            st.warning("These runs have a status but are **not in the new file**, so they'll be removed:\n\n"
+                                       + "\n".join(f"- {x}" for x in pv['statuses_lost']))
+                        if st.button(f"Load this run order for {days_txt}", type="primary"):
+                            db.import_runs(ENGINE, new_runs)
+                            st.session_state.upload_ver = up_ver + 1
+                            st.session_state.pending_day = pv['dates'][0]
+                            st.session_state.admin_flash = f"Run order loaded: {pv['new']} runs for {days_txt}."
+                            st.rerun()
 
-            if dates:
+            removable = [d for d in dates if not db.is_locked(ENGINE, d)]   # Trial Manager's days are removed there
+            if removable:
                 with st.expander("Remove a day"):
-                    rm_day = st.selectbox("Day to remove", dates, format_func=_day_label, key="rm_day")
+                    rm_day = st.selectbox("Day to remove", removable, format_func=_day_label, key="rm_day")
                     confirm = st.checkbox(f"Yes, delete every run for {_day_label(rm_day)}", key="rm_confirm")
                     if st.button("Delete day", disabled=not confirm):
                         db.delete_day(ENGINE, rm_day)

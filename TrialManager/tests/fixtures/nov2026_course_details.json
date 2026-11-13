@@ -1,0 +1,88 @@
+{
+ "show": "Level Up Dog Sports November 2026 (UKI show 6910)",
+ "source": "Derived 2026-11-12 from the SCTs in UKI Manager's results workbook (the Yardage screen wasn't read): for each class, the one yardage per level group (and games time + small/Select seconds) that reproduces every SCT.",
+ "note": "Saturday Agility Senior/Champ yardage is unknown: UKI Manager recorded SCT 0 for all 22 Senior/Champ runs.",
+ "classes": [
+  {
+   "day": "Saturday",
+   "class": "Agility",
+   "rate": "fast",
+   "yards_bn": 150
+  },
+  {
+   "day": "Saturday",
+   "class": "Agility 2",
+   "yards_champ": 185,
+   "rate": "fast",
+   "yards_bn": 176
+  },
+  {
+   "day": "Saturday",
+   "class": "Gamblers",
+   "opening_time": 25,
+   "closing_time": 12,
+   "small_extra": 3,
+   "select_extra": 3
+  },
+  {
+   "day": "Saturday",
+   "class": "Jumping",
+   "yards_champ": 203,
+   "rate": "fast",
+   "yards_bn": 194
+  },
+  {
+   "day": "Saturday",
+   "class": "Jumping 2",
+   "yards_champ": 164,
+   "rate": "fast",
+   "yards_bn": 148
+  },
+  {
+   "day": "Saturday",
+   "class": "Speedstakes",
+   "yards_champ": 153,
+   "rate": "fast",
+   "yards_bn": 148
+  },
+  {
+   "day": "Sunday",
+   "class": "Agility",
+   "yards_champ": 188,
+   "rate": "fast",
+   "yards_bn": 168
+  },
+  {
+   "day": "Sunday",
+   "class": "Jumping",
+   "yards_champ": 160,
+   "rate": "fast",
+   "yards_bn": 172
+  },
+  {
+   "day": "Sunday",
+   "class": "Masters Agility",
+   "yards_champ": 197,
+   "rate": "fast"
+  },
+  {
+   "day": "Sunday",
+   "class": "Masters Jumping",
+   "yards_champ": 215,
+   "rate": "fast"
+  },
+  {
+   "day": "Sunday",
+   "class": "Speedstakes",
+   "yards_champ": 161,
+   "rate": "fast"
+  },
+  {
+   "day": "Sunday",
+   "class": "Speedstakes 2",
+   "yards_champ": 161,
+   "rate": "fast",
+   "yards_bn": 194
+  }
+ ]
+}

@@ -11,27 +11,13 @@
 </head>
 <body hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'>
 {% if user %}
-  <div class="mobilebar"><a href="/shows">Trial Manager</a><span><a href="/people">People</a></span></div>
+  <details class="mobilebar"><summary><a href="/shows">Trial Manager</a><span class="burger">{% if slug and d %}{{ (SHOW_NAV|selectattr('1', 'equalto', tab)|map(attribute='2')|first) or 'Menu' }}{% else %}Menu{% endif %} ☰</span></summary>
+    <nav class="side mobile">{% include "_nav.html" %}
+      <div class="me"><b>{{ user.name }}</b> <a href="/account">Account</a></div></nav></details>
   <div class="layout">
     <aside class="side">
       <a class="brand" href="/shows">Trial Manager</a>
-      <a class="nav {{ 'on' if not slug and request.url.path.startswith('/shows') }}" href="/shows">All shows</a>
-      {% if slug and d %}
-        <div class="lbl">{{ d.show.name }}</div>
-        <a class="nav {{ 'on' if tab == 'setup' }}" href="/shows/{{ slug }}/setup">Show setup</a>
-        <a class="nav {{ 'on' if tab == 'entries' }}" href="/shows/{{ slug }}/entries">Entries <span class="n" title="Entries received from JotForm">{{ d.stats.submissions }}</span></a>
-        <a class="nav {{ 'on' if tab == 'paper' }}" href="/shows/{{ slug }}/paper">Paper entries</a>
-        <a class="nav {{ 'on' if tab == 'typos' }}" href="/shows/{{ slug }}/typos">Fix typos <span class="n" id="side-fixes">{{ fix_count }}</span></a>
-        <a class="nav {{ 'on' if tab == 'warnings' }}" href="/shows/{{ slug }}/warnings">Warnings <span class="n">{{ open_warnings }}</span></a>
-        <a class="nav {{ 'on' if tab == 'download' }}" href="/shows/{{ slug }}/download">Download</a>
-        <div class="lbl">Trial day</div>
-        <a class="nav {{ 'on' if tab == 'runorder' }}" href="/shows/{{ slug }}/runorder">Run order</a>
-        <a class="nav {{ 'on' if tab == 'dayof' }}" href="/shows/{{ slug }}/dayof">Day-of entries</a>
-        <a class="nav {{ 'on' if tab == 'scoring' }}" href="/shows/{{ slug }}/scoring">Scoring</a>
-      {% endif %}
-      <div class="lbl">Admin</div>
-      <a class="nav {{ 'on' if request.url.path.startswith('/directory') }}" href="/directory">Handlers &amp; dogs</a>
-      <a class="nav {{ 'on' if request.url.path.startswith('/people') }}" href="/people">People</a>
+      {% include "_nav.html" %}
       <div class="me"><b>{{ user.name }}</b>
         <a href="/account">Account</a> ·
         <form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button>Sign out</button></form>

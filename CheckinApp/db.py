@@ -94,6 +94,18 @@ aframe_settings = Table(
     UniqueConstraint('trial_date', 'class_name'),
 )
 
+# Days whose run order, A-frame and results come straight from Trial Manager (it writes this row on every push).
+# Admin's upload/reorder/late-entry/A-frame/publish tools are locked for these days unless someone unlocks them;
+# while unlocked, Trial Manager stops pushing that day.
+managed_days = Table(
+    'managed_days', metadata,
+    Column('trial_date', Date, primary_key=True),
+    Column('source', String, nullable=False, default='Trial Manager'),
+    Column('updated_at', DateTime(timezone=True)),
+    Column('unlocked', Boolean, nullable=False, default=False),
+    Column('unlocked_at', DateTime(timezone=True)),
+)
+
 # Fields copied from the CSV / typed in for a late entry
 RUN_FIELDS = ['day', 'ring', 'event', 'event_num', 'level', 'class_type', 'height', 'dog_name', 'breed',
               'first_name', 'last_name', 'handler_name', 'handler_number', 'dog_number',
@@ -335,6 +347,30 @@ def classes_with_maps(engine, trial_date: date) -> set:
     with engine.connect() as c:
         return {r[0] for r in c.execute(select(course_maps.c.class_name).distinct()
                                         .where(course_maps.c.trial_date == trial_date))}
+
+
+# ── Days managed by Trial Manager ────────────────────────────────────────────
+
+def managed_day(engine, trial_date: date):
+    """{'source', 'updated_at', 'unlocked'} if Trial Manager sends this day's run order, else None."""
+    with engine.connect() as c:
+        row = c.execute(select(managed_days).where(managed_days.c.trial_date == trial_date)).mappings().first()
+    if row is None:
+        return None
+    return {'source': row['source'], 'updated_at': _aware(row['updated_at']), 'unlocked': bool(row['unlocked'])}
+
+
+def is_locked(engine, trial_date: date) -> bool:
+    """True while Trial Manager owns the day, so the admin tools that change the run order are hidden."""
+    m = managed_day(engine, trial_date)
+    return bool(m and not m['unlocked'])
+
+
+def set_day_unlocked(engine, trial_date: date, unlocked: bool):
+    """Unlock a managed day for hand edits (Trial Manager stops pushing it), or hand it back."""
+    with _write(engine) as c:
+        c.execute(update(managed_days).where(managed_days.c.trial_date == trial_date)
+                  .values(unlocked=unlocked, unlocked_at=_now() if unlocked else None))
 
 
 # ── A-frame ──────────────────────────────────────────────────────────────────

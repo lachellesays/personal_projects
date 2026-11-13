@@ -24,6 +24,7 @@
       <form method="post" action="/shows/{{ slug }}/runorder/build"><input type="hidden" name="csrf" value="{{ csrf }}">
         <button class="btn small">Update run order</button></form></div>
   {% endif %}
+  {% include "_checkin_link.html" %}
   <div class="toolbar">
     {% for dd in days %}<a class="fchip {{ 'on' if dd == day }}" href="/shows/{{ slug }}/runorder?day={{ dd }}">{{ dd|day }}</a>{% endfor %}
     {% set ds = day_sets[day] %}

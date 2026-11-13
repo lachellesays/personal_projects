@@ -1,8 +1,4 @@
-{% extends "base.html" %}
-{% block title %}Warnings · {{ d.show.name }}{% endblock %}
-{% block main %}
-{% include "_show_head.html" %}
-<p class="muted" style="margin:14px 0 10px">Things worth a look before you download. Resolve or dismiss each one; the count on the tab goes down.</p>
+<p class="muted" style="margin:14px 0 10px">Things worth a look before you send the workbook to UKI. Resolve or dismiss each one; the count goes down.</p>
 {% for w in warnings %}
 <div class="warn {{ w.kind }} {{ 'dismissed' if w.dismissed }}">
   <span class="ic">{{ {'money': '$', 'addr': '?', 'data': '!'}[w.kind] }}</span>
@@ -33,4 +29,3 @@
 {% else %}
 <div class="flash ok">No warnings. Everything looks good.</div>
 {% endfor %}
-{% endblock %}

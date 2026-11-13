@@ -154,6 +154,8 @@ class_settings = Table(
     Column('sct_extra', Integer, default=0),               # judge's extra seconds (0-3)
     Column('opening_time', Integer), Column('closing_time', Integer),   # Gamblers
     Column('course_time', Integer),                                      # Snooker
+    # Games: the judge may give small dogs (16" and under, Select counted one height up) and Select more time
+    Column('small_extra', Integer), Column('select_extra', Integer),
     Column('calculated_at', DateTime(timezone=True)),
 )
 
@@ -189,6 +191,27 @@ day_payments = Table(
     Column('note', String, default=''),
     Column('at', DateTime(timezone=True)),
     Column('user_name', String, default=''),
+)
+
+# ── Live link to the check-in app — see checkin.py ─────────────────────────
+
+checkin_shows = Table(
+    'tm_checkin_shows', metadata,
+    Column('show_slug', String, primary_key=True),
+    Column('live', Boolean, nullable=False, default=False),   # off = nothing is sent to check-in
+    Column('changed_at', DateTime(timezone=True)),
+    Column('changed_by', String, default=''),
+)
+
+checkin_days = Table(
+    'tm_checkin_days', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('day', String, nullable=False),
+    Column('fingerprint', String, default=''),       # what was last sent, so unchanged days aren't re-sent
+    Column('pushed_at', DateTime(timezone=True)),
+    Column('error', String, default=''),             # the last failure, cleared by the next good push
+    Column('error_at', DateTime(timezone=True)),
 )
 
 # ── Handler & dog directory, paper entries — see people.py ──────────────────

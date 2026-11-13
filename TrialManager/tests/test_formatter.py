@@ -71,7 +71,7 @@ def test_typo_fix_and_undo(admin):
 
 def test_warnings_are_actionable(admin):
     c, token = admin
-    page = c.get(f'/shows/{SLUG}/warnings').text
+    page = c.get(f'/shows/{SLUG}/review?t=warnings').text
     assert 'Bob Jones (200) has a credit of $45.00' in page
     assert 'Cara Lee (300) typed their address 2 ways' in page
     assert 'zip code 23220 is in VA' in page

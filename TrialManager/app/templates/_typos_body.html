@@ -1,12 +1,8 @@
-{% extends "base.html" %}
-{% block title %}Fix typos · {{ d.show.name }}{% endblock %}
-{% block main %}
-{% include "_show_head.html" %}
-<form class="toolbar" method="get" action="/shows/{{ slug }}/typos">
-  <input type="hidden" name="kind" value="{{ kind }}">
+<form class="toolbar" method="get" action="/shows/{{ slug }}/review">
+  <input type="hidden" name="t" value="typos"><input type="hidden" name="kind" value="{{ kind }}">
   <input class="search" type="search" name="q" value="{{ q }}" placeholder="Search handler, dog, or number">
-  <a class="fchip {{ 'on' if kind == 'handlers' }}" href="/shows/{{ slug }}/typos?kind=handlers">Handlers</a>
-  <a class="fchip {{ 'on' if kind == 'dogs' }}" href="/shows/{{ slug }}/typos?kind=dogs">Dogs</a>
+  <a class="fchip {{ 'on' if kind == 'handlers' }}" href="/shows/{{ slug }}/review?t=typos&kind=handlers">Handlers</a>
+  <a class="fchip {{ 'on' if kind == 'dogs' }}" href="/shows/{{ slug }}/review?t=typos&kind=dogs">Dogs</a>
 </form>
 <div class="typo-grid">
   <div>
@@ -23,4 +19,3 @@
   </div>
   {% include "_fix_log.html" %}
 </div>
-{% endblock %}
