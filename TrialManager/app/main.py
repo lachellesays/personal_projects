@@ -21,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.background import BackgroundTask
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import auth, checkin, db, formatter as fmt, mailer, messages, results, trial
+from app import auth, checkin, db, formatter as fmt, mailer, measurements, messages, results, trial, uki_exports
 from app import people as dirdb   # the handler & dog directory ('people' is the admin People page below)
 from app.core import Show
 
@@ -41,7 +41,7 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie='tm_
 app.mount('/static', StaticFiles(directory=HERE / 'static'), name='static')
 
 # Changes that can't touch the run order, so they don't need a check-in sync afterwards
-_NO_SYNC = ('/scoring/', '/paper/total', '/typos/', '/checkin/', '/warnings', '/download', '/refresh', '/messages', '/discount')
+_NO_SYNC = ('/scoring/', '/paper/total', '/typos/', '/checkin/', '/warnings', '/download', '/refresh', '/messages', '/discount', '/measurements', '/paper-accounts')
 
 
 @app.middleware('http')
@@ -109,6 +109,7 @@ SHOW_NAV = [
     ('Before the trial', 'download', 'Send to UKI', 'download'),
     ('Trial day', 'runorder', 'Run order', 'runorder'),
     ('Trial day', 'dayof', 'Day-of entries', 'dayof'),
+    ('Trial day', 'measure', 'Measurements', 'measurements'),
     ('Trial day', 'scoring', 'Scoring & results', 'scoring'),
     ('Competitors', 'messages', 'Messages', 'messages'),
 ]
@@ -833,7 +834,7 @@ def scoring_page(request: Request, slug: str, day: str = '', cls: str = '', view
     require_user(request)
     ctx = _scoring_ctx(request, slug, day, cls)
     has_masters = any(c['class_name'] == 'Masters Agility' for c in ctx['score_classes'])
-    view = view if view in ('results', 'masters') else 'scores'
+    view = view if view in ('results', 'masters', 'uki') else 'scores'
     if view == 'masters' and not has_masters:
         view = 'scores'
     extra = {}
@@ -844,6 +845,12 @@ def scoring_page(request: Request, slug: str, day: str = '', cls: str = '', view
                             for combined in sorted({r['combined'] for r in ctx['ev']['rows']})]
     elif view == 'masters':
         extra['mv'] = results.masters_view(slug, ctx['day'])
+    elif view == 'uki':
+        counts = uki_exports.paper_counts(slug)
+        extra.update(ready=uki_exports.readiness(slug, ctx['d'].show), counts=counts,
+                     totals=uki_exports.paper_totals(counts), paypal_email=uki_exports.PAYPAL_EMAIL,
+                     prices={'run': uki_exports.RUN_PRICE,
+                                                                      'masters': uki_exports.MASTERS_PRICE})
     return render(request, 'scoring.html', view=view, has_masters=has_masters, **extra, **ctx)
 
 
@@ -912,9 +919,39 @@ def results_xlsx(request: Request, slug: str):
     user = require_user(request)
     show = db.get_show(slug)
     data = results.results_workbook(slug, show)
-    db.log(user, 'download', slug, target='results.xlsx')
+    db.log(user, 'download', slug, target='trial data for UKI')
     return Response(data, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    headers={'Content-Disposition': f'attachment; filename="Results_{slug}.xlsx"'})
+                    headers={'Content-Disposition': f'attachment; filename="TrialData_{slug}.xlsx"'})
+
+
+def _memberships(form) -> list:
+    out = []
+    for i in range(3):
+        number, name, amount = (str(form.get(f'm{k}_{i}', '')).strip() for k in ('num', 'name', 'amt'))
+        if not (number or name or amount):
+            continue
+        try:
+            value = float(amount.replace('$', '') or 0)
+        except ValueError:
+            raise results.ResultsError(f'Membership amount “{amount}” should be a number, like 40.')
+        out.append({'number': number, 'name': name, 'amount': value})
+    return out
+
+
+@app.post('/shows/{slug}/paper-accounts.xlsx')
+async def paper_accounts_xlsx(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    show = db.get_show(slug)
+    try:
+        unpaid = float(str(form.get('unpaid_masters') or '0').replace('$', '') or 0)
+    except ValueError:
+        raise results.ResultsError('Unpaid Masters prize fund should be a number, like 0 or 12.')
+    data = uki_exports.paper_accounts_workbook(slug, show, form.get('paypal_email', '').strip(), unpaid,
+                                               _memberships(form))
+    db.log(user, 'download', slug, target='paper accounts for UKI')
+    return Response(data, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition': f'attachment; filename="PaperAccts_{show.show_id}.xlsx"'})
 
 
 @app.get('/shows/{slug}/scoring/masters', include_in_schema=False)
@@ -939,6 +976,52 @@ def masters_certificates(request: Request, slug: str, day: str):
     db.log(user, 'download', slug, target='masters certificates', day=day)
     return Response(data, media_type='application/pdf',
                     headers={'Content-Disposition': f'inline; filename="masters_final_certificates_{day}.pdf"'})
+
+
+# ── Measurements ────────────────────────────────────────────────────────────
+
+@app.get('/shows/{slug}/measurements', response_class=HTMLResponse)
+def measurements_page(request: Request, slug: str, edit: int = 0):
+    require_user(request)
+    d, ws, ctx = _show_ctx(request, slug, 'measure')
+    dogs = sorted(trial.known_dogs(d), key=lambda g: (g['last_name'].lower(), g['first_name'].lower(), g['dog_name'].lower()))
+    editing = measurements.get(slug, edit) if edit else None
+    form = editing or {'kind': 'P', 'official': measurements.last_official(slug)}
+    if editing:
+        form['dog_key'] = next((g['key'] for g in dogs if (g['dog_number'] and g['dog_number'] == editing['dog_number'])
+                                or (not g['dog_number'] and g['dog_name'] == editing['dog_name'])), '')
+    return render(request, 'measurements.html', dogs=dogs, rows=measurements.all_for(slug), form=form,
+                  editing=editing, kinds=measurements.KINDS, error=None,
+                  flash=request.session.pop('measure_flash', ''), **ctx)
+
+
+@app.post('/shows/{slug}/measurements', response_class=HTMLResponse)
+async def measurements_save(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    mid = int(form.get('id') or 0)
+    if form.get('delete') and mid:
+        measurements.remove(slug, mid, user)
+        request.session['measure_flash'] = 'Measurement removed.'
+        return back(f'/shows/{slug}/measurements')
+    d = fmt.load(slug)
+    dogs = trial.known_dogs(d)
+    dog = next((g for g in dogs if g['key'] == form.get('dog_key')), None)
+    try:
+        if not dog:
+            raise measurements.MeasurementError('Pick the dog from the list.')
+        measurements.save(slug, dog, dict(form), user, mid or None)
+    except measurements.MeasurementError as e:
+        d, ws, ctx = _show_ctx(request, slug, 'measure', d)
+        dogs = sorted(dogs, key=lambda g: (g['last_name'].lower(), g['first_name'].lower(), g['dog_name'].lower()))
+        return render(request, 'measurements.html', dogs=dogs, rows=measurements.all_for(slug), form=dict(form),
+                      editing=measurements.get(slug, mid) if mid else None, kinds=measurements.KINDS, error=str(e),
+                      flash='', status_code=400, **ctx)
+    msg = f"Saved {dog['dog_name']}'s measurement."
+    if not dog['dog_number']:
+        msg += ' This dog has no UKI number, and UKI only records measurements with one.'
+    request.session['measure_flash'] = msg
+    return back(f'/shows/{slug}/measurements')
 
 
 # ── Messages to competitors ─────────────────────────────────────────────────

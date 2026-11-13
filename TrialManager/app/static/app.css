@@ -300,3 +300,4 @@ details.disc summary::-webkit-details-marker { display: none; }
 details.disc[open] form { width: 220px; margin: 6px 0 0 auto; background: #F8FAFC; border: 1px solid var(--line);
   border-radius: 10px; padding: 10px 12px; }
 details.disc .disc-acts { display: flex; gap: 6px; margin-top: 8px; }
+.nowrap { white-space: nowrap; }

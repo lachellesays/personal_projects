@@ -254,30 +254,10 @@ RAW_RESULTS_COLUMNS = ['Show ID', 'Level', 'Class', 'Height', 'Date', 'Member ID
 
 
 def results_workbook(slug: str, show) -> bytes:
-    """The Raw Results sheet in UKI Manager's results spreadsheet layout, for sending to UKI."""
-    import openpyxl
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = 'Raw Results'
-    ws.append(RAW_RESULTS_COLUMNS)
-    for day in (str(show.saturday_date), str(show.sunday_date)):
-        for s in trial.class_list(slug, day):
-            if not s['calculated_at']:
-                continue
-            for r in class_runs(slug, day, s['class_name']):
-                res, sc_ = (r['score'] or {}).get('result') or {}, r['score'] or {}
-                status = res.get('status') or ''
-                faults = status or (int(sc_.get('course_faults') or 0) + int(sc_.get('refusals') or 0) if res.get('scored') else '')
-                ws.append([show.show_id, r['level'], s['class_name'],
-                           f"{r['height']} inch" + (' (s)' if r['class_type'] == 'Select' else ''),
-                           date.fromisoformat(day).strftime('%-m/%-d/%Y'), _intish(r['handler_number']),
-                           f"{r['first_name']} {r['last_name']}".strip(), _intish(r['dog_number']), r['dog_name'], r['breed'],
-                           res.get('sct'), faults, res.get('points') or 0, round(res.get('time') or 0, 2),
-                           res.get('place') or 0, res.get('level_points') or 0])
-    _masters_sheets(wb, slug, show)
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+    """The trial data workbook for UKI (Raw Results, Measurements, Masters Scoring, Masters Byes) in UKI's own
+    layout; see uki_exports."""
+    from app import uki_exports
+    return uki_exports.trial_data_workbook(slug, show)
 
 
 def _masters_sheets(wb, slug: str, show):

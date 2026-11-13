@@ -237,7 +237,7 @@ def test_menu_follows_the_trial_and_old_pages_redirect(built):
     assert 'before you send the workbook to UKI' in c.get(f'/shows/{SLUG}/review?t=warnings').text
     # Scoring & results tabs; no Masters classes this day, so that tab isn't offered and falls back to Scores
     page = c.get(f'/shows/{SLUG}/scoring?day={SAT}&cls=Agility').text
-    assert 'Course details for Agility' in page and 'view=results' in page and 'Results file for UKI' in page
+    assert 'Course details for Agility' in page and 'view=results' in page and 'Files for UKI' in page
     assert 'Not calculated yet' in c.get(f'/shows/{SLUG}/scoring?view=results&day={SAT}&cls=Agility').text
     assert 'Course details' in c.get(f'/shows/{SLUG}/scoring?view=masters&day={SAT}').text
 
@@ -301,7 +301,7 @@ def test_scoring_end_to_end(built):
     assert head == results.RAW_RESULTS_COLUMNS
     rows_ = [dict(zip(head, [x.value for x in row])) for row in ws.iter_rows(min_row=2)]
     ace = next(x for x in rows_ if x['Dog Name'] == 'Ace')
-    assert ace['Place'] == 1 and ace['Level Points'] == 6 and ace['SCT'] == 56 and ace['Class'] == 'Agility'
+    assert ace['Place'] == 1 and ace['Level Points'] == 6 and ace['SCT'] == 56 and ace['Class'] == 'Agility '
 
 
 def test_scoring_games(built):

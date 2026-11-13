@@ -206,6 +206,27 @@ checkin_days = Table(
     Column('error_at', DateTime(timezone=True)),
 )
 
+# ── Dog measurements taken at a trial — see measurements.py ────────────────
+
+measurements = Table(
+    'tm_measurements', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('dog_number', String, default=''),
+    Column('dog_name', String, default=''),
+    Column('handler_number', String, default=''),
+    Column('handler_name', String, default=''),
+    Column('height_entered', String, default=''),    # as UKI writes it: '16 inch' / '16 inch(s)'
+    Column('kind', String, default=''),              # P (permanent) or T (temporary)
+    Column('age', String, default=''),               # years, as typed
+    Column('inches', JSON),                          # e.g. 15.75
+    Column('organization', String, default=''),      # for a temporary measure
+    Column('official', String, default=''),          # UKI measuring official
+    Column('notes', String, default=''),
+    Column('updated_at', DateTime(timezone=True)),
+    Column('updated_by', String, default=''),
+)
+
 # ── Discounts (certificates etc.), one per handler per show — see formatter.set_discount ──
 
 discounts = Table(

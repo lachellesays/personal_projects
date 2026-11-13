@@ -1,0 +1,39 @@
+<div class="dl-grid">
+  <div class="panel">
+    <h3>1. Trial data</h3>
+    <p class="muted">UKI's results workbook: <b>Raw Results</b>, <b>Measurements</b>, <b>Masters Scoring</b> and <b>Masters Byes</b>, in UKI's own layout.</p>
+    {% if ready.waiting %}<div class="flash error">Not calculated yet, so not in the file: {{ ready.waiting|join(', ') }}.</div>
+    {% else %}<div class="flash ok">Every class is calculated.</div>{% endif %}
+    {% if ready.unscored %}<div class="flash info">{{ ready.unscored }} run{{ 's have' if ready.unscored != 1 else ' has' }} no score; they go in as ABS.</div>{% endif %}
+    <p>{{ ready.measurements }} measurement{{ 's' if ready.measurements != 1 }} recorded
+      (<a href="/shows/{{ slug }}/measurements">Measurements</a>){% if ready.measurements_no_number %}; <span class="owes">{{ ready.measurements_no_number }} without a dog UKI #</span>, which UKI won't record{% endif %}.</p>
+    <a class="btn primary big" href="/shows/{{ slug }}/results.xlsx">Download TrialData_{{ slug }}.xlsx</a>
+  </div>
+  <div class="panel">
+    <h3>2. Paper accounts</h3>
+    <p class="muted">UKI's handling-fee form for entries that came straight to the club rather than through UKI. For this trial that's every
+      entry (JotForm, paper and day-of). The fee formulas are UKI's own.</p>
+    <table class="t" style="margin-bottom:10px">
+      <tr><td>Regular runs</td><td class="num nowrap"><b>{{ counts.runs }}</b> × {{ prices.run|money }}</td></tr>
+      <tr><td>Masters Series entries</td><td class="num nowrap"><b>{{ counts.masters }}</b> × {{ prices.masters|money }}</td></tr>
+      <tr><td>Handling fees (before memberships or unpaid prize fund)</td><td class="num">{{ totals.handling|money }}</td></tr>
+      <tr><td>With UKI's 3.5% banking fee</td><td class="num"><b>{{ totals.due|money }}</b></td></tr>
+    </table>
+    <form method="post" action="/shows/{{ slug }}/paper-accounts.xlsx">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="l" for="paypal_email">Email for UKI's PayPal request</label>
+      <input class="f" id="paypal_email" name="paypal_email" type="email" value="{{ paypal_email }}">
+      <label class="l" for="unpaid_masters">Unpaid Masters prize fund ($)</label>
+      <input class="f" id="unpaid_masters" name="unpaid_masters" inputmode="decimal" value="0">
+      <label class="l">UKI memberships paid at the show (optional)</label>
+      {% for i in range(3) %}
+      <div class="row3" style="margin-bottom:4px">
+        <input class="f" name="mnum_{{ i }}" placeholder="UKI #" inputmode="numeric" aria-label="Membership {{ i + 1 }} UKI number">
+        <input class="f" name="mname_{{ i }}" placeholder="Name" aria-label="Membership {{ i + 1 }} name">
+        <input class="f" name="mamt_{{ i }}" placeholder="Amount" inputmode="decimal" aria-label="Membership {{ i + 1 }} amount">
+      </div>
+      {% endfor %}
+      <button class="btn primary big" style="margin-top:8px">Download PaperAccts_{{ d.show.show_id }}.xlsx</button>
+    </form>
+  </div>
+</div>

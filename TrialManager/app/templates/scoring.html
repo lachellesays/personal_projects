@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ {'scores': 'Scoring', 'results': 'Results', 'masters': 'Masters Series'}[view] }} · {{ d.show.name }}{% endblock %}
+{% block title %}{{ {'scores': 'Scoring', 'results': 'Results', 'masters': 'Masters Series', 'uki': 'Files for UKI'}[view] }} · {{ d.show.name }}{% endblock %}
 {% block main %}
 {% include "_show_head.html" %}
 {% if not built %}
@@ -9,16 +9,17 @@
 <div id="ro-msg"></div>
 <div class="toolbar">
   {% for dd in days %}<a class="fchip {{ 'on' if dd == day }}" href="/shows/{{ slug }}/scoring?view={{ view }}&day={{ dd }}">{{ dd|day }}</a>{% endfor %}
-  <span style="flex:1"></span>
-  <a class="btn small" href="/shows/{{ slug }}/results.xlsx">Results file for UKI</a>
 </div>
 {% set sq = '&day=' ~ day ~ '&cls=' ~ (cls|urlencode) %}
 {% set items = [{'key': 'scores', 'label': 'Scores', 'href': '/shows/' ~ slug ~ '/scoring?view=scores' ~ sq},
                 {'key': 'results', 'label': 'Results', 'href': '/shows/' ~ slug ~ '/scoring?view=results' ~ sq}] %}
 {% if has_masters %}{% set items = items + [{'key': 'masters', 'label': 'Masters Series overall', 'href': '/shows/' ~ slug ~ '/scoring?view=masters&day=' ~ day}] %}{% endif %}
+{% set items = items + [{'key': 'uki', 'label': 'Files for UKI', 'href': '/shows/' ~ slug ~ '/scoring?view=uki&day=' ~ day}] %}
 {% with current = view %}{% include "_subtabs.html" %}{% endwith %}
 {% if view == 'masters' %}
   <div style="margin-top:14px">{% include "_masters_body.html" %}</div>
+{% elif view == 'uki' %}
+  <div style="margin-top:14px">{% include "_uki_body.html" %}</div>
 {% else %}
 <div class="ro-grid" style="margin-top:14px">
   {% include "_scoring_classes.html" %}

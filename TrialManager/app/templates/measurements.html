@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Measurements · {{ d.show.name }}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+<p class="muted" style="margin:12px 0">Dogs measured at this trial go on the <b>Measurements</b> sheet of the trial data file for UKI
+  (Scoring &amp; results → Files for UKI). UKI only records a measurement that has the dog's UKI number.</p>
+<div class="dl-grid">
+  <div class="panel">
+    <h3>{{ 'Edit measurement' if editing else 'Add a measurement' }}</h3>
+    {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+    <form method="post" action="/shows/{{ slug }}/measurements">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if editing %}<input type="hidden" name="id" value="{{ editing.id }}">{% endif %}
+      <label class="l" for="dog_key">Dog</label>
+      <select class="f" id="dog_key" name="dog_key" required>
+        <option value="">Choose a dog…</option>
+        {% for g in dogs %}<option value="{{ g.key }}" {{ 'selected' if form.get('dog_key') == g.key }}>{{ g.last_name }}, {{ g.first_name }} — {{ g.dog_name }} ({{ g.height }}"{{ ' Select' if g.class_type == 'Select' }}){% if not g.dog_number %} · no UKI #{% endif %}</option>{% endfor %}
+      </select>
+      <div class="row2">
+        <div><label class="l">Measure</label>
+          <div class="seg">{% for k, label in kinds.items() %}<label><input type="radio" name="kind" value="{{ k }}" {{ 'checked' if form.get('kind') == k }}> {{ label }}</label>{% endfor %}</div></div>
+        <div><label class="l" for="inches">Height in inches</label>
+          <input class="f" id="inches" name="inches" value="{{ form.get('inches') if form.get('inches') is not none else '' }}" inputmode="decimal" placeholder="15.75" required></div>
+      </div>
+      <div class="row2">
+        <div><label class="l" for="age">Dog's age (years)</label><input class="f" id="age" name="age" value="{{ form.get('age', '') }}" inputmode="decimal"></div>
+        <div><label class="l" for="official">UKI measuring official</label><input class="f" id="official" name="official" value="{{ form.get('official', '') }}"></div>
+      </div>
+      <label class="l" for="organization">Organization (if a temporary measure used another organization's card)</label>
+      <input class="f" id="organization" name="organization" value="{{ form.get('organization', '') }}">
+      <label class="l" for="notes">Notes</label>
+      <input class="f" id="notes" name="notes" value="{{ form.get('notes', '') }}">
+      <p class="hint">Type the height as a number: 15.75 (15 3/4 is converted for you).</p>
+      <div class="toolbar" style="margin:0">
+        <button class="btn primary">{{ 'Save changes' if editing else 'Add measurement' }}</button>
+        {% if editing %}<a class="btn" href="/shows/{{ slug }}/measurements">Cancel</a>
+          <button class="btn danger" name="delete" value="1" formnovalidate onclick="return confirm('Remove this measurement?')">Remove</button>{% endif %}
+      </div>
+    </form>
+  </div>
+  <div class="panel">
+    <h3>Measured at this trial ({{ rows|length }})</h3>
+    {% if rows %}
+    <div class="tscroll"><table class="t">
+      <thead><tr><th>Dog</th><th>Entered</th><th class="num">Inches</th><th>Type</th><th></th></tr></thead>
+      <tbody>{% for m in rows %}
+        <tr><td><span class="dname">{{ m.dog_name }}</span>{% if not m.dog_number %} <span class="tag fix" title="UKI won't record it without the dog's number">NO UKI #</span>{% endif %}
+              <div class="muted">{{ m.handler_name }}{% if m.dog_number %} · #{{ m.dog_number }}{% endif %}</div></td>
+          <td>{{ m.height_entered }}</td><td class="num"><b>{{ '%g'|format(m.inches) }}</b></td>
+          <td>{{ m.kind_label }}{% if m.official %}<div class="muted">{{ m.official }}</div>{% endif %}</td>
+          <td><a class="btn small" href="/shows/{{ slug }}/measurements?edit={{ m.id }}">Edit</a></td></tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="muted">None yet.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}
