@@ -94,6 +94,14 @@ aframe_settings = Table(
     UniqueConstraint('trial_date', 'class_name'),
 )
 
+# Whether exhibitors can check themselves in on the Check-in tab. Closed until the secretary opens it in Admin.
+checkin_open = Table(
+    'checkin_open', metadata,
+    Column('trial_date', Date, primary_key=True),
+    Column('is_open', Boolean, nullable=False, default=False),
+    Column('changed_at', DateTime(timezone=True)),
+)
+
 # Days whose run order, A-frame and results come straight from Trial Manager (it writes this row on every push).
 # Admin's upload/reorder/late-entry/A-frame/publish tools are locked for these days unless someone unlocks them;
 # while unlocked, Trial Manager stops pushing that day.
@@ -347,6 +355,34 @@ def classes_with_maps(engine, trial_date: date) -> set:
     with engine.connect() as c:
         return {r[0] for r in c.execute(select(course_maps.c.class_name).distinct()
                                         .where(course_maps.c.trial_date == trial_date))}
+
+
+# ── Exhibitor check-in open / closed ─────────────────────────────────────────
+
+def checkin_is_open(engine, trial_date: date) -> bool:
+    """False until the secretary opens check-in for the day (Admin), and again after it's closed."""
+    with engine.connect() as c:
+        return bool(c.execute(select(checkin_open.c.is_open).where(checkin_open.c.trial_date == trial_date)).scalar())
+
+
+def set_checkin_open(engine, trial_date: date, is_open: bool):
+    with _write(engine) as c:
+        c.execute(delete(checkin_open).where(checkin_open.c.trial_date == trial_date))
+        c.execute(insert(checkin_open).values(trial_date=trial_date, is_open=is_open, changed_at=_now()))
+
+
+def exhibitor_set_status(engine, run_ids, status: str) -> bool:
+    """An exhibitor's own tap on the Check-in tab. Refused (returns False) while check-in is closed for that day,
+    so a page left open from before can't sneak a change in. Gate stewards and Admin use set_status."""
+    if status not in SELF_SERVE_STATUSES:
+        raise ValueError(f'Exhibitors can\'t set {status!r}')
+    ids = [run_ids] if isinstance(run_ids, int) else list(run_ids)
+    with engine.connect() as c:
+        days = {r[0] for r in c.execute(select(runs.c.trial_date).where(runs.c.id.in_(ids)).distinct())}
+    if not days or not all(checkin_is_open(engine, d) for d in days):
+        return False
+    set_status(engine, ids, status)
+    return True
 
 
 # ── Days managed by Trial Manager ────────────────────────────────────────────

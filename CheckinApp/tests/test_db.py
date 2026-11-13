@@ -272,3 +272,25 @@ def test_admin_locks_trial_manager_days():
     src = (Path(__file__).resolve().parent.parent / 'app.py').read_text()
     assert 'MANAGED_SECTIONS = {"Upload run order", "Reorder", "Late entry", "A-frame", "Publish results"}' in src
     assert 'db.is_locked(ENGINE, d)' in src   # an uploaded CSV can't replace a managed day
+
+
+def test_exhibitor_check_in_is_closed_until_opened(engine):
+    load(engine)
+    run_id = int(db.runs_for_day(engine, SAT_DATE).iloc[0]['id'])
+    status = lambda: db.runs_for_day(engine, SAT_DATE).set_index('id').loc[run_id, 'status']
+    assert not db.checkin_is_open(engine, SAT_DATE)
+    assert db.exhibitor_set_status(engine, run_id, 'Checked In') is False and status() == 'Not Checked In'
+    db.set_checkin_open(engine, SAT_DATE, True)
+    assert db.exhibitor_set_status(engine, run_id, 'Checked In') is True and status() == 'Checked In'
+    db.set_checkin_open(engine, SAT_DATE, False)                       # closed again: taps refused
+    assert db.exhibitor_set_status(engine, [run_id], 'Not Checked In') is False and status() == 'Checked In'
+    db.set_status(engine, run_id, 'Run Completed')                     # the gate works either way
+    assert status() == 'Run Completed'
+    with pytest.raises(ValueError):
+        db.exhibitor_set_status(engine, run_id, 'In Ring')
+
+
+def test_check_in_tab_only_uses_the_guarded_setter():
+    src = (Path(__file__).resolve().parent.parent / 'app.py').read_text()
+    tab = src[src.index('def render_checkin():'):src.index('# --- TAB: RUNNING ORDER ---')]
+    assert 'db.set_status' not in tab and "read('checkin_is_open', day)" in tab

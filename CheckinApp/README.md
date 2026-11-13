@@ -43,6 +43,11 @@ If the app shows a red warning about `DATABASE_URL`, step 3 isn't right yet.
 ---
 
 ## Each trial
+**Open check-in when you're ready:** exhibitor check-in starts **closed** for every day. At the top of Admin,
+turn on **Check-in open for <day>** (pick the day at the top first; Saturday and Sunday each have their own switch).
+While closed, the Check-in tab says check-in isn't open yet, and exhibitors can't change their status, even from a
+page they already had open. Running order, course maps, results, the Gate and Admin work either way.
+
 **If Trial Manager is connected** (its `CHECKIN_DATABASE_URL` points at this app's database and the show is
 switched "Live on check-in"), it fills in the run order, late entries, A-frame and results by itself. Those
 Admin sections then say "managed by Trial Manager"; only Course maps and Reset statuses are used here. If

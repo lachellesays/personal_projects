@@ -387,9 +387,22 @@ def set_handler(num: str):
         st.query_params.pop('h', None)
 
 
+def self_serve(run_ids, status):
+    """Button callback for an exhibitor's tap. If check-in was closed after their page loaded, nothing changes."""
+    if not db.exhibitor_set_status(ENGINE, run_ids, status):
+        st.session_state.checkin_closed_flash = True
+
+
 def render_checkin():
+    if st.session_state.pop('checkin_closed_flash', False):
+        st.warning("Check-in is closed right now, so that wasn't saved.")
     if df.empty:
         st.info("The running order hasn't been posted yet. Check back soon!")
+        return
+
+    if not read('checkin_is_open', day):
+        st.info(f"Check-in for {_day_label(day)} isn't open yet. Check back closer to the trial! "
+                "You can see the running order and course maps on the other tabs.")
         return
 
     handler = st.session_state.active_handler
@@ -421,7 +434,7 @@ def render_checkin():
             open_ids = [int(i) for i in dog_rows.loc[dog_rows['status'] == 'Not Checked In', 'id']]
             if len(open_ids) > 1:
                 st.button(f"Check in all {len(open_ids)} remaining runs", key=f"btn_all_{day}_{dog}",
-                          on_click=db.set_status, args=(ENGINE, open_ids, "Checked In"), use_container_width=True)
+                          on_click=self_serve, args=(open_ids, "Checked In"), use_container_width=True)
 
             for _, row in dog_rows.iterrows():
                 run_id, status = int(row['id']), row['status']
@@ -434,15 +447,15 @@ def render_checkin():
                 b1, b2, b3 = st.columns([1, 1, 0.45])
                 checked = status == 'Checked In'
                 b1.button("Checked in", key=f"ci_{run_id}", type="primary" if checked else "secondary",
-                          on_click=db.set_status, args=(ENGINE, run_id, 'Not Checked In' if checked else 'Checked In'),
+                          on_click=self_serve, args=(run_id, 'Not Checked In' if checked else 'Checked In'),
                           use_container_width=True)
                 scratched = status == 'Scratch'
                 b2.button("Scratch", key=f"sc_{run_id}", type="primary" if scratched else "secondary",
-                          on_click=db.set_status, args=(ENGINE, run_id, 'Not Checked In' if scratched else 'Scratch'),
+                          on_click=self_serve, args=(run_id, 'Not Checked In' if scratched else 'Scratch'),
                           use_container_width=True)
                 with b3.popover("⋯", use_container_width=True):
                     for s in ('Conflict', 'NFC', 'Not Checked In'):
-                        st.button(s, key=f"more_{run_id}_{s}", on_click=db.set_status, args=(ENGINE, run_id, s),
+                        st.button(s, key=f"more_{run_id}_{s}", on_click=self_serve, args=(run_id, s),
                                   type="primary" if status == s else "secondary", use_container_width=True)
 
 
@@ -742,6 +755,20 @@ MANAGED_SECTIONS = {"Upload run order", "Reorder", "Late entry", "A-frame", "Pub
 def render_admin():
     st.header("Secretary Admin")
     if pin_unlocked('admin', 'ADMIN_PIN', 'Admin PIN'):
+        # Exhibitor check-in switch for the selected day: always at the top, whoever manages the run order
+        if day:
+            is_open = read('checkin_is_open', day)
+            with st.container(border=True):
+                now_open = st.toggle(f"Check-in open for {_day_label(day)}", value=is_open, key=f"ci_open_{day}",
+                                     help="Off: the Check-in tab says check-in isn't open yet, and exhibitors can't "
+                                          "change their status. The Gate and Admin work either way.")
+                st.caption("Exhibitors can check in now." if is_open else
+                           "Closed: exhibitors see \"Check-in isn't open yet\". Turn on when you're ready.")
+            if now_open != is_open:
+                db.set_checkin_open(ENGINE, day, now_open)
+                st.session_state.admin_flash = f"Check-in {'opened' if now_open else 'closed'} for {_day_label(day)}."
+                st.rerun()
+
         section = st.radio(
             "Section", ["Upload run order", "Reorder", "Course maps", "A-frame",
                         "Publish results", "Reset statuses"],
