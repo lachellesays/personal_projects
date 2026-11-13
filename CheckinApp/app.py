@@ -402,7 +402,7 @@ def render_checkin():
 
     if not read('checkin_is_open', day):
         st.info(f"Check-in for {_day_label(day)} isn't open yet. Check back closer to the trial! "
-                "You can see the running order and course maps on the other tabs.")
+                "You can see the running order on the Running order tab.")
         return
 
     handler = st.session_state.active_handler
