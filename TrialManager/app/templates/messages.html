@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Messages · {{ d.show.name }}{% endblock %}
+{% block head %}{% if sending %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block main %}
+{% include "_show_head.html" %}
+{% with current = kind, items = [
+    {'key': 'confirmation', 'label': 'Entry confirmations', 'href': '/shows/' ~ slug ~ '/messages?kind=confirmation'},
+    {'key': 'results', 'label': 'Results', 'href': '/shows/' ~ slug ~ '/messages?kind=results'}] %}
+  {% include "_subtabs.html" %}{% endwith %}
+{% if flash %}<div class="flash ok" style="margin-top:12px">{{ flash }}</div>{% endif %}
+{% if sending %}<div class="flash info" style="margin-top:12px">Sending… {{ sending }} still to go.</div>{% endif %}
+{% if not mail_ready %}
+  <div class="flash info" style="margin-top:12px"><b>Gmail isn't connected yet.</b> You can preview every email below; sending turns on once
+    the GMAIL_ variables are set on Railway (README → Connect Gmail).</div>
+{% endif %}
+<p class="muted" style="margin:12px 0 8px">{% if kind == 'confirmation' %}One email per handler with each dog, its classes, the fees, what's
+  been paid and anything still owed. Nothing is sent until you pick people and click Send. If an entry changes after
+  it was confirmed (classes, payment, scratch), it shows as <b>Changed since sent</b> so you can send an updated one.
+  {% else %}One email per handler with every dog's results for both days, Q's, places and level points, plus Masters Series
+  if it's been worked out. Only calculated classes are included.{% endif %}</p>
+{% if kind == 'results' and ov.waiting %}
+  <div class="flash info">Not calculated yet, so not in the emails: {{ ov.waiting|join(', ') }}.</div>
+{% endif %}
+
+{% set labels = {'not_sent': 'Not sent', 'changed': 'Changed since sent', 'failed': 'Failed', 'sent': 'Sent',
+                 'sending': 'Sending', 'no_email': 'No email'} %}
+<div class="toolbar">
+  <a class="fchip {{ 'on' if not f }}" href="/shows/{{ slug }}/messages?kind={{ kind }}">All {{ ov.handlers|length }}</a>
+  {% for st in ['not_sent', 'changed', 'failed', 'sent', 'no_email'] %}{% if ov.counts.get(st) %}
+    <a class="fchip {{ 'on' if f == st }}" href="/shows/{{ slug }}/messages?kind={{ kind }}&f={{ st }}">{{ labels[st] }} {{ ov.counts[st] }}</a>
+  {% endif %}{% endfor %}
+</div>
+
+{% if not rows %}
+  <div class="panel muted">{% if kind == 'results' %}No results to send yet. Calculate classes on Scoring &amp; results first.{% else %}No entries yet.{% endif %}</div>
+{% else %}
+<form method="post" action="/shows/{{ slug }}/messages/send" id="msg-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}">
+  <div class="toolbar" style="margin-top:0">
+    <button class="btn small" type="button" onclick="pick(['not_sent', 'changed'])">Select not sent + changed</button>
+    <button class="btn small" type="button" onclick="pick(['failed'])">Select failed</button>
+    <button class="btn small" type="button" onclick="pick([])">Clear</button>
+    <span class="muted" id="picked">0 selected</span>
+  </div>
+  <div class="tscroll"><table class="t msgs">
+    <thead><tr><th></th><th>Handler</th><th>Dogs</th><th class="num">{{ 'Balance' if kind == 'confirmation' else "Q's" }}</th>
+      <th>Status</th><th class="hide-sm">Last sent</th><th></th></tr></thead>
+    <tbody>
+    {% for h in rows %}
+      <tr class="{{ 'scr' if h.get('all_scratched') }}">
+        <td><input type="checkbox" name="h" value="{{ h.key }}" data-state="{{ h.state }}" {{ 'disabled' if not h.email or h.state == 'sending' }}
+                   aria-label="Send to {{ h.name }}" onchange="count()"></td>
+        <td><span class="hname">{{ h.name }}</span><div class="muted">{{ h.email or 'no email address' }}</div></td>
+        <td class="muted">{{ h.dogs|map(attribute='dog_name')|join(', ') }}</td>
+        <td class="num">{% if kind == 'confirmation' %}{% if h.balance > 0.005 %}<span class="owes">{{ h.balance|money }} due</span>{% elif h.balance < -0.005 %}{{ (-h.balance)|money }} credit{% else %}<span class="muted">Paid</span>{% endif %}
+          {% else %}{{ h.qs }}{% endif %}</td>
+        <td><span class="tag st-{{ h.state }}">{{ labels[h.state] }}</span>
+          {% if h.state == 'failed' and h.last %}<div class="muted small">{{ h.last.error }}</div>{% endif %}</td>
+        <td class="hide-sm muted">{% if h.last and h.last.sent_at %}{{ h.last.sent_at|local }}<div>{{ h.last.sent_by }}</div>{% endif %}</td>
+        <td><a class="btn small" href="/shows/{{ slug }}/messages/preview?kind={{ kind }}&key={{ h.key|urlencode }}" target="_blank">Preview</a></td>
+      </tr>
+    {% endfor %}
+    </tbody></table></div>
+  <div class="panel" style="margin-top:12px">
+    <label class="l" for="note">Note at the top of each email (optional)</label>
+    <textarea class="f" id="note" name="note" rows="3" placeholder="{{ 'e.g. Please mail checks to … by November 25.' if kind == 'confirmation' else 'e.g. Thanks for a great weekend! Photos are at …' }}"></textarea>
+    <p class="hint">Emails come from the connected Gmail account (they appear in its Sent folder). Replies go to you ({{ user.email }}).</p>
+    <button class="btn primary" {{ 'disabled' if not mail_ready }} onclick="return check()">Send to selected</button>
+  </div>
+</form>
+{% endif %}
+
+{% if history %}
+<details class="panel" style="margin-top:14px"><summary><b>Sent log</b> <span class="muted">(last {{ history|length }})</span></summary>
+  <div class="tscroll" style="margin-top:8px"><table class="t">
+    <thead><tr><th>When</th><th>To</th><th>Status</th><th class="hide-sm">By</th></tr></thead>
+    <tbody>{% for m in history %}
+      <tr><td class="muted">{{ (m.sent_at or m.created_at)|local }}</td><td>{{ m.to_email }}</td>
+        <td><span class="tag st-{{ 'sending' if m.status == 'queued' else m.status }}">{{ m.status|capitalize }}</span>{% if m.error %} <span class="muted">{{ m.error }}</span>{% endif %}</td>
+        <td class="hide-sm muted">{{ m.sent_by }}</td></tr>
+    {% endfor %}</tbody></table></div>
+</details>
+{% endif %}
+<script>
+  function boxes() { return Array.prototype.slice.call(document.querySelectorAll('#msg-form input[name=h]:not(:disabled)')); }
+  function count() { var n = boxes().filter(function (b) { return b.checked; }).length;
+    var el = document.getElementById('picked'); if (el) el.textContent = n + ' selected'; return n; }
+  function pick(states) { boxes().forEach(function (b) { b.checked = states.indexOf(b.dataset.state) >= 0; }); count(); }
+  function check() { var n = count(); if (!n) { alert('Pick at least one person.'); return false; }
+    return confirm('Send ' + n + ' email' + (n === 1 ? '' : 's') + ' now?'); }
+</script>
+{% endblock %}

@@ -6,6 +6,7 @@ Environment:  DATABASE_URL, JOTFORM_API_KEY, SECRET_KEY, BOOTSTRAP_ADMIN_EMAIL, 
 """
 
 import hmac
+from html import escape
 import os
 import secrets
 from datetime import date, datetime, timedelta
@@ -20,7 +21,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.background import BackgroundTask
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import auth, checkin, db, formatter as fmt, results, trial
+from app import auth, checkin, db, formatter as fmt, mailer, messages, results, trial
 from app import people as dirdb   # the handler & dog directory ('people' is the admin People page below)
 from app.core import Show
 
@@ -40,7 +41,7 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie='tm_
 app.mount('/static', StaticFiles(directory=HERE / 'static'), name='static')
 
 # Changes that can't touch the run order, so they don't need a check-in sync afterwards
-_NO_SYNC = ('/scoring/', '/paper/total', '/typos/', '/checkin/', '/warnings', '/download', '/refresh')
+_NO_SYNC = ('/scoring/', '/paper/total', '/typos/', '/checkin/', '/warnings', '/download', '/refresh', '/messages')
 
 
 @app.middleware('http')
@@ -109,6 +110,7 @@ SHOW_NAV = [
     ('Trial day', 'runorder', 'Run order', 'runorder'),
     ('Trial day', 'dayof', 'Day-of entries', 'dayof'),
     ('Trial day', 'scoring', 'Scoring & results', 'scoring'),
+    ('Competitors', 'messages', 'Messages', 'messages'),
 ]
 BEFORE_TRIAL_TABS = ('setup', 'entries', 'review', 'download')
 templates.env.globals.update(SHOW_NAV=SHOW_NAV, BEFORE_TRIAL_TABS=BEFORE_TRIAL_TABS)
@@ -535,6 +537,7 @@ async def download(request: Request, slug: str):
 
 @app.exception_handler(trial.TrialError)
 @app.exception_handler(results.ResultsError)
+@app.exception_handler(messages.MessageError)
 async def _trial_error(request: Request, exc):
     if request.headers.get('HX-Request'):
         return HTMLResponse(f'<div class="flash error" id="ro-msg">{exc}</div>', status_code=200,
@@ -907,6 +910,51 @@ def masters_certificates(request: Request, slug: str, day: str):
     db.log(user, 'download', slug, target='masters certificates', day=day)
     return Response(data, media_type='application/pdf',
                     headers={'Content-Disposition': f'inline; filename="masters_final_certificates_{day}.pdf"'})
+
+
+# ── Messages to competitors ─────────────────────────────────────────────────
+
+@app.get('/shows/{slug}/messages', response_class=HTMLResponse)
+def messages_page(request: Request, slug: str, kind: str = 'confirmation', f: str = ''):
+    require_user(request)
+    kind = kind if kind in messages.KINDS else 'confirmation'
+    d, ws, ctx = _show_ctx(request, slug, 'messages')
+    ov = messages.overview(d, kind)
+    rows = [h for h in ov['handlers'] if not f or h['state'] == f]
+    return render(request, 'messages.html', kind=kind, kinds=messages.KINDS, ov=ov, rows=rows, f=f,
+                  mail_ready=mailer.configured(), sending=ov['counts'].get('sending', 0),
+                  history=messages.history(slug, kind, limit=30), flash=request.session.pop('messages_flash', ''), **ctx)
+
+
+@app.get('/shows/{slug}/messages/preview', response_class=HTMLResponse)
+def messages_preview(request: Request, slug: str, kind: str, key: str, note: str = ''):
+    user = require_user(request)
+    d = fmt.load(slug)
+    content = messages.confirmation_content(d) if kind == 'confirmation' else messages.results_content(d)['handlers']
+    h = next((x for x in content if x['key'] == key), None)
+    if h is None:
+        raise messages.MessageError('That person isn’t in this show’s list any more.')
+    m = messages.render(kind, d.show, h, note, sender=user.get('name', ''))
+    bar = (f'<div style="font:14px -apple-system,Segoe UI,Arial;background:#FEF3C7;color:#92400E;padding:10px 14px">'
+           f'<b>Preview</b> · To: {escape(h["email"] or "(no email address)")} · Subject: {escape(m["subject"])} · '
+           f'Replies go to: {escape(user.get("email", ""))}</div>')
+    return HTMLResponse(m['html'].replace('<table role="presentation"', bar + '<table role="presentation"', 1))
+
+
+@app.post('/shows/{slug}/messages/send')
+async def messages_send(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    kind = form.get('kind', 'confirmation')
+    if not mailer.configured():
+        raise messages.MessageError('Gmail isn’t connected yet, so nothing can be sent. See README → Connect Gmail.')
+    d = fmt.load(slug)
+    ids = messages.queue(d, kind, form.getlist('h'), user, form.get('note', ''))
+    request.session['messages_flash'] = (f"Sending {len(ids)} email{'s' if len(ids) != 1 else ''}. This page updates "
+                                         f"as they go out.")
+    response = back(f'/shows/{slug}/messages?kind={kind}')
+    response.background = BackgroundTask(messages.send_queued, slug, ids)
+    return response
 
 
 # ── Show setup ──────────────────────────────────────────────────────────────

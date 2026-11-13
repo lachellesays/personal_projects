@@ -206,6 +206,27 @@ checkin_days = Table(
     Column('error_at', DateTime(timezone=True)),
 )
 
+# ── Emails to competitors — see messages.py ────────────────────────────────
+
+messages = Table(
+    'tm_messages', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('kind', String, nullable=False),                 # confirmation | results
+    Column('handler_key', String, nullable=False),          # UKI # (or the name, for someone without one)
+    Column('to_email', String, default=''),
+    Column('subject', String, default=''),
+    Column('body_text', Text, default=''),
+    Column('fingerprint', String, default=''),              # what the email said, to spot later changes
+    Column('status', String, nullable=False, default='queued'),   # queued | sent | failed
+    Column('error', String, default=''),
+    Column('created_at', DateTime(timezone=True)),
+    Column('sent_at', DateTime(timezone=True)),
+    Column('sent_by', String, default=''),
+    Column('reply_to', String, default=''),
+    Column('note', Text, default=''),
+)
+
 # ── Handler & dog directory, paper entries — see people.py ──────────────────
 # info_date is the date the details came from (a trial date, an export date, or the day typed in). Newer details
 # overwrite older ones; older details only fill blanks. Dates are ISO strings like tm_runs.day.

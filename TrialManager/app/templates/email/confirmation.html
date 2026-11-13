@@ -1,0 +1,24 @@
+{% set heading = 'Entry confirmation' %}{% include "_wrap_top.html" %}
+<p style="margin:0 0 14px">We've received your entry for <b>{{ show.name }}</b> on {{ dates }}. Here's what we have:</p>
+{% for g in h.dogs %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #E2E8F0;border-radius:10px;margin:0 0 12px">
+<tr><td style="padding:12px 14px">
+  <div style="font-size:16px;font-weight:700">{{ g.dog_name }}{% if g.scratched %} <span style="color:#B91C1C;font-size:13px">SCRATCHED</span>{% endif %}</div>
+  <div style="color:#64748B;font-size:13px">{% if g.dog_number %}UKI #{{ g.dog_number }} · {% endif %}{{ g.breed }}{% if g.breed %} · {% endif %}{{ g.height }} · {{ g.level }}</div>
+  {% if not g.scratched %}
+  {% for label, classes in [(show.saturday_date|day, g.saturday), (show.sunday_date|day, g.sunday)] %}
+  <div style="margin-top:8px"><b>{{ label }}:</b> {% if classes %}{{ classes|map('class_label')|join(', ') }}{% else %}<span style="color:#64748B">no classes</span>{% endif %}</div>
+  {% endfor %}
+  {% endif %}
+</td></tr></table>
+{% endfor %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 0;font-size:15px">
+  <tr><td style="padding:3px 0">Entry fees</td><td align="right">{{ h.fees|money }}</td></tr>
+  <tr><td style="padding:3px 0">Paid</td><td align="right">{{ h.paid|money }}</td></tr>
+  <tr><td style="padding:6px 0;border-top:1px solid #E2E8F0;font-weight:700">
+    {% if h.balance > 0.005 %}Balance due{% elif h.balance < -0.005 %}Credit{% else %}Balance{% endif %}</td>
+    <td align="right" style="padding:6px 0;border-top:1px solid #E2E8F0;font-weight:700;color:{{ '#B91C1C' if h.balance > 0.005 else '#166534' }}">
+    {% if h.balance > 0.005 %}{{ h.balance|money }}{% elif h.balance < -0.005 %}{{ (-h.balance)|money }}{% else %}Paid in full{% endif %}</td></tr>
+</table>
+{% if h.balance > 0.005 %}<p style="margin:12px 0 0;color:#B91C1C"><b>You still owe {{ h.balance|money }}.</b> Please pay before the trial.</p>{% endif %}
+{% include "_wrap_bottom.html" %}

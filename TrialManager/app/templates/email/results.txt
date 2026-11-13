@@ -1,0 +1,32 @@
+Hi {{ h.first_name or h.name }},
+
+{% if note %}{{ note }}
+
+{% endif %}
+Thanks for coming to {{ show.name }}! Here are your results{% if h.qs %} ({{ h.qs }} qualifying run{{ 's' if h.qs != 1 }}){% endif %}.
+
+{% for g in h.dogs %}
+{{ g.dog_name }}
+{% for dd in g.days %}
+  {{ dd.day|day }}
+{% for r in dd.runs %}
+    {{ r.class_name }}: {% if r.q %}Q, {% endif %}{{ r.score }}{% if r.time %}, {{ r.time }}s{% endif %}{% if r.place %}, place {{ r.place }}{% endif %}{% if r.level_points %}, {{ r.level_points }} level pts{% endif %}
+
+{% endfor %}
+{% endfor %}
+
+{% endfor %}
+{% if h.masters %}
+Masters Series
+{% for m in h.masters %}
+  {{ m.dog_name }} ({{ m.group }}, {{ m.day|day }}): {% if m.place %}place {{ m.place }} overall{% else %}{{ m.note or 'not placed' }}{% endif %}{% if m.prize %}, prize {{ m.prize|money }}{% endif %}{% if m.final %}, qualified for the Final{% endif %}
+
+{% endfor %}
+
+{% endif %}
+If anything looks wrong, just reply to this email.
+{% if sender %}
+
+{{ sender }}
+Trial secretary, {{ show.name }}
+{% endif %}

@@ -283,3 +283,13 @@ a.clink { color: var(--navy); font-weight: 700; text-decoration: underline dotte
 .tag.gate { background: #E2E8F0; color: var(--muted); }
 .tag.gate.scr { background: var(--red-bg); color: var(--red-ink); }
 .linkrow > span .muted { display: block; font-size: 13px; max-width: 760px; }
+/* Messages */
+.tag.st-not_sent { background: #E2E8F0; color: var(--muted); }
+.tag.st-changed { background: var(--amber-bg); color: var(--amber-ink); }
+.tag.st-failed { background: var(--red-bg); color: var(--red-ink); }
+.tag.st-sent { background: var(--green-bg); color: var(--green-ink); }
+.tag.st-sending { background: var(--blue-bg, #DBEAFE); color: var(--navy); }
+.tag.st-no_email { background: #F1F5F9; color: var(--muted); }
+.t.msgs td:first-child { width: 28px; }
+.muted.small { font-size: 12px; }
+.owes { color: var(--red-ink); font-weight: 700; }
