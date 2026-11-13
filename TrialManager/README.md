@@ -11,6 +11,7 @@ Each show's menu follows the trial: **1 Setup**; **Before the trial**: 2 Entries
 
 - **Shows:** list of trials, plus New show / Edit details.
 - **Entries:** one row per dog, with fees, paid and balance. The scratch switch saves instantly. Search, and filters for New / Scratched / Owes money / Paper. **+ Paper entry** at the top opens the paper-form lookup.
+- **Discounts** (certificates etc.): on Entries, click **Discount** under a handler's balance, type the amount and an optional note (e.g. "Certificate #123"), and Save. It comes off what they owe on Entries, in the stats, in the workbook's Balances sheet and in their confirmation email (shown as its own line). A discount covers at most their entry fees; if they'd already paid, the rest shows as a credit (Review → Warnings). Edit or Remove it the same way.
 - **Change classes:** click a dog's Sat or Sun number on Entries to change which classes it's in (for example, move Sunday's entries to Saturday, with one-click Move buttons). Saved like typo fixes: JotForm stays the original, the entry shows CLASSES CHANGED, fees and the workbook follow, Undo returns to the JotForm entry, and Run order picks it up on Update run order.
 - **Review → Fix typos:** click a cell, type, press Enter. Fixed cells turn yellow and show the JotForm value. Every fix records who made it, with Undo.
 - **Review → Warnings:** credits, addresses typed two ways (pick one), state/zip mismatches (one-click fix), plus anything else the formatter notices. Dismiss or Reopen.

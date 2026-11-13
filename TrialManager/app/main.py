@@ -41,7 +41,7 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, session_cookie='tm_
 app.mount('/static', StaticFiles(directory=HERE / 'static'), name='static')
 
 # Changes that can't touch the run order, so they don't need a check-in sync afterwards
-_NO_SYNC = ('/scoring/', '/paper/total', '/typos/', '/checkin/', '/warnings', '/download', '/refresh', '/messages')
+_NO_SYNC = ('/scoring/', '/paper/total', '/typos/', '/checkin/', '/warnings', '/download', '/refresh', '/messages', '/discount')
 
 
 @app.middleware('http')
@@ -424,6 +424,35 @@ def entries(request: Request, slug: str, q: str = '', f: str = 'all'):
         return render(request, '_entry_rows.html', rows=rows, slug=slug)
     return render(request, 'entries.html', rows=rows, q=q, f=f, flash=request.session.pop('entries_flash', ''),
                   directory_size=dirdb.counts()['handlers'], **ctx)
+
+
+@app.post('/shows/{slug}/discount')
+async def set_discount(request: Request, slug: str):
+    user = require_user(request)
+    form = await check_csrf(request)
+    hid = form.get('handler_number', '').strip()
+    amount = '0' if form.get('remove') else form.get('amount', '')
+    value = fmt.set_discount(slug, hid, amount, form.get('note', ''), user)
+    d = fmt.load(slug)
+    row = next((r for r in d.rows if r['handler_number'] == hid and r['first_of_handler']), None)
+    who = row['handler_name'] if row else f'#{hid}'
+    if not value:
+        msg = f"Removed {who}'s discount."
+    else:
+        msg = f"{who}: {fmt_money(value)} discount saved."
+        if row:
+            if row['discount'] + 0.005 < value:
+                msg += f" Only {fmt_money(row['discount'])} counts, because that’s all their entry fees come to."
+            if row['balance'] > 0.005:
+                msg += f" They still owe {fmt_money(row['balance'])}."
+            elif row['balance'] < -0.005:
+                msg += (f" They’d already paid, so they now have a {fmt_money(-row['balance'])} credit "
+                        "(see Review → Warnings).")
+            else:
+                msg += ' They’re paid in full.'
+    request.session['entries_flash'] = msg
+    q, f = form.get('q', ''), form.get('f', 'all')
+    return back(f'/shows/{slug}/entries?f={quote(f)}' + (f'&q={quote(q)}' if q else ''))
 
 
 @app.post('/shows/{slug}/scratch/{dog_number}', response_class=HTMLResponse)

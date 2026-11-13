@@ -293,3 +293,10 @@ a.clink { color: var(--navy); font-weight: 700; text-decoration: underline dotte
 .t.msgs td:first-child { width: 28px; }
 .muted.small { font-size: 12px; }
 .owes { color: var(--red-ink); font-weight: 700; }
+/* Discount on Entries */
+details.disc { margin-top: 4px; text-align: left; position: relative; }
+details.disc summary { cursor: pointer; font-size: 12px; color: var(--navy); text-decoration: underline dotted; list-style: none; text-align: right; }
+details.disc summary::-webkit-details-marker { display: none; }
+details.disc[open] form { width: 220px; margin: 6px 0 0 auto; background: #F8FAFC; border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px; }
+details.disc .disc-acts { display: flex; gap: 6px; margin-top: 8px; }

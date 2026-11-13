@@ -85,6 +85,7 @@ class ShowData:
     stats: dict = field(default_factory=dict)
     new_ids: set = field(default_factory=set)
     last_download: dict = None
+    discounts: dict = field(default_factory=dict)     # {handler number: {'amount', 'note'}}
 
 
 def load(slug: str, fetch_if_missing: bool = True) -> ShowData:
@@ -98,6 +99,7 @@ def load(slug: str, fetch_if_missing: bool = True) -> ShowData:
     # Paper entries ride along as extra entries shaped like JotForm's (submission_id 'paper-<id>')
     entries = parse_entries(subs or [], show.field_names) + people.paper_entries(slug)
     data = ShowData(slug, show, fetched_at, entries, apply_corrections(entries, show))
+    data.discounts = get_discounts(slug)
     history = db.download_history(slug, limit=1)
     data.last_download = history[0] if history else None
     if data.last_download:
@@ -128,7 +130,9 @@ def _build_rows(d: ShowData):
         paid = sum(e['amount_paid'] or 0 for e in es)
         live = [e for e in es if not is_scratched(d.show, e)]
         fees = sum(fee_by_sub.get(e['submission_id'], 0) for e in live)
-        balance = fees - paid
+        disc = d.discounts.get(hid) or {}
+        discount = min(float(disc.get('amount') or 0), max(fees, 0.0))   # covers at most the entry fees
+        balance = fees - paid - discount
         if live:
             handlers_live += 1
             balance_out += max(balance, 0)
@@ -146,7 +150,9 @@ def _build_rows(d: ShowData):
                 'breed': e['dog_breed'], 'height': e['jump_height'], 'level': e['international_level'],
                 'sat': len(e['saturday_classes']), 'sun': len(e['sunday_classes']),
                 'fee': fee_by_sub.get(e['submission_id'], 0.0),
-                'paid': paid, 'balance': balance, 'scratched': scr,
+                'paid': paid, 'discount': discount, 'discount_entered': float(disc.get('amount') or 0),
+                'discount_note': disc.get('note', ''), 'balance': balance,
+                'scratched': scr,
                 'new': e['submission_id'] in d.new_ids,
                 'fixed': any(k == hid for k in d.show.handler_corrections) or e['dog_number'] in d.show.dog_corrections,
                 'classes_changed': str(e['submission_id']) in d.show.class_corrections,
@@ -382,7 +388,7 @@ def warnings(d: ShowData) -> list:
                 'Probably a typo in the form.', actions=[f'fixstate:{zs}'])
 
     # Anything else core.transform noticed (unknown class names, missing numbers, unreadable payments...)
-    for text in transform(d.entries, d.show).warnings:
+    for text in transform(with_discounts(d), d.show).warnings:
         if 'negative balance' in text or 'different addresses' in text:
             continue  # covered by the actionable warnings above
         add('core:' + hashlib.sha1(text.encode()).hexdigest()[:12], 'data', text, '')
@@ -418,16 +424,61 @@ def dismiss(slug: str, key: str, user: dict, reopen: bool = False):
     db.log(user, 'warning', slug, key, reopened=reopen)
 
 
+# ── Discounts ───────────────────────────────────────────────────────────────
+
+def get_discounts(slug: str) -> dict:
+    from sqlalchemy import select
+    with db.engine().connect() as c:
+        return {r['handler_number']: {'amount': float(r['amount'] or 0), 'note': r['note'] or ''}
+                for r in c.execute(select(db.discounts).where(db.discounts.c.show_slug == slug)).mappings()}
+
+
+def set_discount(slug: str, handler_number: str, amount, note: str, user: dict) -> float:
+    """Set (or with 0 / blank, remove) a handler's discount for this show, e.g. a certificate. Returns the amount."""
+    from sqlalchemy import delete, insert
+    text = str(amount if amount is not None else '').replace('$', '').replace(',', '').strip()
+    try:
+        value = round(float(text or 0), 2)
+    except ValueError:
+        raise FormatterError('Type the discount as a number, like 15 or 15.00.')
+    if value < 0 or value > 2000:
+        raise FormatterError('The discount looks wrong. Type it as a positive amount, like 15.')
+    if not handler_number:
+        raise FormatterError('That handler has no UKI number, so a discount can’t be attached to them.')
+    with db.engine().begin() as c:
+        c.execute(delete(db.discounts).where(db.discounts.c.show_slug == slug, db.discounts.c.handler_number == handler_number))
+        if value:
+            c.execute(insert(db.discounts).values(show_slug=slug, handler_number=handler_number, amount=value,
+                                                  note=(note or '').strip()[:200], updated_at=db.now(),
+                                                  updated_by=user.get('name', '')))
+    db.log(user, 'discount', slug, handler_number, amount=value, note=(note or '').strip())
+    return value
+
+
 # ── Download ────────────────────────────────────────────────────────────────
 
+def with_discounts(d: ShowData) -> list:
+    """The entries for the UKI workbook with each handler's discount counted like a payment, so the Balances sheet
+    (class costs minus payments) shows what they really owe. The discount goes on their first entry."""
+    applied = {r['handler_number']: r['discount'] for r in d.rows if r['first_of_handler'] and r['discount']}
+    out, done = [], set()
+    for e in d.entries:
+        hid = e['handler_number']
+        if hid in applied and hid not in done:
+            e = {**e, 'amount_paid': (e['amount_paid'] or 0.0) + applied[hid]}
+            done.add(hid)
+        out.append(e)
+    return out
+
+
 def workbook_counts(d: ShowData) -> dict:
-    r = transform(d.entries, d.show)
+    r = transform(with_discounts(d), d.show)
     return {'contact': len(r.contact), 'balances': len(r.balances), 'runs': len(r.raw_results)}
 
 
 def download(slug: str, user: dict):
     d = load(slug)
-    result = transform(d.entries, d.show)
+    result = transform(with_discounts(d), d.show)
     db.record_download(slug, user, len(result.contact), len(result.raw_results), [e['submission_id'] for e in d.entries])
     db.log(user, 'download', slug, runs=len(result.raw_results))
     return to_xlsx_bytes(result), f'TrialData_{slug}.xlsx'

@@ -16,7 +16,8 @@ We've received your entry for {{ show.name }} on {{ dates }}. Here's what we hav
 {% endfor %}
 Entry fees: {{ h.fees|money }}
 Paid: {{ h.paid|money }}
-{% if h.balance > 0.005 %}Balance due: {{ h.balance|money }} - please pay before the trial.
+{% if h.discount %}Discount{% if h.discount_note %} ({{ h.discount_note }}){% endif %}: -{{ h.discount|money }}
+{% endif %}{% if h.balance > 0.005 %}Balance due: {{ h.balance|money }} - please pay before the trial.
 {% elif h.balance < -0.005 %}Credit: {{ (-h.balance)|money }}
 {% else %}Paid in full.
 {% endif %}

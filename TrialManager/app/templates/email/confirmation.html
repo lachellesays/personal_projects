@@ -15,6 +15,7 @@
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 0;font-size:15px">
   <tr><td style="padding:3px 0">Entry fees</td><td align="right">{{ h.fees|money }}</td></tr>
   <tr><td style="padding:3px 0">Paid</td><td align="right">{{ h.paid|money }}</td></tr>
+  {% if h.discount %}<tr><td style="padding:3px 0">Discount{% if h.discount_note %} ({{ h.discount_note }}){% endif %}</td><td align="right">-{{ h.discount|money }}</td></tr>{% endif %}
   <tr><td style="padding:6px 0;border-top:1px solid #E2E8F0;font-weight:700">
     {% if h.balance > 0.005 %}Balance due{% elif h.balance < -0.005 %}Credit{% else %}Balance{% endif %}</td>
     <td align="right" style="padding:6px 0;border-top:1px solid #E2E8F0;font-weight:700;color:{{ '#B91C1C' if h.balance > 0.005 else '#166534' }}">

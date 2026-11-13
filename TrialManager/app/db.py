@@ -206,6 +206,19 @@ checkin_days = Table(
     Column('error_at', DateTime(timezone=True)),
 )
 
+# ── Discounts (certificates etc.), one per handler per show — see formatter.set_discount ──
+
+discounts = Table(
+    'tm_discounts', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),
+    Column('show_slug', String, nullable=False, index=True),
+    Column('handler_number', String, nullable=False),
+    Column('amount', JSON, nullable=False),          # dollars, e.g. 15.0
+    Column('note', String, default=''),              # e.g. "Certificate #123"
+    Column('updated_at', DateTime(timezone=True)),
+    Column('updated_by', String, default=''),
+)
+
 # ── Emails to competitors — see messages.py ────────────────────────────────
 
 messages = Table(

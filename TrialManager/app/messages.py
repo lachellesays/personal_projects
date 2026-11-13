@@ -72,7 +72,8 @@ def confirmation_content(d) -> list:
         k = _key(r['handler_number'], e['first_name'], e['last_name'])
         h = handlers.setdefault(k, {'key': k, 'handler_number': r['handler_number'], 'first_name': e['first_name'],
                                     'name': r['handler_name'], 'email': emails.get(k, ''), 'dogs': [],
-                                    'fees': 0.0, 'paid': r['paid'], 'balance': r['balance']})
+                                    'fees': 0.0, 'paid': r['paid'], 'balance': r['balance'],
+                                    'discount': r.get('discount', 0.0), 'discount_note': r.get('discount_note', '')})
         h['dogs'].append({'dog_name': r['dog_name'], 'dog_number': r['dog_number'], 'breed': r['breed'],
                           'height': r['height'], 'level': r['level'], 'scratched': r['scratched'],
                           'speedstakes_level': (e.get('speedstakes_level') or '').strip()
@@ -85,7 +86,7 @@ def confirmation_content(d) -> list:
     for h in out:
         h['fees'] = round(h['fees'], 2)
         h['all_scratched'] = all(g['scratched'] for g in h['dogs'])
-        h['fingerprint'] = _fingerprint({k: h[k] for k in ('email', 'dogs', 'fees', 'paid', 'balance')})
+        h['fingerprint'] = _fingerprint({k: h[k] for k in ('email', 'dogs', 'fees', 'paid', 'discount', 'balance')})
     return out
 
 

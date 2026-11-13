@@ -13,7 +13,21 @@
       <td class="num"><a class="clink" href="/shows/{{ slug }}/entries/{{ r.submission_id }}/classes" title="Change {{ r.dog_name }}'s classes">{{ r.sun }}</a></td>
       <td class="num hide-sm">{{ r.fee|money }}</td>
       <td class="num hide-sm">{% if r.first_of_handler %}{{ r.paid|money }}{% endif %}</td>
-      <td class="num">{% if r.first_of_handler %}{% if r.balance > 0.005 %}<span class="owes">{{ r.balance|money }}</span>{% elif r.balance < -0.005 %}<span class="credit">{{ r.balance|money }}</span>{% else %}$0.00{% endif %}{% endif %}</td>
+      <td class="num">{% if r.first_of_handler %}{% if r.balance > 0.005 %}<span class="owes">{{ r.balance|money }}</span>{% elif r.balance < -0.005 %}<span class="credit">{{ r.balance|money }}</span>{% else %}$0.00{% endif %}
+        {% if r.discount_entered %}<div class="muted small" title="{{ r.discount_note }}">after {{ r.discount|money }} discount{% if r.discount_note %} · {{ r.discount_note }}{% endif %}</div>{% endif %}
+        {% if r.handler_number %}
+        <details class="disc"><summary>{{ 'Edit discount' if r.discount_entered else 'Discount' }}</summary>
+          <form method="post" action="/shows/{{ slug }}/discount">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="handler_number" value="{{ r.handler_number }}">
+            <input type="hidden" name="q" value="{{ q or '' }}"><input type="hidden" name="f" value="{{ f or 'all' }}">
+            <label class="l">Discount for {{ r.handler_name }} ($)</label>
+            <input class="f" name="amount" inputmode="decimal" value="{{ '%.2f'|format(r.discount_entered) if r.discount_entered else '' }}" placeholder="15.00">
+            <label class="l">Note (optional)</label>
+            <input class="f" name="note" value="{{ r.discount_note }}" placeholder="e.g. Certificate #123">
+            <div class="disc-acts"><button class="btn small primary">Save</button>
+              {% if r.discount_entered %}<button class="btn small" name="remove" value="1">Remove</button>{% endif %}</div>
+          </form></details>
+        {% endif %}{% endif %}</td>
       <td class="keep">{% if r.dog_number %}
         <label class="sw" title="Scratch {{ r.dog_name }}"><input type="checkbox" aria-label="Scratch {{ r.dog_name }}" {{ 'checked' if r.scratched }}
           hx-post="/shows/{{ slug }}/scratch/{{ r.dog_number }}" hx-trigger="change" hx-target="#entry-table" hx-swap="outerHTML"
