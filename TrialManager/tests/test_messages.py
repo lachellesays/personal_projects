@@ -38,6 +38,8 @@ def test_confirmation_lists_dogs_classes_and_balance(admin):
     for text in ('Hi Ann', 'Mail checks by Nov 25.', 'Rex', 'Bea', 'Balance due: $15.00', 'Lachelle'):
         assert text in m['text']
     assert 'You still owe $15.00' in m['html'] and 'Snooker' in m['html']
+    assert 'https://trialsecretary.up.railway.app' in m['text'] and 'href="https://trialsecretary.up.railway.app"' in m['html']
+    assert 'check in' in m['text'] and 'course maps' in m['text']
     bob = messages.render('confirmation', d.show, by['Bob Jones'])
     assert 'Credit: $45.00' in bob['text']
 
@@ -141,3 +143,13 @@ def test_expired_gmail_permission_says_what_to_do(monkeypatch):
     mailer._token.update(value='', expires=0)
     with pytest.raises(mailer.MailError, match='gmail_auth.py'):
         mailer.send('a@example.com', 's', 't')
+
+
+def test_app_link_follows_checkin_app_url(admin, monkeypatch):
+    from app import formatter, messages
+    c, token = admin
+    c.post(f'/shows/{SLUG}/refresh', data={'csrf': token})
+    monkeypatch.setenv('CHECKIN_APP_URL', 'https://checkin.example.com/')
+    d = formatter.load(SLUG)
+    m = messages.render('confirmation', d.show, messages.confirmation_content(d)[0])
+    assert 'https://checkin.example.com' in m['text'] and 'trialsecretary' not in m['html']

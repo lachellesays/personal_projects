@@ -21,6 +21,10 @@ Paid: {{ h.paid|money }}
 {% else %}Paid in full.
 {% endif %}
 
+The running order is on the trial app and updates automatically if anything changes. You'll be able to check in
+there closer to the day of the trial, and course maps will be posted there too:
+{{ app_url }}
+
 If anything looks wrong, just reply to this email.
 {% if sender %}
 

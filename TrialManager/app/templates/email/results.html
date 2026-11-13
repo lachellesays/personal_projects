@@ -23,4 +23,5 @@
 <p style="margin:4px 0">{{ m.dog_name }} ({{ m.group }}, {{ m.day|day }}): {% if m.place %}<b>{{ m.place }}{{ {1: 'st', 2: 'nd'}.get(m.place, 'th') }} overall</b>{% else %}{{ m.note or 'not placed' }}{% endif %}{% if m.prize %} · prize {{ m.prize|money }}{% endif %}{% if m.final %} · <b style="color:#166534">qualified for the Final</b>{% endif %}</p>
 {% endfor %}
 {% endif %}
+<p style="margin:18px 0 0">Everyone's results are on the trial app's Results tab: <a href="{{ app_url }}" style="color:#1E3A8A;font-weight:700">{{ app_url }}</a></p>
 {% include "_wrap_bottom.html" %}

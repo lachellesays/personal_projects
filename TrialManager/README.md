@@ -102,6 +102,9 @@ set up you can still preview every email. One-time setup, about 20 minutes:
 7. Optional: to show a name other than your own on emails, also add `MAIL_FROM_NAME` (e.g. `Level Up Dog Sports
    Trials`) and `MAIL_FROM_ADDRESS` (your Gmail address).
 
+8. The emails link to the check-in app at `https://trialsecretary.up.railway.app`. If it moves (e.g. to a custom
+   domain), add `CHECKIN_APP_URL` with the new address.
+
 Emails appear in that Gmail account's **Sent** folder. **Reply** goes to whoever clicked Send. Personal Gmail
 allows about 500 emails a day. If Messages ever says Google no longer accepts the permission, repeat step 5–6.
 

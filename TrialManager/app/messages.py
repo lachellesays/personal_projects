@@ -11,6 +11,7 @@ payment, a recalculated result) shows as "Changed since sent".
 
 import hashlib
 import json
+import os
 from datetime import date
 from pathlib import Path
 
@@ -21,6 +22,12 @@ from app import db, mailer
 from app import people as dirdb
 
 KINDS = {'confirmation': 'Confirmations', 'results': 'Results'}
+DEFAULT_APP_URL = 'https://trialsecretary.up.railway.app'
+
+
+def app_url() -> str:
+    """The check-in app's address for the emails (CHECKIN_APP_URL, e.g. after moving it to a custom domain)."""
+    return ((os.environ.get('CHECKIN_APP_URL') or '').strip() or DEFAULT_APP_URL).rstrip('/')
 
 env = Environment(loader=FileSystemLoader(Path(__file__).parent / 'templates' / 'email'),
                   autoescape=select_autoescape(['html']), trim_blocks=True, lstrip_blocks=True)
@@ -150,7 +157,7 @@ def render(kind: str, show, h: dict, note: str = '', sender: str = '') -> dict:
     """{'subject', 'text', 'html'} for one handler."""
     if kind not in KINDS:
         raise MessageError('Unknown kind of message.')
-    ctx = {'show': show, 'h': h, 'note': (note or '').strip(), 'sender': sender,
+    ctx = {'show': show, 'h': h, 'note': (note or '').strip(), 'sender': sender, 'app_url': app_url(),
            'dates': f"{_d(show.saturday_date):%A %B %-d} and {_d(show.sunday_date):%A %B %-d, %Y}"}
     subject = (f"Entry confirmation: {show.name}" if kind == 'confirmation' else f"Your results: {show.name}")
     return {'subject': subject, 'text': env.get_template(f'{kind}.txt').render(**ctx).strip() + '\n',

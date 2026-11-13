@@ -24,6 +24,8 @@ Masters Series
 {% endfor %}
 
 {% endif %}
+Everyone's results are on the trial app's Results tab: {{ app_url }}
+
 If anything looks wrong, just reply to this email.
 {% if sender %}
 
