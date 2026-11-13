@@ -46,7 +46,7 @@ _NO_SYNC = ('/scoring/', '/paper/total', '/typos/', '/checkin/', '/warnings', '/
 @app.middleware('http')
 async def sync_checkin_after_changes(request: Request, call_next):
     """After any successful change to a show, bring the check-in app up to date in the background
-    (checkin.sync_show does nothing unless the show is Live on check-in, and skips days that didn't change)."""
+    (checkin.sync_show does nothing until the link is set up and the run order is built, and skips days that didn't change)."""
     response = await call_next(request)
     path = request.url.path
     if (request.method == 'POST' and path.startswith('/shows/') and response.status_code < 400
@@ -578,19 +578,6 @@ def _sync_message(out: dict) -> str:
                                                    ('scratched', 'scratched')) if r.get(k)]
         parts.append(f"{date.fromisoformat(d):%a %-m/%-d}: " + (', '.join(bits) or 'no run changes'))
     return 'Sent to the check-in app. ' + '; '.join(parts) + '.'
-
-
-@app.post('/shows/{slug}/checkin/live')
-async def checkin_live(request: Request, slug: str):
-    user = require_user(request)
-    form = await check_csrf(request)
-    on = form.get('live') == '1'
-    if on and not checkin.configured():
-        raise trial.TrialError('The check-in link isn’t set up yet: add CHECKIN_DATABASE_URL on Railway (see README).')
-    checkin.set_live(slug, on, user)
-    request.session['checkin_flash'] = (_sync_message(checkin.sync_show(slug, force=True)) if on else
-                                        'Check-in updates are off. The check-in app keeps what it has; use the CSV if needed.')
-    return back(f'/shows/{slug}/runorder?day={form.get("day", "")}')
 
 
 @app.post('/shows/{slug}/checkin/send')

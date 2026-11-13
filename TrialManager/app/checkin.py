@@ -10,7 +10,9 @@ CHECKIN_DATABASE_URL:
   results    → check-in `results`         when a class is calculated
   gate       ← check-in `runs.status`     scratches / NFC shown on the scoring sheet
 
-Nothing is sent until the show is switched "Live on check-in" on the Run order page. Each pushed day is marked in
+Once CHECKIN_DATABASE_URL is set, every show syncs from the moment its run order is built, so the preliminary run
+order is on the check-in app weeks ahead (exhibitors can't check in until the secretary opens check-in there). Each
+pushed day is marked in
 check-in's `managed_days`, which locks its Upload/Reorder/A-frame/Publish tools there; if someone unlocks a day in
 check-in (Trial Manager down), pushes for that day stop until it's handed back.
 
@@ -170,21 +172,6 @@ def reset_engine():
 
 # ── The show's switch and sync status ───────────────────────────────────────
 
-def is_live(slug: str) -> bool:
-    with db.engine().connect() as c:
-        return bool(c.execute(select(db.checkin_shows.c.live).where(db.checkin_shows.c.show_slug == slug)).scalar())
-
-
-def set_live(slug: str, on: bool, user: dict):
-    with db.engine().begin() as c:
-        c.execute(delete(db.checkin_shows).where(db.checkin_shows.c.show_slug == slug))
-        c.execute(insert(db.checkin_shows).values(show_slug=slug, live=on, changed_at=db.now(),
-                                                  changed_by=user.get('name', '')))
-        if on:   # send everything fresh
-            c.execute(update(db.checkin_days).where(db.checkin_days.c.show_slug == slug).values(fingerprint=''))
-    db.log(user, 'checkin live' if on else 'checkin off', slug)
-
-
 def _day_row(c, slug: str, day: str) -> dict:
     row = c.execute(select(db.checkin_days).where(db.checkin_days.c.show_slug == slug, db.checkin_days.c.day == day)
                     ).mappings().first()
@@ -196,7 +183,7 @@ def _day_row(c, slug: str, day: str) -> dict:
 
 def status(slug: str, days: list) -> dict:
     """For the Run order page: is the link set up, is the show live, and how each day's last push went."""
-    out = {'configured': configured(), 'live': is_live(slug), 'days': {}, 'target': describe() if configured() else '',
+    out = {'configured': configured(), 'days': {}, 'target': describe() if configured() else '',
            'there': None, 'there_error': ''}
     if configured():
         try:
@@ -328,11 +315,11 @@ def push_day(slug: str, day: str, force: bool = False) -> dict:
 
 
 def sync_show(slug: str, force: bool = False) -> dict:
-    """Push every day of a live show whose run order changed. Safe to call after any change: it does nothing when
-    the link isn't set up, the show isn't live, the run order isn't built, or nothing changed. Never raises; each
+    """Push every day of a show whose run order changed. Safe to call after any change: it does nothing when
+    the link isn't set up, the run order isn't built yet, or nothing changed. Never raises; each
     day's failure is recorded for the Run order page."""
     from app import trial
-    if not configured() or not is_live(slug) or not trial.is_built(slug):
+    if not configured() or not trial.is_built(slug):
         return {}
     show = db.get_show(slug)
     out = {}
@@ -350,9 +337,9 @@ def sync_show(slug: str, force: bool = False) -> dict:
 
 def publish_results(slug: str, day: str, class_name: str) -> int:
     """Publish a calculated class to check-in's Results tab, one entry per check-in class (e.g. Senior/Champ
-    Agility). Returns how many check-in classes were published (0 when the show isn't live)."""
+    Agility). Returns how many check-in classes were published (0 when the link isn't set up)."""
     from app import results as res
-    if not configured() or not is_live(slug):
+    if not configured():
         return 0
     trial_date = date.fromisoformat(day)
     ev = res.entry_view(slug, day, class_name)
@@ -373,9 +360,9 @@ def publish_results(slug: str, day: str, class_name: str) -> int:
 # ── Gate statuses → scoring ─────────────────────────────────────────────────
 
 def gate_statuses(slug: str, day: str, class_name: str) -> dict:
-    """{Trial Manager run id: gate status} for one class, or {} if the link isn't set up / the show isn't live."""
+    """{Trial Manager run id: gate status} for one class, or {} if the link isn't set up."""
     from app import trial
-    if not configured() or not is_live(slug):
+    if not configured():
         return {}
     mine = [r for r in trial.ordered_for_export(slug, day) if r['class_name'] == class_name]
     if not mine:

@@ -195,14 +195,6 @@ day_payments = Table(
 
 # ── Live link to the check-in app — see checkin.py ─────────────────────────
 
-checkin_shows = Table(
-    'tm_checkin_shows', metadata,
-    Column('show_slug', String, primary_key=True),
-    Column('live', Boolean, nullable=False, default=False),   # off = nothing is sent to check-in
-    Column('changed_at', DateTime(timezone=True)),
-    Column('changed_by', String, default=''),
-)
-
 checkin_days = Table(
     'tm_checkin_days', metadata,
     Column('id', Integer, primary_key=True, autoincrement=True),

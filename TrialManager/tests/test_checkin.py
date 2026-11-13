@@ -38,8 +38,9 @@ def gate(tmp_path, monkeypatch):
 
 @pytest.fixture
 def live(built, gate):
+    """A built show with the link set up (the build happened before the URL was set, so send it once)."""
     c, token = built
-    r = c.post(f'/shows/{SLUG}/checkin/live', data={'csrf': token, 'live': '1', 'day': SAT}, follow_redirects=True)
+    r = c.post(f'/shows/{SLUG}/checkin/send', data={'csrf': token, 'day': SAT}, follow_redirects=True)
     assert 'Sent to the check-in app' in r.text
     return c, token, gate
 
@@ -64,13 +65,16 @@ def test_table_copies_match_the_check_in_app():
                [(c.name, type(c.type).__name__) for c in theirs.columns], name
 
 
-def test_nothing_is_sent_until_live(built, gate):
-    c, token = built
-    from app import checkin
-    assert checkin.configured() and not checkin.is_live(SLUG)
-    c.post(f'/shows/{SLUG}/runorder/generate', data={'csrf': token, 'day': SAT, 'cls': 'Agility'})
+def test_syncs_by_itself_from_the_first_build(admin, app_env, gate):
+    """No switch to flip: building the run order puts the preliminary order on the check-in app."""
+    app_env['data'] = trial_subs()
+    c, token = admin
+    c.post(f'/shows/{SLUG}/refresh', data={'csrf': token})
     assert gate_runs(gate) == []
-    assert 'Live on check-in' in c.get(f'/shows/{SLUG}/runorder').text
+    c.post(f'/shows/{SLUG}/runorder/build', data={'csrf': token})
+    assert gate_runs(gate) and gate_runs(gate, day=SUN)
+    page = c.get(f'/shows/{SLUG}/runorder').text
+    assert 'Synced with the check-in app' in page and 'Live on check-in' not in page
 
 
 def test_not_configured_keeps_the_csv_way(built, monkeypatch):
@@ -209,21 +213,13 @@ def test_an_unlocked_day_in_check_in_is_left_alone(live):
     assert 'not updated' in page and 'unlocked' in page
 
 
-def test_turning_live_off_stops_updates(live):
-    c, token, eng = live
-    c.post(f'/shows/{SLUG}/checkin/live', data={'csrf': token, 'live': '0', 'day': SAT})
-    n = len(gate_runs(eng))
-    c.post(f'/shows/{SLUG}/scratch/9001', data={'csrf': token})
-    assert all(r['status'] == 'Not Checked In' for r in gate_runs(eng) if r['dog_number'] == '9001') and len(gate_runs(eng)) == n
-
-
 def test_works_before_check_in_has_made_its_tables(built, tmp_path, monkeypatch):
     """Streamlit only creates its tables when someone first opens the check-in app; going live first still works."""
     from app import checkin
     monkeypatch.setenv('CHECKIN_DATABASE_URL', f'sqlite:///{tmp_path}/fresh.db')
     checkin.reset_engine()
     c, token = built
-    r = c.post(f'/shows/{SLUG}/checkin/live', data={'csrf': token, 'live': '1', 'day': SAT}, follow_redirects=True)
+    r = c.post(f'/shows/{SLUG}/checkin/send', data={'csrf': token, 'day': SAT}, follow_redirects=True)
     assert 'Sent to the check-in app' in r.text
     assert gate_runs(create_engine(f'sqlite:///{tmp_path}/fresh.db'))
     checkin.reset_engine()

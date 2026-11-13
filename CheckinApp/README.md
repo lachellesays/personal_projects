@@ -48,8 +48,9 @@ turn on **Check-in open for <day>** (pick the day at the top first; Saturday and
 While closed, the Check-in tab says check-in isn't open yet, and exhibitors can't change their status, even from a
 page they already had open. Running order, course maps, results, the Gate and Admin work either way.
 
-**If Trial Manager is connected** (its `CHECKIN_DATABASE_URL` points at this app's database and the show is
-switched "Live on check-in"), it fills in the run order, late entries, A-frame and results by itself. Those
+**If Trial Manager is connected** (its `CHECKIN_DATABASE_URL` points at this app's database), it fills in the run
+order as soon as it's built (so exhibitors can see the preliminary order weeks ahead), plus late entries, A-frame
+and results, by itself. Those
 Admin sections then say "managed by Trial Manager"; only Course maps and Reset statuses are used here. If
 Trial Manager is down, **Unlock for manual edits** on that Admin page lets you work by hand. Click **Hand back
 to Trial Manager** afterwards so it takes over again.

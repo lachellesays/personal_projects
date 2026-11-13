@@ -282,3 +282,4 @@ a.clink { color: var(--navy); font-weight: 700; text-decoration: underline dotte
 .linkbar .hint { margin: 6px 0 0; }
 .tag.gate { background: #E2E8F0; color: var(--muted); }
 .tag.gate.scr { background: var(--red-bg); color: var(--red-ink); }
+.linkrow > span .muted { display: block; font-size: 13px; max-width: 760px; }

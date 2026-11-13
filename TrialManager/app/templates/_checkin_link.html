@@ -2,29 +2,15 @@
 <div class="panel linkbar">
   {% if not link.configured %}
     <span class="muted"><b>Check-in app:</b> not connected. Send the run order with the CSV buttons below, or set
-      <code>CHECKIN_DATABASE_URL</code> on Railway to update it automatically (see README).</span>
+      <code>CHECKIN_DATABASE_URL</code> on Railway to keep it updated automatically (see README).</span>
   {% else %}
     <div class="linkrow">
-      <form method="post" action="/shows/{{ slug }}/checkin/live" class="linkswitch">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="day" value="{{ day }}">
-        <input type="hidden" name="live" value="{{ '0' if link.live else '1' }}">
-        <label class="sw go" title="Live on check-in"><input type="checkbox" aria-label="Live on check-in" {{ 'checked' if link.live }}
-          onchange="if (this.checked || confirm('Stop sending changes to the check-in app? It keeps what it has now.')) this.form.submit(); else this.checked = true;"><span></span></label>
-        <span><b>Live on check-in</b>
-          <span class="muted">{% if link.live %}Changes here reach the gate within seconds.{% else %}Off: nothing is sent. Turn on when the run order is ready for the gate.{% endif %}</span></span>
-      </form>
-      {% if link.live %}
+      <span><b>Synced with the check-in app</b>
+        <span class="muted">Every change here reaches it within seconds, so exhibitors can see the preliminary run order
+          there. They can't check in until you turn on <b>Check-in open</b> in the check-in app's Admin.</span></span>
       <form method="post" action="/shows/{{ slug }}/checkin/send"><input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="day" value="{{ day }}"><button class="btn small">Send now</button></form>
-      {% endif %}
     </div>
-    <div class="linkdays muted">
-      <span><b>Connected to:</b> {{ link.target }}</span>
-      {% if link.there_error %}<span class="bad">Can’t read the check-in database: {{ link.there_error }}</span>
-      {% elif link.there %}<span><b>In the check-in app now:</b> {% for dd, n in link.there.items() %}{{ dd|day }} {{ n }} runs{{ ', ' if not loop.last }}{% endfor %}</span>
-      {% else %}<span><b>In the check-in app now:</b> nothing yet</span>{% endif %}
-    </div>
-    {% if link.live %}
     <div class="linkdays">
       {% for dd, st in link.days.items() %}
         <span class="{{ 'bad' if st.error else '' }}"><b>{{ dd|day }}:</b>
@@ -33,9 +19,11 @@
           {% else %}not sent yet{% endif %}</span>
       {% endfor %}
     </div>
-    <p class="hint">Run order changes, scratches, day-of entries and A-frame settings go to the gate automatically, and
-      Calculate publishes results. In the check-in app these days are locked to Trial Manager (Admin can unlock one if
-      this app is ever down).</p>
-    {% endif %}
+    <div class="linkdays muted">
+      <span><b>Connected to:</b> {{ link.target }}</span>
+      {% if link.there_error %}<span class="bad">Can’t read the check-in database: {{ link.there_error }}</span>
+      {% elif link.there %}<span><b>In the check-in app now:</b> {% for dd, n in link.there.items() %}{{ dd|day }} {{ n }} runs{{ ', ' if not loop.last }}{% endfor %}</span>
+      {% else %}<span><b>In the check-in app now:</b> nothing yet</span>{% endif %}
+    </div>
   {% endif %}
 </div>
