@@ -153,3 +153,21 @@ def test_app_link_follows_checkin_app_url(admin, monkeypatch):
     d = formatter.load(SLUG)
     m = messages.render('confirmation', d.show, messages.confirmation_content(d)[0])
     assert 'https://checkin.example.com' in m['text'] and 'trialsecretary' not in m['html']
+
+
+def test_speedstakes_level_shows_when_different(admin, app_env):
+    from tests.conftest import submission
+    from app import formatter, messages
+    sub = submission('9', 'Eve', 'Park', '900', '990', 'Pip', sat=['Agility 1'], sun=['Speedstakes 1'], level='Novice')
+    for a in sub['answers'].values():
+        if a['name'] == 'speedstakesLevel':
+            a['answer'] = 'Senior'
+    app_env['data'] = app_env['data'] + [sub]
+    c, token = admin
+    c.post(f'/shows/{SLUG}/refresh', data={'csrf': token})
+    d = formatter.load(SLUG)
+    by = {h['name']: h for h in messages.confirmation_content(d)}
+    eve = messages.render('confirmation', d.show, by['Eve Park'])
+    assert 'Novice (Speedstakes: Senior)' in eve['text'] and 'Speedstakes: Senior' in eve['html']
+    ann = messages.render('confirmation', d.show, by['Ann Smith'])        # same level for both: shown once
+    assert 'Speedstakes:' not in ann['text']

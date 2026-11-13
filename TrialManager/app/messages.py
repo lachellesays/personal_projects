@@ -75,6 +75,8 @@ def confirmation_content(d) -> list:
                                     'fees': 0.0, 'paid': r['paid'], 'balance': r['balance']})
         h['dogs'].append({'dog_name': r['dog_name'], 'dog_number': r['dog_number'], 'breed': r['breed'],
                           'height': r['height'], 'level': r['level'], 'scratched': r['scratched'],
+                          'speedstakes_level': (e.get('speedstakes_level') or '').strip()
+                          if (e.get('speedstakes_level') or '').strip().lower() != (r['level'] or '').strip().lower() else '',
                           'saturday': list(e['saturday_classes'] or []), 'sunday': list(e['sunday_classes'] or []),
                           'paper': str(r['submission_id']).startswith('paper-')})
         if not r['scratched']:

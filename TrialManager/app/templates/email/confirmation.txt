@@ -6,7 +6,7 @@ Hi {{ h.first_name or h.name }},
 We've received your entry for {{ show.name }} on {{ dates }}. Here's what we have:
 
 {% for g in h.dogs %}
-{{ g.dog_name }}{% if g.dog_number %} (UKI #{{ g.dog_number }}){% endif %} - {{ g.height }}, {{ g.level }}{% if g.scratched %} - SCRATCHED{% endif %}
+{{ g.dog_name }}{% if g.dog_number %} (UKI #{{ g.dog_number }}){% endif %} - {{ g.height }}, {{ g.level }}{% if g.speedstakes_level %} (Speedstakes: {{ g.speedstakes_level }}){% endif %}{% if g.scratched %} - SCRATCHED{% endif %}
 
 {% if not g.scratched %}
   {{ show.saturday_date|day }}: {{ g.saturday|map('class_label')|join(', ') or 'no classes' }}
