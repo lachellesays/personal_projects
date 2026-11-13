@@ -18,6 +18,12 @@
         <input type="hidden" name="day" value="{{ day }}"><button class="btn small">Send now</button></form>
       {% endif %}
     </div>
+    <div class="linkdays muted">
+      <span><b>Connected to:</b> {{ link.target }}</span>
+      {% if link.there_error %}<span class="bad">Can’t read the check-in database: {{ link.there_error }}</span>
+      {% elif link.there %}<span><b>In the check-in app now:</b> {% for dd, n in link.there.items() %}{{ dd|day }} {{ n }} runs{{ ', ' if not loop.last }}{% endfor %}</span>
+      {% else %}<span><b>In the check-in app now:</b> nothing yet</span>{% endif %}
+    </div>
     {% if link.live %}
     <div class="linkdays">
       {% for dd, st in link.days.items() %}

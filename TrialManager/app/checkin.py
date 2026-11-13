@@ -114,6 +114,25 @@ def database_url() -> str:
     return url
 
 
+def describe() -> str:
+    """Which database the link points at, without the password, so it can be checked against the check-in app's."""
+    from sqlalchemy.engine import make_url
+    try:
+        u = make_url(database_url())
+    except Exception:  # noqa: BLE001
+        return 'an address Trial Manager can’t read'
+    where = u.host or (u.query.get('host') if u.query else '') or 'local file'
+    return f"{where}{':' + str(u.port) if u.port else ''} / {u.database or ''}".strip(' /')
+
+
+def runs_in_checkin() -> dict:
+    """{trial date: run count} currently in the check-in app, to confirm the push landed where the gate reads."""
+    from sqlalchemy import func
+    with engine().connect() as c:
+        return {str(r[0]): r[1] for r in c.execute(select(runs.c.trial_date, func.count()).group_by(runs.c.trial_date)
+                                                    .order_by(runs.c.trial_date))}
+
+
 def configured() -> bool:
     return bool(database_url())
 
@@ -177,7 +196,13 @@ def _day_row(c, slug: str, day: str) -> dict:
 
 def status(slug: str, days: list) -> dict:
     """For the Run order page: is the link set up, is the show live, and how each day's last push went."""
-    out = {'configured': configured(), 'live': is_live(slug), 'days': {}}
+    out = {'configured': configured(), 'live': is_live(slug), 'days': {}, 'target': describe() if configured() else '',
+           'there': None, 'there_error': ''}
+    if configured():
+        try:
+            out['there'] = runs_in_checkin()
+        except Exception as e:  # noqa: BLE001
+            out['there_error'] = friendly(e)
     with db.engine().connect() as c:
         rows = {r['day']: dict(r) for r in c.execute(select(db.checkin_days).where(db.checkin_days.c.show_slug == slug)
                                                        ).mappings()}

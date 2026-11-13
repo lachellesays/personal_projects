@@ -756,6 +756,10 @@ def render_admin():
     st.header("Secretary Admin")
     if pin_unlocked('admin', 'ADMIN_PIN', 'Admin PIN'):
         # Exhibitor check-in switch for the selected day: always at the top, whoever manages the run order
+        if not day:
+            st.info("No run order is loaded yet, so there's no day to open check-in for. Once a day arrives "
+                    "(from Trial Manager's **Live on check-in** switch, or a CSV upload below), a "
+                    "**Check-in open** switch for that day appears here. Check-in starts closed.")
         if day:
             is_open = read('checkin_is_open', day)
             with st.container(border=True):

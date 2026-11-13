@@ -235,3 +235,10 @@ def test_errors_are_one_short_line():
     assert 'CHECKIN_DATABASE_URL' in checkin.friendly(OperationalError('SELECT 1', {}, Exception('could not connect')))
     msg = checkin.friendly(ProgrammingError('SELECT runs.id FROM runs WHERE ...', {}, Exception('relation "x" does not exist\nLINE 2')))
     assert 'SELECT' not in msg and 'relation "x" does not exist' in msg and '\n' not in msg
+
+
+def test_run_order_page_says_where_it_sends_and_what_is_there(live):
+    c, token, eng = live
+    page = c.get(f'/shows/{SLUG}/runorder').text
+    assert 'Connected to:' in page and 'checkin.db' in page
+    assert 'In the check-in app now:' in page and 'runs' in page and 'nothing yet' not in page
